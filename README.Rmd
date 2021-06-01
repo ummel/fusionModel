@@ -1,0 +1,448 @@
+---
+title: "fusionModel"
+author: Kevin Ummel ([ummel@sas.upenn.edu](mailto:ummel@sas.upenn.edu))
+output:
+  md_document:
+    variant: gfm
+#output: html_document  # Useful for testing/editing; turned off for final production
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      #cache = TRUE, # Useful for testing/editing; turned off for final production
+                      comment = NA)
+```
+
+## Overview
+
+**fusionModel** enables variables unique to a "donor" dataset to be statistically simulated for (i.e. *fused to*) a "recipient" dataset. The resulting "fused data" contains all of the recipient *and* donor variables. The latter are true "synthetic" data -- *not* observations sampled/matched from the donor -- and resemble the original donor data in key respects. fusionModel provides a simple and efficient interface for general data fusion in *R*. The current release is a beta version.
+
+The package was originally developed to allow statistical integration of microdata from disparate social surveys. fusionModel is the data fusion workhorse underpinning the larger fusionACS data platform under development at the [Socio-Spatial Climate Collaborative](https://web.sas.upenn.edu/sociospatialclimate/). In this context, fusionModel is used to fuse variables from a range of social surveys onto microdata from the American Community Survey, allowing for analysis and spatial resolution otherwise impossible.
+
+fusionModel can also be used for "pure" data synthesis; i.e. creation of a wholly synthetic version of a single dataset. This is a specific case of the more general data fusion problem.
+
+## Methodology
+
+**fusionModel** builds on techniques developed for data synthesis and statistical disclosure control; e.g. the [synthpop](https://cran.r-project.org/web/packages/synthpop/index.html) package ([Nowok, Raab and Dibben 2016](https://doi.org/10.18637%2Fjss.v074.i11)). It uses classification and regression tree models ([Breiman et al. 1984](https://www.routledge.com/Classification-and-Regression-Trees/Breiman-Friedman-Stone-Olshen/p/book/9780412048418); see [rpart](https://cran.r-project.org/web/packages/rpart/index.html)) to partition donor observations into low-variance nodes. Observations in a given node are randomly sampled to create simulated values for recipient observations assigned to the same node, as originally introduced by [Reiter (2005)](https://nces.ed.gov/FCSM/pdf/2003FCSM_Reiter.pdf). In the continuous case, kernel density estimation is used to create a "smooth" conditional probability distribution for each node. This nonparametric approach is used to sequentially simulate the fusion variables, allowing previously-simulated variables to become predictors in subsequent models (i.e. "chained" models).
+
+The package contains a number of innovations to improve performance across intended use cases:
+
+* Pseudo-optimal ordering of the fusion variables is determined from analysis of predictor importance in fully-specified CART models fit upfront. This step leverages parallel processing, and the results can also be used to exclude predictors from (and, therefore, speed up) subsequent sequential model-fitting for large datasets.
+
+* For continuous and ordered factor data types, the fusion/simulation step identifies a minimal-change "reshuffling" of initial simulated values that induces more realistic rank correlations with other variables. Initial testing suggests this technique can improve simulation quality.
+
+* A K-means clustering strategy is used to allow faster tree-building in the presence of factor variables with many levels.
+
+* Fitted CART models are "slimmed" to retain only the information absolutely necessary for the data fusion process, thereby reducing the size of saved-on-disk objects and improving load times.
+
+## Installation
+
+```r
+devtools::install_github("ummel/fusionModel")
+library(fusionModel)
+```
+
+## Data fusion example
+
+The fusionModel package contains sample microdata with a mix of data types constructed from the 2015 Residential Energy Consumption Survey (see `?recs` for details and variable definitions). For real-world use cases, the donor and recipient input datasets are typically independent and possibly very different in the number of observations. For illustrative purposes, we will use the `recs` dataset to create both our "donor" and "recipient" data. This will also allow us to isolate the performance of fusionModel's algorithms.
+
+```{r, echo = FALSE, include = FALSE}
+library(fusionModel)
+library(ggplot2)
+```
+
+```{r, echo = TRUE}
+# Donor dataset
+donor <- recs
+dim(donor)
+
+# Recipient dataset
+# Retain a handful of variables we will treat as "predictors" common to both donor and recipient
+recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
+head(recipient)
+```
+
+The `recipient` dataset contains `r ncol(recipient) ` variables that are shared with `donor`. These shared "predictor" variables provide a statistical link between the two datasets. fusionModel exploits the information in these shared variables.
+
+There are `r ncol(donor) - ncol(recipient) ` non-shared variables that are unique to `donor`. These are the variables that will be fused to `recipient`. This includes a mix of continuous, ordered factor, and unordered factor variables.
+
+```{r, echo = TRUE}
+# The variables to be fused
+fusion.vars <- setdiff(names(donor), names(recipient))
+fusion.vars
+```
+
+We build our fusion model using the `train()` function. The minimal usage is shown below. See `?train` for additional function arguments and options. Note that observation weights are ignored here for simplicity but can be incorporated via the optional `weights` argument.
+
+```{r, echo = TRUE, results = 'hide'}
+fit <- train(data = donor, y = fusion.vars)
+```
+
+The resulting object (`fit`) contains all of the information necessary to statistically fuse the `fusion.vars` to *any* recipient dataset containing the necessary shared predictors. Fusion is performed using the `fuse()` function.
+
+```{r, echo = TRUE, results = 'hide'}
+sim <- fuse(data = recipient, train.object = fit)
+```
+
+The output from `fuse()` contains simulated/synthetic values for each of the `fusion.vars` for each observation in `recipient`. The order of the columns reflects the order in which the variables were fused. A pseudo-optimal order is determined automatically within `train()`. Let's look at just a few of the simulated variables.
+
+```{r, echo = TRUE}
+head(sim[, 1:7])
+```
+
+**If you run the same code yourself, your results for `sim` *will look different*.** This is because each call to `fuse()` produces a different random sampling from the underlying, conditional probability distributions (see section below on "Generating implicates").
+
+## Validation
+
+Successful fusion should result in simulated/synthetic variables that "look like" the donor in key respects. We can run a series of simple comparisons to confirm that this is the case. The continuous variables in `recs` -- like many social survey variables -- can be very sparse (lots of zeros). Let's first check that the proportion of zero values is similar in the donor and simulated data.
+
+```{r}
+
+# Fusion variables by data type: continuous, ordered factor, unordered factor
+cont <- names(which(sapply(sim, is.numeric)))
+ord <- names(which(sapply(sim, is.ordered)))
+unord <- setdiff(names(sim), c(cont, ord))
+
+# Predictor variables by data type: continuous, ordered factor, unordered factor
+xcont <- names(which(sapply(recipient, is.numeric)))
+xord <- names(which(sapply(recipient, is.ordered)))
+xunord <- setdiff(names(recipient), c(xcont, xord))
+
+# Create 'pdata' data frame for subsequent plots
+r <- mutate(cbind(recipient, sim), type = "simulated")
+d <- mutate(donor[names(r)[-ncol(r)]], type = "donor")
+pdata <- bind_rows(d, r)
+
+# Proportion of zero values among continuous variables
+d <- summarize_all(donor[cont], ~ mean(.x == 0))
+r <- summarize_all(sim[cont], ~ mean(.x == 0))
+comp <- round(rbind(d, r), 4)
+rownames(comp) <- c("donor", "simulated")
+comp
+
+```
+
+Comparatively few households use propane or fuel oil, and almost everyone has a television. Now let's look at the means of the non-zero values.
+
+```{r}
+
+# Check mean of non-zero values for continuous variables
+d <- summarize_all(donor[cont], ~ mean(.x[.x != 0]))
+r <- summarize_all(sim[cont], ~ mean(.x[.x != 0]))
+comp <- round(rbind(d, r), 4)
+rownames(comp) <- c("donor", "simulated")
+comp
+
+```
+
+Next, let's look at kernel density plots of the non-zero values for the continuous variables where this kind of visualization makes sense. Recall that "propane" and "fuel_oil" are quite sparse, which generally results in noisier results.
+
+```{r}
+
+# Univariate naturally continuous case
+# Compare density plots for select continuous variables
+
+# The "natural" continuous variables (SPECIFY MANUALLY)
+ncont <- c("square_feet", "electricity", "natural_gas", "propane", "fuel_oil")
+
+# Density plots - MUST SPECIFY APPROPRIATE VARIABLES MANUALLY
+pdata[c("type", ncont)] %>%
+  pivot_longer(cols = -1L) %>%
+  filter(value != 0) %>%
+  ggplot(aes(x = value, color = type)) +
+  geom_density(size = 1) +
+  theme(legend.position = "top") +
+  facet_wrap(~ name, scales = "free") +
+  ggtitle("Distribution of select continuous variables (non-zero values)")
+
+```
+
+For the remaining fused variables, we can compare the relative frequency (proportion) of different outcomes in the donor and simulated data. Here is one such comparison for the "insulation" variable.
+
+```{r}
+
+# Relative frequency for a single fusion variable
+v <- "insulation"
+t1 <- table(sim[v]) / nrow(sim)
+t2 <- table(donor[v]) / nrow(donor)
+comp <- round(rbind(t1, t2), 4)
+rownames(comp) <- c("donor", "simulated")
+comp
+
+```
+
+This kind of comparison can be extended to all of the fusion variables and summarized in a single plot.
+
+```{r}
+
+# Univariate comparison for all other cases
+# Compare relative frequency of fused variable labels
+
+# Function returns all cell proportions comparing variables combinations
+propComp <- function(data1, data2, fused, depth = 1) {
+  
+  stopifnot(exprs = {
+    depth >= 1 & depth %% 1 == 0
+    is.data.frame(data1)
+    is.data.frame(data2)
+    ncol(data1) == ncol(data2)
+    all(names(data1) == names(data2))
+    is.character(fused)
+  })
+  
+  # Combinations to test
+  X <- combn(x = intersect(names(data1), fused), m = depth)  # intersect() with 'fused' prevents inclusion of predictor-predictor comparisons
+  
+  out <- list()
+  for (i in 1:ncol(X)) {
+    t1 <- as.data.frame(table(data1[X[, i]]) / nrow(data1))
+    t2 <- as.data.frame(table(data2[X[, i]]) / nrow(data2))
+    m <- merge(t1, t2, by = names(t1)[-ncol(t1)], all = TRUE)
+    m[is.na(m)] <- 0
+    out <- c(out, list(m[-c(1:(ncol(m) - 2))]))
+  }
+  
+  result <- bind_rows(out)
+  names(result) <- c("data1", "data2")
+  return(result)
+}
+
+v <- setdiff(names(sim), ncont)
+data1 <- filter(pdata, type == "donor")[v]
+data2 <- filter(pdata, type == "simulated")[v]
+pd <- propComp(data1, data2, fused = names(sim), depth = 1) %>%
+  setNames(c("donor", "simulated"))
+
+pd %>%
+  ggplot(aes(x = donor, y = simulated)) +
+  geom_point() +
+  #geom_hex() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", col = 2) +
+  ggtitle(paste0("Relative frequency of fused variable values/labels (N = ", nrow(pd), ")"))
+
+```
+
+So far, we've only looked at univariate distributions. The much trickier task in data synthesis is to replicate *interactions* between variables (e.g. bivariate relationships). For continuous and ordered factor data types, we can calculate the correlation for each variable pairing (e.g. the correlation between "income" and "electricity") and compare the value calculated for the donor and simulated data. The following plot shows just that, including pairwise correlations between fused variables and *predictor* variables.
+
+```{r}
+
+# Compare pairwise correlations among ALL continuous variables (both fusion variables and predictors, incl. ordered factors) for donor vs. simulated
+# Returns pairwise correlations using observations where the 'y' variable is non-zero
+# Ignores correlations between predictor variables
+
+corFun <- function(y, data) {
+  j <- which(names(data) == y)
+  if (length(j) > 0) {
+    i <- data[[j]] != 0  # Restrict to rows that are non-zero for 'y' (could be zero for the pairwise x)
+    cor(data[i, 1:(j - 1), drop = FALSE], data[i, j])[, 1] # Unweighted PEARSON rank correlation
+  }
+}
+
+pd <- pdata %>%
+  select(all_of(c(xcont, xord, cont, ord))) %>%
+  mutate_if(is.ordered, as.integer) %>%
+  split(pdata$type) %>%
+  map(~ lapply(c(cont, ord), corFun, data = .x)) %>%
+  map_dfc(unlist)
+
+pd %>%
+  ggplot(aes(x = donor, y = simulated)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", col = 2) +
+  ggtitle(paste0("Pairwise correlations among continuous and ordered variables (N = ", nrow(pd), ")"))
+
+```
+
+The same kind of bivariate comparisons can be made for discrete variables by looking at the relative frequency of the cells in all possible 2-way contingency tables. And *voila*:
+
+```{r}
+
+# Pairwise comparison of 2-way contingency tables
+v <- names(select_if(pdata, is.factor))
+data1 <- filter(pdata, type == "donor")[v]
+data2 <- filter(pdata, type == "simulated")[v]
+pd <- propComp(data1, data2, fused = names(sim), depth = 2) %>%
+  setNames(c("donor", "simulated"))
+
+pd %>%
+  ggplot(aes(x = donor, y = simulated)) +
+  geom_point(alpha = 0.25) +
+  #geom_hex() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", col = 2) +
+  ggtitle(paste0("Relative frequency of 2-way contingency table cells (N = ", nrow(pd), ")"))
+
+```
+
+Extending to 3-way contingency tables, things get a bit noisier.
+
+```{r}
+
+# Pairwise comparison of 3-way contingency tables
+pd <- propComp(data1, data2, fused = names(sim), depth = 3) %>%
+  setNames(c("donor", "simulated"))
+
+pd %>%
+  ggplot(aes(x = donor, y = simulated)) +
+  geom_point(alpha = 0.25) +
+  #geom_hex() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", col = 2) +
+  ggtitle(paste0("Relative frequency of 3-way contingency table cells (N = ", nrow(pd), ")"))
+
+```
+
+Bivariate relationships between continuous and categorical variables can be assessed by plotting the distribution of the former for each level of the latter -- for example, with a boxplot. The plot below shows how electricity consumption varies with a household's air conditioning technology for both the donor and simulated data.
+
+```{r}
+
+# Discrete X, continuous Y, boxplots
+boxplotDiscCont <- function(data, xvar, yvars) {
+  
+  # https://stackoverflow.com/questions/25124895/no-outliers-in-ggplot-boxplot-with-facet-wrap
+  calc_stat <- function(x) {
+    stats <- quantile(x, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+    names(stats) <- c("ymin", "lower", "middle", "upper", "ymax")
+    return(stats)
+  }
+  
+  # NOTE: This data frame could be huge
+  pd <- data[c("type", xvar, yvars)] %>%
+    #select(all_of(c("type", xord, xunord, unord, ord, cont))) %>%  # This code block pre-computes ALL data, but it can get VERY large
+    #mutate_at(c(xord, xunord, unord), as.character) %>%
+    #pivot_longer(cols = all_of(c(cont, ord)), names_to = "y", values_to = "yval") %>%
+    #pivot_longer(cols = -c(type, y, yval), names_to = "x", values_to = "xval")
+    #mutate_at(xvar, as.character) %>%
+    mutate_at(yvars, ~ if (is.ordered(.x)) {as.integer(.x)} else {.x}) %>%
+    pivot_longer(cols = all_of(yvars), names_to = "y", values_to = "yval") %>%
+    pivot_longer(cols = -c(type, y, yval), names_to = "x", values_to = "xval")
+  
+  pd %>%
+    filter(x == xvar, y %in% yvars, yval != 0) %>%
+    ggplot(aes(x = xval, y = yval, fill = type)) +
+    stat_summary(fun.data = calc_stat, geom = "boxplot", position = position_dodge2(reverse = TRUE)) +
+    scale_x_discrete(name = xvar) +
+    scale_y_continuous(name = NULL) +
+    theme(legend.position = "top") +
+    coord_flip() +
+    facet_wrap(~ y, scales = "free")
+  
+}
+
+boxplotDiscCont(data = pdata, xvar = "aircon", yvars = "electricity")
+#boxplotDiscCont(data = pdata, xvar = "aircon", yvars = c("electricity", "natural_gas"))
+
+```
+
+We can generalize this kind of comparison by calculating "level-wise means" for the donor and simulated data (again, including predictor *and* fused variables). Since continuous variables are measured on widely-varying scales, they are scaled to mean zero and unit variance for the purposes of comparison. 
+
+```{r}
+
+# Compare bivariate relationships for continuous and categorical variables
+# https://stats.stackexchange.com/questions/119835/correlation-between-a-nominal-iv-and-a-continuous-dv-variable
+
+corFun2 <- function(data1, data2) {
+  
+  # Compare mean Y values for each level of X
+  out <- list()
+  for (i in 1:nrow(X)) {
+    
+    y1 <- data1[[X$y[i]]]
+    if (is.ordered(y1)) y1 <- as.integer(y1)
+    
+    mu1 <- mean(y1)
+    sd1 <- sd(y1)
+    
+    y2 <- data2[[X$y[i]]]
+    if (is.ordered(y2)) y2 <- as.integer(y2)
+    
+    # The Y's are scaled to they all have zero mean and unit SD (for better visual comparison)
+    m1 <- tapply((y1 - mu1) / sd1, data1[[X$x[i]]], FUN = mean)
+    m2 <- tapply((y2 - mu1) / sd1, data2[[X$x[i]]], FUN = mean)
+    
+    m <- merge(tibble::enframe(m1), tibble::enframe(m2), by = "name", all = TRUE)
+    out <- c(out, list(m[-1L]))
+    
+  }
+  
+  result <- bind_rows(out)
+  names(result) <- c("data1", "data2")
+  return(result)
+  
+}
+
+X <- expand.grid(x = c(xunord, unord), y = cont, stringsAsFactors = FALSE)
+v <- unique(unlist(X))
+data1 <- filter(pdata, type == "donor")[v]
+data2 <- filter(pdata, type == "simulated")[v]
+pd <- corFun2(data1, data2) %>%
+  setNames(c("donor", "simulated"))
+
+pd %>%
+  ggplot(aes(x = donor, y = simulated)) +
+  geom_point(alpha = 0.25) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", col = 2) +
+  ggtitle(paste0("Comparison of scaled level-wise means (N = ", nrow(pd), ")"))
+
+```
+
+Finally, for illustrative purposes, we assess the non-linear relationship between two continuous variables -- "square_feet" and "electricity" -- both overall and for geographic areas defined by the "urban_rural" variable. The plot below shows the GAM-smoothed relationship for the donor and simulated data. Note the high degree of overlap for the confidence interval shading, implying that the relationships are statistically indistinguishable.
+
+```{r, message = FALSE}
+
+# GAM-smoothed relationships between naturally continuous variables
+# Specific example with hard-coded variables
+
+d1 <- pdata %>%
+  select(type, urban_rural, square_feet, electricity) %>%
+  group_by(type) %>%
+  filter(square_feet >= quantile(square_feet, probs = 0.025),
+         square_feet <= quantile(square_feet, probs = 0.975))
+
+d2 <- pdata %>%
+  select(type, urban_rural, square_feet, electricity) %>%
+  mutate(urban_rural = "Overall (all areas)") %>%
+  filter(square_feet >= quantile(square_feet, probs = 0.025),
+         square_feet <= quantile(square_feet, probs = 0.975))
+
+bind_rows(d1, d2) %>%
+  ggplot(aes(x = square_feet, y = electricity, color = type)) +
+  geom_smooth() +
+  theme(legend.position = "top") +
+  facet_wrap(vars(urban_rural), scales = "free")
+
+```
+
+## Generating implicates
+
+Because values are randomly sampled from the conditional probability distributions, each call to `fuse()` produces a unique, synthetic dataset referred to as an "implicate" (in the sense of "simple synthesis"). It is common in data synthesis and imputation to produce multiple implicates that, collectively, quantify (some of) the uncertainty inherent in the underlying data and models.
+
+Since variables are synthesized serially, the creation of multiple implicates requires running `fuse()` multiple times. For example:
+
+```{r, echo = TRUE, results = 'hide'}
+
+# Desired number of implicates
+n.imp <- 10
+
+# Generate 'n.imp' implicates
+sim <- lapply(1:n.imp, function(i) fuse(data = recipient, train.object = fit))
+
+# Correlation between electricity consumption and mean number of televisions, across the implicates
+sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
+
+```
+
+## Data synthesis example
+
+To generate a wholly synthetic version of `recs`, we proceed as above but use only a single predictor variable. That predictor is then manually sampled to "seed" the recipient dataset.
+
+```r
+# Create fusion model with a single predictor ("division" in this case)
+recipient <- subset(recs, select = division)
+fusion.vars <- setdiff(names(donor), names(recipient))
+fit <- train(data = recs, y = fusion.vars)
+
+# Randomly sample "division" in the recipient and then run fuse()
+recipient$division <- sample(recipient$division, size = nrow(recipient))
+sim <- fuse(data = recipient, train.object = fit)
+```
+
+Happy fusing!
