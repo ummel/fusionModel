@@ -16,11 +16,12 @@
 # # Target correlations
 # rho <- cor(x, y)[, 1] + runif(ncol(x), -0.2, 0.2)
 
+# TEST CASE
 # x <- matrix(c(rep(1, 1000), rep(0, 2000)), ncol = 1)
 # x <- cbind(x, matrix(c(rep(1, 2000), rep(0, 1000)), ncol = 1))
 # y <- y0 <- c(runif(1000, 0.5, 1), runif(2000, 0.2, 0.6))
 # rho <- c(0.7, 0.5)
-# threshold = 1e-12
+# threshold <- 1e-12
 
 #---------------------------
 
@@ -48,9 +49,11 @@ induceCor <- function(x, rho, y = NULL, threshold = 1e-12) {
   y.sd <- sd(y)
   y <- scale(y)
 
-  # Remove the effects of `y` on `x`.
+  # Remove the effects of `y` on `x`
+  # On speed of various lm() implementations: https://stackoverflow.com/questions/25416413/is-there-a-faster-lm-function
   #e <- residuals(lm(y ~ x))
-  e <- lm.fit(x = x, y = y)$residuals  # Slightly faster than lm()
+  #e <- lm.fit(x = x, y = y)$residuals  # Considerably faster than lm()
+  e <- .lm.fit(x = x, y = y)$residuals  # Even faster than lm.fit
 
   # Calculate the coefficient `sigma` of `e` so that the correlation of
   # `x` with the linear combination x.dual %*% rho + sigma*e is the desired vector.
