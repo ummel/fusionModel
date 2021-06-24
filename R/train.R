@@ -8,9 +8,12 @@
 #' @param x Character vector. Predictor variables common to donor and recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param ignore Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
-#' @param mc Logical. Should multicore processing be used? This only affects the step that determines the fusion order, since final model-building is necessarily serial. Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.
+#' @param mc Logical. Should multicore processing be used? Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.
+#' @param lasso Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.
 #' @param maxcats Positive integer. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.
 #' @param ... Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.
+#'
+#' @details When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[rpart]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
 #'
 #' @return A list containing trained model information to be passed to \link{fuse}.
 #'
@@ -30,7 +33,6 @@
 # source("R/fitRpart.R")
 # source("R/fitDensity.R")
 # source("R/fusionOrder.R")
-# source("R/correlatedVariates.R")
 #
 # data <- recs
 # #recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race, education, employment))
@@ -41,6 +43,7 @@
 # ignore = NULL
 # maxcats = 10
 # mc = FALSE
+# lasso = 0.975
 
 #---------------------
 
@@ -50,6 +53,7 @@ train <- function(data,
                   ignore = NULL,
                   weight = NULL,
                   mc = FALSE,
+                  lasso = NULL,
                   maxcats = 10,
                   ...) {
 
@@ -58,6 +62,7 @@ train <- function(data,
     !missing(y)
     maxcats > 1 & maxcats %% 1 == 0
     is.logical(mc)
+    is.null(lasso) | (lasso >= 0 & lasso <= 1)
   })
 
   # Check that no more than one of 'x' or 'ignore' is specified
@@ -168,18 +173,20 @@ train <- function(data,
   cat("Determining order of fusion variables...\n")
 
   # Fit full models, including yvars as predictors
-  # NOTE: Only 'variable.importance' slot is returned
+  # Excludes variables identified in 'lasso.ignore'
+  # Only 'variable.importance' slot is returned
   full.varimp <- mcFun(yvars, function(y) {
-    fitRpart(y = y,
-             x = c(xvars, setdiff(yvars, y)),
-             w = w,
-             data = data,
-             args = if (rpart.default & !y %in% ycont) replace(rpart.args, 3, 10) else rpart.args)$variable.importance
+    m <- fitRpart(y = y,
+                  x = c(xvars, setdiff(yvars, y)),
+                  w = w,
+                  data = data,
+                  args = if (rpart.default & !y %in% ycont) replace(rpart.args, 3, 10) else rpart.args,
+                  lasso.threshold = lasso)
+    m$variable.importance
   }) %>%
     setNames(yvars)
 
   # Find preferred order of yvars
-  gc()
   yord <- fusionOrder(varimp = full.varimp)
 
   #----------------------------------
@@ -195,7 +202,7 @@ train <- function(data,
   ranks <- lapply(xvars, matFun, data = data)
   ranks <- do.call(cbind, ranks)
 
-  # Placeholder list for 'ycor' with slots for continuous and ordered factor fusion variables
+  # Placeholder list for 'ycor' with slots for continuous and ordered factor fusion variables (but not unordered factors)
   ycor.vars <- names(which(sapply(yclass, function(x) x[1] != "factor")))
   ycor <- vector(mode = "list", length = length(ycor.vars))
   names(ycor) <- ycor.vars
@@ -229,7 +236,8 @@ train <- function(data,
                   x = c(xvars, yprior),
                   w = w,
                   data = d,
-                  args = if (rpart.default & !cont) replace(rpart.args, 3, 10) else rpart.args)  # Sets default minbucket = 10 in the discrete case
+                  args = if (rpart.default & !cont) replace(rpart.args, 3, 10) else rpart.args, # Sets default minbucket = 10 in the discrete case
+                  lasso.threshold = lasso)
 
     #--------
 
@@ -285,6 +293,9 @@ train <- function(data,
     setTxtProgressBar(pb, i)
 
   }
+
+  # Close progress bar
+  close(pb)
 
   #-----
 

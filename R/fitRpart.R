@@ -1,4 +1,4 @@
-fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL) {
+fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL, lasso.threshold = NULL) {
 
   stopifnot(exprs = {
     length(y) == 1
@@ -49,8 +49,24 @@ fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL) {
 
   #-----
 
+  # If requested, screen 'x' predictors via fast LASSO regression
+  # When 'fast' = TRUE, no screeening occurs if 'y' is an unordered factor
+  lasso.ignore <- if (is.null(lasso.threshold)) {
+    NULL
+  } else {
+    LASSOignore(y = y,
+                x = x,
+                w = w,
+                data = data,
+                threshold = lasso.threshold,
+                fast = TRUE)
+  }
+
+  #-----
+
   # Formual object
-  fobj <- as.formula(paste0(y, "~", paste(x, collapse = "+")))
+  # NOTE that 'x' predictors are potentially exlcuded via 'lasso.ignore'
+  fobj <- as.formula(paste0(y, "~", paste(setdiff(x, lasso.ignore), collapse = "+")))
 
   # Fit rpart() model
   args.list <- c(list(formula = fobj,
@@ -60,15 +76,6 @@ fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL) {
                  args)
 
   m <- do.call(rpart::rpart, args = args.list)
-
-  # m <- rpart::rpart(formula = fobj,
-  #                   data = data,
-  #                   weights = data[[w]],
-  #                   method = ifelse(ycon, "anova", "class"),
-  #                   ...)
-  # minbucket = max(50, ceiling(0.0001 * nrow(data))),
-  # cp = 0,  # Set sufficiently low without imposing computing cost
-  # xval = 0)
 
   # If cross-validation used, select the pruned tree that minimized cross-validation error
   if ("xerror" %in% colnames(m$cptable)) {
@@ -94,7 +101,8 @@ fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL) {
 
 }
 
-#---------
+#--------------------
+#--------------------
 
 collapseCategorical <- function(x, y, w, data, n) {
 
@@ -118,5 +126,66 @@ collapseCategorical <- function(x, y, w, data, n) {
   d[paste0(x, "__clus")] <- factor(paste("cluster", k$cluster, sep = "_"))
   d <- d[c(1, ncol(d))]
   return(d)
+
+}
+
+#--------------------
+#--------------------
+
+LASSOignore <- function(y, x, w, data, threshold, fast = TRUE) {
+
+  Y <- data[[y]]
+
+  # Determine model 'type' (family) and whether to skip model-fitting if fast = TRUE
+  if (is.numeric(Y)) {
+    type <- "gaussian"
+  } else {
+    if (length(levels(Y)) == 2) {
+      type <- "binomial"
+    } else {
+      if (is.ordered(Y) & fast) {  # Treats ordered factor as integer
+        type <- "gaussian"
+        Y <- as.integer(Y)
+      } else {
+        type <- ifelse(fast, "skip", "multinomial")  # Skip unordered factor response if 'fast' = TRUE
+      }
+    }
+  }
+
+  if (type == "skip") {
+    xdrop <- NULL
+  } else {
+
+    # Fit LASSO
+    m <- suppressWarnings(
+      glmnet::glmnet(
+        x = data[x],
+        y = Y,
+        family = type,
+        weights = data[[w]],
+        alpha = 1,
+        pmax = length(x) - 1,  # Ensures there is at least one non-zero variable along with the intercept
+        type.multinomial = "grouped"  # Only relevant when 'type' = "multinomial"
+      )
+    )
+
+    # Find preferred lambda
+    ind <- which(m$dev.ratio / max(m$dev.ratio) >= threshold)[1]
+    # plot(m$dev.ratio, type = "l")
+    # abline(v = ind, h = m$dev.ratio[ind], lty = 2)
+    # m$lambda[ind]
+
+    # Get model coefficients for preferred lambda
+    mcoef <- glmnet::coef.glmnet(m, s = m$lambda[ind])
+
+    # In categorical response case, sum coefficients across levels
+    if (is.list(mcoef)) mcoef <- Reduce("+", mcoef)
+
+    # Predictor variables to ignore (LASSO coefficient = 0)
+    xdrop <- rownames(mcoef)[-1L][as.vector(mcoef == 0)[-1L]]
+
+  }
+
+  return(xdrop)
 
 }

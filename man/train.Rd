@@ -11,6 +11,7 @@ train(
   ignore = NULL,
   weight = NULL,
   mc = FALSE,
+  lasso = NULL,
   maxcats = 10,
   ...
 )
@@ -26,7 +27,9 @@ train(
 
 \item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
 
-\item{mc}{Logical. Should multicore processing be used? This only affects the step that determines the fusion order, since final model-building is necessarily serial. Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.}
+\item{mc}{Logical. Should multicore processing be used? Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.}
+
+\item{lasso}{Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.}
 
 \item{maxcats}{Positive integer. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
 
@@ -37,6 +40,9 @@ A list containing trained model information to be passed to \link{fuse}.
 }
 \description{
 Train a fusion model on donor data.
+}
+\details{
+When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[rpart]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
 }
 \examples{
 donor <- recs
