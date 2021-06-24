@@ -1,15 +1,16 @@
-fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL, lasso.threshold = NULL) {
+fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args) {
 
-  stopifnot(exprs = {
-    length(y) == 1
-    y %in% names(data)
-    all(x %in% names(data))
-    !y %in% x
-    length(w) == 1
-    w %in% names(data)
-    is.numeric(maxcats)
-    maxcats > 1 & maxcats %% 1 == 0
-  })
+  # Turned off since not necessary when used within train()
+  # stopifnot(exprs = {
+  #   length(y) == 1
+  #   y %in% names(data)
+  #   all(x %in% names(data))
+  #   !y %in% x
+  #   length(w) == 1
+  #   w %in% names(data)
+  #   is.numeric(maxcats)
+  #   maxcats > 1 & maxcats %% 1 == 0
+  # })
 
   # Is 'y' continuous?
   ycon <- is.numeric(data[[y]])
@@ -24,7 +25,7 @@ fitRpart <- function(y, x, w, data, maxcats = 10, args = NULL, lasso.threshold =
   # Collapse categorical predictor categories, if necessary
   # Only necessary if the response variable (y) is categorical
   kmeans.xwalk <- NULL
-  if (!ycon) {
+  if (!ycon & !is.null(maxcats)) {
 
     # Number of categorical levels for each allowable, non-numeric predictor
     cats.count <- sapply(data[x], function(x) length(levels(x)))
