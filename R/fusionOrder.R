@@ -2,10 +2,8 @@
 fusionOrder <- function(varimp) {
 
   yvars <- names(varimp)
-  #yvars <- map_chr(models, "yvar")
 
   var.imp <- map2_dfr(.x = varimp, .y = yvars, .f = getVarImp, yvars = yvars)
-  #var.imp <- map_dfr(models, getVarImp, yvars = yvars)
 
   # How important are the xvars for each y?
   # When the xvars have high collective importance, y can be moved forward...
@@ -43,7 +41,6 @@ fusionOrder <- function(varimp) {
 #----------
 
 getVarImp <- function(vimp, y, yvars) {
-  #m$variable.importance %>%
   vimp %>%
     tibble::enframe(name = "predictor", value = "importance") %>%
     mutate(predictor = ifelse(predictor %in% yvars, predictor, "_xvars_"),
