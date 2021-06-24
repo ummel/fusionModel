@@ -11,8 +11,8 @@ train(
   ignore = NULL,
   weight = NULL,
   mc = FALSE,
+  maxcats = NULL,
   lasso = NULL,
-  maxcats = 10,
   ...
 )
 }
@@ -29,9 +29,9 @@ train(
 
 \item{mc}{Logical. Should multicore processing be used? Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.}
 
-\item{lasso}{Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.}
+\item{maxcats}{Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
 
-\item{maxcats}{Positive integer. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
+\item{lasso}{Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.}
 
 \item{...}{Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.}
 }
