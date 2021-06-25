@@ -1,3 +1,7 @@
+fusionModel
+================
+Kevin Ummel (<ummel@sas.upenn.edu>)
+
 ## Overview
 
 **fusionModel** enables variables unique to a “donor” dataset to be
@@ -46,10 +50,8 @@ The package contains a number of innovations to improve performance
 across intended use cases:
 
 -   Pseudo-optimal ordering of the fusion variables is determined from
-    analysis of predictor importance in fully-specified CART models fit
-    upfront. This step leverages parallel processing, and the results
-    can also be used to exclude predictors from (and, therefore, speed
-    up) subsequent sequential model-fitting for large datasets.
+    analysis of predictor importance in fully-specified `rpart` models
+    fit upfront.
 
 -   For continuous and ordered factor data types, the fusion/simulation
     step identifies a minimal-change “reshuffling” of initial simulated
@@ -57,8 +59,15 @@ across intended use cases:
     variables. Initial testing suggests this technique can improve
     simulation quality.
 
--   A K-means clustering strategy is used to allow faster tree-building
-    in the presence of factor variables with many levels.
+-   LASSO regression is (optionally) used to “pre-screen” predictor
+    variables prior to calling `rpart()`. Predictors for which the LASSO
+    coefficient is shrunk to zero are excluded from consideration. This
+    can speed up tree-fitting considerably for large datasets.
+
+-   A K-means clustering strategy is (optionally) used to “collapse” the
+    levels of unordered factor predictor variables. This allows for
+    faster tree-building when predictor variables with many levels are
+    used to model unordered factor response variables.
 
 -   Fitted CART models are “slimmed” to retain only the information
     absolutely necessary for the data fusion process, thereby reducing
@@ -161,27 +170,34 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                employment                                   aircon propane
-    1   Employed part-time          Central air conditioning system       0
-    2 Not employed/retired Individual window/wall or portable units       0
-    3 Not employed/retired Individual window/wall or portable units       0
-    4 Not employed/retired          Central air conditioning system       0
-    5   Employed full-time          Central air conditioning system       0
-    6 Not employed/retired Individual window/wall or portable units       0
-                                    education   year_built refrigerator_age
-    1 Bachelor’s degree (for example: BA, BS) 1980 to 1989 2 to 4 years old
-    2      Some college or Associate’s degree 1980 to 1989 2 to 4 years old
-    3              High school diploma or GED 1970 to 1979 5 to 9 years old
-    4      Some college or Associate’s degree  Before 1950 2 to 4 years old
-    5              High school diploma or GED 1950 to 1959 5 to 9 years old
-    6      Some college or Associate’s degree 1950 to 1959 2 to 4 years old
-      fuel_oil
-    1        0
-    2        0
-    3        0
-    4        0
-    5    18967
-    6    85792
+                employment propane
+    1   Employed full-time       0
+    2 Not employed/retired       0
+    3 Not employed/retired       0
+    4   Employed full-time       0
+    5   Employed full-time       0
+    6 Not employed/retired       0
+                                                                                education
+    1 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
+    2                                                          High school diploma or GED
+    3                                             Bachelor’s degree (for example: BA, BS)
+    4                                                  Some college or Associate’s degree
+    5                                                          High school diploma or GED
+    6                                                Less than high school diploma or GED
+                                             heating fuel_oil hh_size
+    1                       Do not use space heating        0       4
+    2                           Some other equipment        0       2
+    3                                Central furnace        0       2
+    4                                Central furnace        0       1
+    5                                Central furnace        0       2
+    6 Steam/hot water system with radiators or pipes    22525       4
+           refrigerator_age
+    1 Less than 2 years old
+    2    10 to 14 years old
+    3      2 to 4 years old
+    4    10 to 14 years old
+    5    10 to 14 years old
+    6    10 to 14 years old
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -197,43 +213,43 @@ in `recs` – like many social survey variables – can be very sparse (lots
 of zeros). Let’s first check that the proportion of zero values is
 similar in the donor and simulated data.
 
-              propane fuel_oil hh_size electricity square_feet natural_gas
+              propane fuel_oil hh_size square_feet electricity natural_gas
     donor      0.8992   0.9483       0           0           0      0.4193
-    simulated  0.8975   0.9476       0           0           0      0.4094
+    simulated  0.9047   0.9471       0           0           0      0.4187
               televisions
     donor          0.0239
-    simulated      0.0236
+    simulated      0.0237
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television. Now let’s look at the means of the non-zero
 values.
 
-               propane fuel_oil hh_size electricity square_feet natural_gas
-    donor     346.7819 69028.60  2.5774    11028.97    2081.443    576.6752
-    simulated 354.4844 69416.08  2.5675    11166.61    2088.699    578.6748
+               propane fuel_oil hh_size square_feet electricity natural_gas
+    donor     346.7819  69028.6  2.5774    2081.443    11028.97    576.6752
+    simulated 372.6410  69145.0  2.5642    2107.789    11315.94    586.0939
               televisions
     donor          2.4195
-    simulated      2.4242
+    simulated      2.4244
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
 Recall that “propane” and “fuel\_oil” are quite sparse, which generally
 results in noisier results.
 
-![](README_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-9-1.png)<!-- -->
 
 For the remaining fused variables, we can compare the relative frequency
 (proportion) of different outcomes in the donor and simulated data. Here
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0120           0.1527               0.4977         0.3377
+    donor            0.0130           0.1567               0.4926         0.3377
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
 and summarized in a single plot.
 
-![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-11-1.png)<!-- -->
 
 So far, we’ve only looked at univariate distributions. The much trickier
 task in data synthesis is to replicate *interactions* between variables
@@ -244,17 +260,17 @@ the value calculated for the donor and simulated data. The following
 plot shows just that, including pairwise correlations between fused
 variables and *predictor* variables.
 
-![](README_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-12-1.png)<!-- -->
 
 The same kind of bivariate comparisons can be made for discrete
 variables by looking at the relative frequency of the cells in all
 possible 2-way contingency tables. And *voila*:
 
-![](README_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-13-1.png)<!-- -->
 
 Extending to 3-way contingency tables, things get a bit noisier.
 
-![](README_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-14-1.png)<!-- -->
 
 Bivariate relationships between continuous and categorical variables can
 be assessed by plotting the distribution of the former for each level of
@@ -262,7 +278,7 @@ the latter – for example, with a boxplot. The plot below shows how
 electricity consumption varies with a household’s air conditioning
 technology for both the donor and simulated data.
 
-![](README_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-15-1.png)<!-- -->
 
 We can generalize this kind of comparison by calculating “level-wise
 means” for the donor and simulated data (again, including predictor
@@ -270,7 +286,7 @@ means” for the donor and simulated data (again, including predictor
 widely-varying scales, they are scaled to mean zero and unit variance
 for the purposes of comparison.
 
-![](README_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-16-1.png)<!-- -->
 
 Finally, for illustrative purposes, we assess the non-linear
 relationship between two continuous variables – “square\_feet” and
@@ -280,7 +296,7 @@ relationship for the donor and simulated data. Note the high degree of
 overlap for the confidence interval shading, implying that the
 relationships are statistically indistinguishable.
 
-![](README_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-17-1.png)<!-- -->
 
 ## Generating implicates
 
@@ -289,7 +305,7 @@ distributions, each call to `fuse()` produces a unique, synthetic
 dataset referred to as an “implicate” (in the sense of “simple
 synthesis”). It is common in data synthesis and imputation to produce
 multiple implicates that, collectively, quantify (some of) the
-uncertainty inherent in the underlying data and models.
+uncertainty inherent in the underlying data.
 
 Since variables are synthesized serially, the creation of multiple
 implicates requires running `fuse()` multiple times. For example:
@@ -300,12 +316,21 @@ n.imp <- 10
 
 # Generate 'n.imp' implicates
 sim <- lapply(1:n.imp, function(i) fuse(data = recipient, train.object = fit))
+```
 
-# Correlation between electricity consumption and mean number of televisions, across the implicates
+We can then look at the variation of a given outcome – e.g. the
+correlation between two variables – across the implicates. This provides
+an estimate of the variance associated with the outcome.
+
+``` r
+# Correlation between electricity consumption and number of televisions, across the implicates
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-## Data synthesis example
+     [1] 0.3600492 0.3566537 0.3552684 0.3446059 0.3423869 0.3420711 0.3444331
+     [8] 0.3293219 0.3409250 0.3315561
+
+## Data synthesis
 
 To generate a wholly synthetic version of `recs`, we proceed as above
 but use only a single predictor variable. That predictor is then
@@ -314,7 +339,7 @@ manually sampled to “seed” the recipient dataset.
 ``` r
 # Create fusion model with a single predictor ("division" in this case)
 recipient <- subset(recs, select = division)
-fusion.vars <- setdiff(names(donor), names(recipient))
+fusion.vars <- setdiff(names(recs), names(recipient))
 fit <- train(data = recs, y = fusion.vars)
 
 # Randomly sample "division" in the recipient and then run fuse()
@@ -322,4 +347,98 @@ recipient$division <- sample(recipient$division, size = nrow(recipient))
 sim <- fuse(data = recipient, train.object = fit)
 ```
 
-Happy fusing!
+## Reducing computation time
+
+The `train()` function has a number of optional arguments that can be
+used to speed up the model building process. One option is to throw
+additional computing resources at the problem via parallel processing
+using the `mc` (“multicore”) argument. As of v0.2, this is only enabled
+for UNIX-like systems (i.e. it fails on Windows). Note that
+`train(..., mc = TRUE)` will utilize all of the available cores except
+one.
+
+``` r
+# Function to return computation time
+timeMe <- function(...) system.time(capture.output(...))["elapsed"]
+
+# Without parallel processing (default; 'mc = FALSE')
+timeMe(train(data = donor, y = fusion.vars, mc = FALSE))
+```
+
+    elapsed 
+      7.385 
+
+``` r
+# With parallel processing ('mc = TRUE')
+timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
+```
+
+    elapsed 
+       4.32 
+
+Binary split decision trees are usually fast, but they can be
+*painfully* slow when there are unordered factor response (fusion)
+variables in the presence of unordered factor predictors. This situation
+requires complete enumeration of the potential split strategies, which
+can be very slow *if the predictor has many levels*. The `maxcats`
+argument allows `train` to cluster predictor variable categories in such
+cases (up to `maxcats` clusters), thereby reducing the number of splits
+that need to be assessed. There is some loss of accuracy in exchange for
+(potentially) faster computation. Again, this is most noticeable if you
+have an unordered factor with many (e.g. &gt; 15) levels.
+
+``` r
+# Make the 'climate' variable a problematic unordered factor with 20 levels
+donor$climate <- factor(sample(LETTERS[1:20], nrow(donor), replace = TRUE))
+
+# Default approach ('maxcats = NULL')
+timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL))
+```
+
+    elapsed 
+     16.115 
+
+``` r
+# With 'maxcats = 10'
+timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = 10))
+```
+
+    elapsed 
+      9.257 
+
+The `lasso` argument allows `train()` to use LASSO regression via
+[glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
+quickly eliminate potential predictor variables prior to tree building.
+The idea here is that a predictor whose coefficient is shrunk to zero in
+the LASSO model is unlikely to be highly influential in the tree and can
+be discarded without significant loss of overall model skill. See
+`?train` for more details. As with `maxcats`, there is some (unknown)
+loss of accuracy in exchange for faster computation. This is most
+helpful for larger datasets.
+
+``` r
+# Make 'donor' larger (more rows and columns)
+donor <- recs[sample.int(nrow(recs), 30e3, replace = TRUE), ]
+donor[LETTERS[1:20]] <- runif(20 * nrow(donor))
+dim(donor)
+```
+
+    [1] 30000    44
+
+``` r
+# Default approach (`lasso = NULL`)
+timeMe(train(data = donor, y = fusion.vars))
+```
+
+    elapsed 
+     45.483 
+
+``` r
+# Using `lasso` for fast screening of predictors
+timeMe(train(data = donor, y = fusion.vars, lasso = 0.9))
+```
+
+    elapsed 
+     24.738 
+
+### Happy fusing!
