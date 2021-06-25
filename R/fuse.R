@@ -5,6 +5,7 @@
 #'
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
 #' @param train.object Output from successfull call to \link{train}.
+#' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Note that \code{induce = TRUE} can slow down simulation considerably.
 #'
 #' @return A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
 #' @examples
@@ -28,11 +29,12 @@
 
 #---------------------
 
-fuse <- function(data, train.object) {
+fuse <- function(data, train.object, induce = TRUE) {
 
   stopifnot(exprs = {
     is.data.frame(data)
     #class(train.object) == ...
+    is.logical(induce)
   })
 
   # Check that predictor variables are present
@@ -73,8 +75,10 @@ fuse <- function(data, train.object) {
   }
 
   # Assemble 'ranks' matrix for the xvars
-  ranks <- lapply(xvars, matFun, data = data)
-  ranks <- do.call(cbind, ranks)
+  if (induce) {
+    ranks <- lapply(xvars, matFun, data = data)
+    ranks <- do.call(cbind, ranks)
+  }
 
   #-----
 
@@ -144,9 +148,11 @@ fuse <- function(data, train.object) {
 
       # Add the clustered predictors, if necessary
       km <- m$kmeans.xwalk
-      for (d in km) {
-        ind <- match(data[[names(d)[1]]], d[[1]])
-        data[names(d)[2]] <- d[ind, 2]
+      if (!is.null(km)) {
+        for (d in km) {
+          ind <- match(data[[names(d)[1]]], d[[1]])
+          data[names(d)[2]] <- d[ind, 2]
+        }
       }
 
       # Class probabilities
@@ -170,65 +176,77 @@ fuse <- function(data, train.object) {
     # Assign final simulated vector
     data[[y]] <- S
 
-    # Create 'ranks' matrix addition for 'y'
-    yrank <- matFun(y, data)
-
     #-----
 
-    # For continuous and ordered factors, adjust initial simulated values to better match known rank correlation with other variables
-    if (y %in% names(train.object$ycor)) {
+    # Proceed to induce correlation and/or update 'ranks' matrix, if requested
+    if (induce) {
 
-      # Target (rank) correlations
-      rho <- train.object$ycor[[y]]
+      # Create 'ranks' matrix addition for 'y'
+      yrank <- matFun(y, data)
 
-      # Restrict adjusted to non-zero observations
-      i <- as.numeric(data[[y]]) != 0
+      #-----
 
-      # Identify and remove any no-variance columns in 'X'
-      X <- ranks[i, names(rho)]
-      nv <- apply(X, MARGIN = 2, FUN = novary)
-      if (any(nv)) {
-        X <- X[, -which(nv)]
-        rho <- rho[-which(nv)]
+      # For continuous and ordered factors, adjust initial simulated values to better match known rank correlation with other variables
+      if (y %in% names(train.object$ycor)) {
+
+        # Target rank correlations
+        rho <- train.object$ycor[[y]]
+
+        # Restrict adjusted to non-zero observations
+        i <- as.numeric(data[[y]]) != 0
+
+        # Identify and remove any no-variance columns in 'X'
+        X <- ranks[i, names(rho)]
+        #nv <- apply(X, MARGIN = 2, FUN = novary)
+        nv <- apply(X, MARGIN = 2, FUN = function(x) var(x) == 0)  # Slightly faster
+        if (any(nv)) {
+          X <- X[, -which(nv)]
+          rho <- rho[-which(nv)]
+        }
+
+        # Attempt to induce desired correlation
+        Y <- induceCor(x = X, rho = rho, y = yrank[i, ])
+
+        # Before and after rank correlations compared to 'rho' target correlation
+        # plot(rho, cor(X, yrank[i, ])[, 1])  # Before
+        # plot(rho, cor(X, Y)[, 1])  # After
+        # abline(0, 1)
+
+        # Re-order original y data to match ranks in Y (this preserve the original distribution)
+        Y <- sort(data[i, y])[rank(Y, ties.method = "random")]
+
+        # Confirm that univariate distribution is unchanged
+        # hist(data[i, y])
+        # hist(Y)
+
+        # Comparing before and after y values, original scale
+        # plot(data[i, y], Y)
+        # abline(0, 1, col = 2)
+        # cor(data[i, y], Y)
+
+        # Update original 'y' data with adjusted simulated values
+        data[i, y] <- Y
+
+        # Update 'yrank' object to reflect adjustment
+        yrank <- matFun(y, data)
+
+
       }
 
-      # Attempt to induce desired correlation
-      Y <- induceCor(x = X, rho = rho, y = yrank[i, ])
-
-      # Before and after rank correlations compared to 'rho' target correlation
-      # plot(rho, cor(X, yrank[i, ])[, 1])  # Before
-      # plot(rho, cor(X, Y)[, 1])  # After
-      # abline(0, 1)
-
-      # Re-order original y data to match ranks in Y (this preserve the original distribution)
-      Y <- sort(data[i, y])[rank(Y, ties.method = "random")]
-
-      # Confirm that univariate distribution is unchanged
-      # hist(data[i, y])
-      # hist(Y)
-
-      # Comparing before and after y values, original scale
-      # plot(data[i, y], Y)
-      # abline(0, 1, col = 2)
-      # cor(data[i, y], Y)
-
-      # Update original 'y' data with adjusted simulated values
-      data[i, y] <- Y
-
-      # Update 'yrank' object to reflect adjustment
-      yrank <- matFun(y, data)
+      # Update the 'ranks' matrix
+      ranks <- cbind(ranks, yrank)
 
     }
 
     #-----
 
-    # Update the 'ranks' matrix
-    ranks <- cbind(ranks, yrank)
-
-    # Update progress bar
+    # Update for() loop progress bar
     setTxtProgressBar(pb, match(y, yord))
 
   }
+
+  # Close progress bar
+  close(pb)
 
   #-----
 

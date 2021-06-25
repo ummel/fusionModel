@@ -4,12 +4,14 @@
 \alias{fuse}
 \title{Fuse variables to a recipient dataset}
 \usage{
-fuse(data, train.object)
+fuse(data, train.object, induce = TRUE)
 }
 \arguments{
 \item{data}{Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.}
 
 \item{train.object}{Output from successfull call to \link{train}.}
+
+\item{induce}{Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Note that \code{induce = TRUE} can slow down simulation considerably.}
 }
 \value{
 A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
