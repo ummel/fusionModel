@@ -20,5 +20,6 @@ Depends:
     tidyr
 Imports: 
     rpart,
-    glmnet,
     pbapply
+Suggests:
+    glmnet
