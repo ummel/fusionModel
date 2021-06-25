@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Fuse Variables from One Dataset to Another
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: 
     person(given = "Kevin",
            family = "Ummel",
@@ -19,4 +19,6 @@ Depends:
     tibble,
     tidyr
 Imports: 
-    rpart
+    rpart,
+    glmnet,
+    pbapply
