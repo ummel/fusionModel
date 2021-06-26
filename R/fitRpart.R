@@ -14,6 +14,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
 
   # Is 'y' continuous?
   ycon <- is.numeric(data[[y]])
+  unordered <- !ycon & !is.ordered(data[[y]])
 
   # Restrict data to non-NA response (y) values
   data <- data %>%
@@ -25,7 +26,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
   # Collapse categorical predictor categories, if necessary
   # Only necessary if the response variable (y) is categorical
   kmeans.xwalk <- NULL
-  if (!ycon & !is.null(maxcats)) {
+  if (unordered  & !is.null(maxcats)) {
 
     # Number of categorical levels for each allowable, non-numeric predictor
     cats.count <- sapply(data[x], function(x) length(levels(x)))
@@ -96,7 +97,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
   m$yvar <- y
 
   # Add the collapsed predictor crosswalk, if present
-  if (!ycon) m$kmeans.xwalk <- kmeans.xwalk
+  if (unordered) m$kmeans.xwalk <- kmeans.xwalk
 
   return(m)
 
