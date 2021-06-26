@@ -13,7 +13,7 @@
 #' @param lasso Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.
 #' @param ... Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.
 #'
-#' @details When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[rpart]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
+#' @details When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
 #'
 #' @return A list containing trained model information to be passed to \link{fuse}.
 #'
@@ -42,8 +42,8 @@
 # x <- NULL
 # ignore = NULL
 # maxcats = 10
-# mc = FALSE
-# lasso = 0.975
+# mc = TRUE
+# lasso = 0.9
 
 #---------------------
 
@@ -131,6 +131,10 @@ train <- function(data,
   if (any(x)) stop("Please coerce character variables to factor:\n", paste(names(which(x)), collapse = ", "))
 
   #-----
+
+  # Check that the 'xvars' and 'yvars' contain only syntactically valid names
+  stopifnot(all(make.names(yvars, unique = TRUE) == yvars))
+  stopifnot(all(make.names(xvars, unique = TRUE) == xvars))
 
   # Print to console
   cat("Identified ", length(yvars), " fusion variables\n")
@@ -228,6 +232,7 @@ train <- function(data,
                   x = c(xvars, yprior),
                   w = w,
                   data = d,
+                  maxcats = maxcats,
                   args = if (rpart.default & !cont) replace(rpart.args, 3, 10) else rpart.args, # Sets default minbucket = 10 in the discrete case
                   lasso.threshold = lasso)
 

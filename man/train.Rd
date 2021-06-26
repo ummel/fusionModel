@@ -42,7 +42,7 @@ A list containing trained model information to be passed to \link{fuse}.
 Train a fusion model on donor data.
 }
 \details{
-When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[rpart]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
+When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
 }
 \examples{
 donor <- recs
