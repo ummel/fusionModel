@@ -145,6 +145,26 @@ train <- function(data,
 
   #-----
 
+  # Detect and impute any missing values in 'data'
+  na.cols <- names(which(sapply(data, anyNA)))
+  if (length(na.cols) > 0) {
+    cat("Imputing missing values...\n")
+    warning("Missing values were imputed for the following variables: ", paste(na.cols, collapse = ", "))
+    for (j in na.cols) {
+      v <- data[[j]]
+      ind <- is.na(data[[j]])
+      data[ind, j] <- if (is.numeric(v)) {
+        m <- median(v[!ind])
+        if (is.integer(v)) as.integer(round(m)) else m
+      } else {
+        tab <- table(v) / sum(!ind)
+        m <- sample(names(tab), size = sum(ind), replace = TRUE, prob = tab)
+      }
+    }
+  }
+
+  #-----
+
   # Identify which of the 'yvars' are continuous
   ycont <- names(which(sapply(data[yvars], is.numeric)))
 

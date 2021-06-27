@@ -60,7 +60,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
                 x = x,
                 w = w,
                 data = data,
-                threshold = lasso.threshold,
+                lasso.threshold = lasso.threshold,
                 fast = TRUE)
   }
 
@@ -134,7 +134,7 @@ collapseCategorical <- function(x, y, w, data, n) {
 #--------------------
 #--------------------
 
-LASSOignore <- function(y, x, w, data, threshold, fast = TRUE) {
+LASSOignore <- function(y, x, w, data, lasso.threshold, fast = TRUE) {
 
   Y <- data[[y]]
 
@@ -172,7 +172,7 @@ LASSOignore <- function(y, x, w, data, threshold, fast = TRUE) {
     )
 
     # Find preferred lambda
-    ind <- which(m$dev.ratio / max(m$dev.ratio) >= threshold)[1]
+    ind <- which(m$dev.ratio / max(m$dev.ratio) >= lasso.threshold)[1]
     # plot(m$dev.ratio, type = "l")
     # abline(v = ind, h = m$dev.ratio[ind], lty = 2)
     # m$lambda[ind]
