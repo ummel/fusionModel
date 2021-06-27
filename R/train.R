@@ -99,7 +99,7 @@ train <- function(data,
   stopifnot(exprs = {
     length(yvars) > 0
     length(xvars) > 0
-    !anyNA(data[yvars])  # Require non-NA values in response values
+    #!anyNA(data[yvars])  # Require non-NA values in response values
   })
 
   #-----
@@ -184,6 +184,15 @@ train <- function(data,
   x <- data[xvars]
   xclass <- lapply(x, class)
   xlevels <- lapply(x[grepl("factor", xclass)], levels)
+
+  #-----
+
+  # Detect if unordered factors with many levels could cause problems and prompt user/console to confirm they want to continue
+  if (is.null(maxcats) & any(map_chr(yclass, 1L) == "factor") & any(lengths(xlevels) > 15)) {
+    cat("Hold up! Unordered factors are present that could cause long compute times. See 'maxcats' argument in ?train.\n")
+    continue <- readline(prompt = "Do you want to continue with 'maxcats = NULL'? (Y/N):\n")
+    if (tolower(continue) != "y") stop(call. = FALSE)
+  }
 
   #----------------------------------
   #----------------------------------
