@@ -34,7 +34,7 @@ induceCor <- function(data, rho, y = NULL, scale.data = FALSE, use.biglm = FALSE
   # if (is.vector(x)) x <- matrix(x, ncol = 1)
 
   stopifnot(exprs = {
-    is.data.frame(data)
+    data.table::is.data.table(data)
     all(names(rho) %in% names(data))
     is.null(y) | y %in% names(data)
     class(rho) == "numeric"
