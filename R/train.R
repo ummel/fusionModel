@@ -193,11 +193,13 @@ train <- function(data,
 
   #-----
 
-  # Detect if unordered factors with many levels could cause problems and prompt user/console to confirm they want to continue
+  # Detect if unordered factors with many levels could cause problems and issue immediate warning to console
   if (is.null(maxcats) & any(map_chr(yclass, 1L) == "factor") & any(lengths(xlevels) > 15)) {
-    cat("Hold up! Unordered factors are present that could cause long compute times. See 'maxcats' argument in ?train.\n")
-    continue <- readline(prompt = "Do you want to continue with 'maxcats = NULL'? (Y/N):\n")
-    if (tolower(continue) != "y") stop(call. = FALSE)
+    warning("\nBe careful: Unordered factors are present that could cause long compute times.\nSee 'maxcats' argument in ?train.\n", immediate. = TRUE)
+    # NOT USED: Prompt user to confirm at console that they want to continue
+    #   cat("Hold up! Unordered factors are present that could cause long compute times. See 'maxcats' argument in ?train.\n")
+    #   continue <- readline(prompt = "Do you want to continue with 'maxcats = NULL'? (Y/N):\n")
+    #   if (tolower(continue) != "y") stop(call. = FALSE)
   }
 
   #----------------------------------
