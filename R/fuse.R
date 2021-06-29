@@ -167,7 +167,7 @@ fuse <- function(data,
   cat("Fusing donor variables to recipient...\n")
 
   # Progress bar printed to console
-  pb <- txtProgressBar(min = 0, max = length(yord), style = 3)
+  pb <- pbapply::timerProgressBar(min = 0, max = length(yord), char = "+", width = 50, style = 3)
 
   for (y in yord) {
 
@@ -334,12 +334,12 @@ fuse <- function(data,
     #-----
 
     # Update for() loop progress bar
-    setTxtProgressBar(pb, match(y, yord))
+    pbapply::setTimerProgressBar(pb, match(y, yord))
 
   }
 
   # Close progress bar
-  close(pb)
+  pbapply::closepb(pb)
 
   #-----
 
