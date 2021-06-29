@@ -20,6 +20,8 @@ Depends:
     tidyr
 Imports: 
     rpart,
+    data.table,
     pbapply
 Suggests:
-    glmnet
+    glmnet,
+    biglm
