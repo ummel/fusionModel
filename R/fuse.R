@@ -288,19 +288,27 @@ fuse <- function(data,
         # Restrict target correlation to variables present in 'ranks'
         rho <- rho[names(rho) %in% names(ranks)]
 
+        # Restrict correlation correction to non-zero observations in 'y'
+        # NOTE: Setting of this option should be consistent with analogous line in train()
+        ind <- which(as.numeric(data[[y]]) != 0)
+
+        # No restriction on correlation correction
+        #ind <- 1:nrow(data)
+
         # Attempt to induce target rank correlations
-        Yout <- induceCor(data = data.table::copy(ranks), rho = rho, y = y, scale.data = FALSE, use.biglm = use.biglm)
+        Yout <- induceCor(data = data.table::copy(ranks[ind, ]), rho = rho, y = y, scale.data = FALSE, use.biglm = use.biglm)
 
         # Only updated y-values if the correlation adjustment was successful (sigma2 >= 0)
         if (Yout$sigma2 >= 0) {
 
+          # Re-order original y data to match ranks in Y (this preserve the original distribution)
+          Y <- sort(data[ind, ][[y]])[data.table::frank(Yout$Y, ties.method = "random")]
+
+          # NOTE: The confirmation code below has not been updated in some time (probably broken)
           # Before and after rank correlations compared to 'rho' target correlation
           # plot(rho, cor(ranks[, -..y], ranks[[y]])[, 1])  # Before
           # plot(rho, cor(ranks[, -..y], Yout$Y)[, 1])  # After
           # abline(0, 1)
-
-          # Re-order original y data to match ranks in Y (this preserve the original distribution)
-          Y <- sort(data[[y]])[data.table::frank(Yout$Y, ties.method = "random")]
 
           # Confirm that univariate distribution is unchanged
           # hist(data[i, y])
@@ -311,17 +319,20 @@ fuse <- function(data,
           # abline(0, 1, col = 2)
           # cor(data[i, y], Y)
 
-          # Update original 'y' data with adjusted simulated values
-          data.table::set(data, j = y, value = Y)
+          # Update original 'y' in 'data' with adjusted simulated values
+          data.table::set(data, i = ind, j = y, value = Y)
 
           # Update the 'ranks' matrix with ranks derived from adjusted 'Y'
           if (y %in% names(ranks)) {
             if (yclass[1] == "factor") {
-              u <- levels(Y)
+              dt <- subset(data, select = y)
+              u <- levels(dt)
               newv <- paste0(y, u)
-              data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(Y == x)))
+              data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(dt == x)))
+              #data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(Y == x)))  # Safe only when 'ind' is 1:nrow(data)
             } else {
-              data.table::set(ranks, j = y, value = as.vector(scale(data.table::frank(Y, ties.method = "average"))))
+              data.table::set(ranks, j = y, value = as.vector(scale(data.table::frank(data[[y]], ties.method = "average"))))
+              #data.table::set(ranks, j = y, value = as.vector(scale(data.table::frank(Y, ties.method = "average"))))  # Safe only when 'ind' is 1:nrow(data)
             }
           }
 

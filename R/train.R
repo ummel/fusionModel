@@ -328,11 +328,11 @@ train <- function(data,
     # Calculate (rank) correlation between 'y' and existing variables in 'ranks' (if necessary; only continuous and ordered factors)
     # NOTE: Correlation calculation restricted to observations where 'y' is non-zero
     if (y %in% ycor.vars) {
-      #ind <- which(as.numeric(data[[y]]) > 0)  #!!! TURN OFF FOR NOW --- TESTING !!!
-      ind <- 1:nrow(data)  # TEMPORARY TESTING - include all observations
+      ind <- which(as.numeric(data[[y]]) != 0)  # Restrict correlation calculation to non-zero observations
+      #ind <- 1:nrow(data)  # No restriction on correlation calculation
       j <- ranks.var == y  # Column in 'ranks' associated with 'y'
-      #p <- suppressWarnings(cor(ranks[ind, 1:(j - 1)], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
-      p <- suppressWarnings(cor(ranks[ind, !j], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
+      k <- ranks.var %in% c(xvars, yprior)  # Columns in 'ranks' associated with predictors of 'y'
+      p <- suppressWarnings(cor(ranks[ind, k], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
       p <- cleanNumeric(p[!is.na(p)], tol = 0.001)
     } else {
       p <- NULL
