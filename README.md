@@ -32,7 +32,7 @@ statistical disclosure control; e.g. the
 [synthpop](https://cran.r-project.org/web/packages/synthpop/index.html)
 package ([Nowok, Raab and Dibben
 2016](https://doi.org/10.18637%2Fjss.v074.i11)). It uses classification
-and regression tree models ([Breiman et
+and regression tree (CART) models ([Breiman et
 al. 1984](https://www.routledge.com/Classification-and-Regression-Trees/Breiman-Friedman-Stone-Olshen/p/book/9780412048418);
 see [rpart](https://cran.r-project.org/web/packages/rpart/index.html))
 to partition donor observations into low-variance nodes. Observations in
@@ -46,32 +46,41 @@ approach is used to sequentially simulate the fusion variables, allowing
 previously-simulated variables to become predictors in subsequent models
 (i.e. “chained” models).
 
-The package contains a number of innovations to improve performance
-across intended use cases:
+The package contains a number of features and innovations designed to
+improve performance across intended use cases:
 
 -   Pseudo-optimal ordering of the fusion variables is determined from
     analysis of predictor importance in fully-specified `rpart` models
     fit upfront.
 
 -   For continuous and ordered factor data types, the fusion/simulation
-    step identifies a minimal-change “reshuffling” of initial simulated
-    values that induces more realistic rank correlations with other
-    variables. Initial testing suggests this technique can improve
-    simulation quality.
+    step (optionally) identifies a minimal-change “reshuffling” of
+    initial simulated values that induces more realistic rank
+    correlations with other variables. This feature is experimental;
+    initial testing suggests it can improve simulation quality.
 
 -   LASSO regression is (optionally) used to “pre-screen” predictor
     variables prior to calling `rpart()`. Predictors for which the LASSO
     coefficient is shrunk to zero are excluded from consideration. This
-    can speed up tree-fitting considerably for large datasets.
+    can speed up tree-building considerably for larger datasets.
 
 -   A K-means clustering strategy is (optionally) used to “collapse” the
-    levels of unordered factor predictor variables. This allows for
-    faster tree-building when predictor variables with many levels are
+    levels of unordered factor predictor variables. This allows much
+    faster tree-building when categorical variables with many levels are
     used to model unordered factor response variables.
 
--   Fitted CART models are “slimmed” to retain only the information
-    absolutely necessary for the data fusion process, thereby reducing
-    the size of saved-on-disk objects and improving load times.
+-   The model-building process is (optionally) fully parallel on
+    UNIX-like systems.
+
+-   Key parts of the code utilize
+    [data.table](https://cran.r-project.org/web/packages/data.table/index.html)
+    and (optionally)
+    [biglm](https://cran.r-project.org/web/packages/biglm/index.html)
+    functionality for more efficient computation with larger datasets.
+
+-   Fitted `rpart` models are “slimmed” to retain only the information
+    absolutely necessary for the data fusion process, leading to reduced
+    file size when saved to disk and improved load times.
 
 ## Installation
 
@@ -170,34 +179,34 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                employment propane
-    1   Employed full-time       0
-    2 Not employed/retired       0
-    3 Not employed/retired       0
-    4   Employed full-time       0
-    5   Employed full-time       0
-    6 Not employed/retired       0
+                employment  propane
+    1   Employed full-time  0.00000
+    2 Not employed/retired  0.00000
+    3 Not employed/retired  0.00000
+    4 Not employed/retired  0.00000
+    5   Employed full-time  0.00000
+    6   Employed full-time 87.60114
                                                                                 education
-    1 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
+    1                                             Bachelor’s degree (for example: BA, BS)
     2                                                          High school diploma or GED
-    3                                             Bachelor’s degree (for example: BA, BS)
-    4                                                  Some college or Associate’s degree
-    5                                                          High school diploma or GED
-    6                                                Less than high school diploma or GED
-                                             heating fuel_oil hh_size
-    1                       Do not use space heating        0       4
-    2                           Some other equipment        0       2
-    3                                Central furnace        0       2
-    4                                Central furnace        0       1
-    5                                Central furnace        0       2
-    6 Steam/hot water system with radiators or pipes    22525       4
-           refrigerator_age
-    1 Less than 2 years old
-    2    10 to 14 years old
-    3      2 to 4 years old
-    4    10 to 14 years old
-    5    10 to 14 years old
-    6    10 to 14 years old
+    3                                                          High school diploma or GED
+    4                                                          High school diploma or GED
+    5 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
+    6                                                          High school diploma or GED
+                                                                          heating
+    1                                                             Central furnace
+    2                                                   Portable electric heaters
+    3                                                             Central furnace
+    4                                                             Central furnace
+    5                              Steam/hot water system with radiators or pipes
+    6 Built-in electric units installed in walls, ceilings, baseboards, or floors
+      fuel_oil hh_size   refrigerator_age
+    1        0       2   2 to 4 years old
+    2        0       1   2 to 4 years old
+    3        0       3 15 to 19 years old
+    4        0       3   2 to 4 years old
+    5        0       1   5 to 9 years old
+    6    72060       1   2 to 4 years old
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -215,26 +224,26 @@ similar in the donor and simulated data.
 
               propane fuel_oil hh_size square_feet electricity natural_gas
     donor      0.8992   0.9483       0           0           0      0.4193
-    simulated  0.9047   0.9471       0           0           0      0.4187
+    simulated  0.8943   0.9499       0           0           0      0.4277
               televisions
     donor          0.0239
-    simulated      0.0237
+    simulated      0.0251
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television. Now let’s look at the means of the non-zero
 values.
 
                propane fuel_oil hh_size square_feet electricity natural_gas
-    donor     346.7819  69028.6  2.5774    2081.443    11028.97    576.6752
-    simulated 372.6410  69145.0  2.5642    2107.789    11315.94    586.0939
+    donor     346.7819 69028.60  2.5774    2081.443    11028.97    576.6752
+    simulated 359.3702 72624.41  2.5601    2078.941    11033.72    574.7071
               televisions
     donor          2.4195
-    simulated      2.4244
+    simulated      2.4023
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
 Recall that “propane” and “fuel\_oil” are quite sparse, which generally
-results in noisier results.
+results in noisier simulation.
 
 ![](man/figures/README-unnamed-chunk-9-1.png)<!-- -->
 
@@ -243,7 +252,7 @@ For the remaining fused variables, we can compare the relative frequency
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0130           0.1567               0.4926         0.3377
+    donor            0.0151           0.1641               0.4810         0.3398
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
@@ -327,8 +336,8 @@ an estimate of the variance associated with the outcome.
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-     [1] 0.3600492 0.3566537 0.3552684 0.3446059 0.3423869 0.3420711 0.3444331
-     [8] 0.3293219 0.3409250 0.3315561
+     [1] 0.3611359 0.3594623 0.3609690 0.3432436 0.3519176 0.3535760 0.3381441
+     [8] 0.3545926 0.3641155 0.3635590
 
 ## Data synthesis
 
@@ -366,7 +375,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = FALSE))
 ```
 
     elapsed 
-      7.385 
+      7.562 
 
 ``` r
 # With parallel processing ('mc = TRUE')
@@ -374,39 +383,44 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
 ```
 
     elapsed 
-       4.32 
+      4.043 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
 variables in the presence of unordered factor predictors. This situation
 requires complete enumeration of the potential split strategies, which
-can be very slow *if the predictor has many levels*. The `maxcats`
+can be very slow if the predictor has many levels. The `maxcats`
 argument allows `train` to cluster predictor variable categories in such
 cases (up to `maxcats` clusters), thereby reducing the number of splits
 that need to be assessed. There is some loss of accuracy in exchange for
-(potentially) faster computation. Again, this is most noticeable if you
-have an unordered factor with many (e.g. &gt; 15) levels.
+(potentially) faster computation. This is most noticeable if you have an
+unordered factor with many (e.g. &gt; 15) levels.
 
 ``` r
 # Make the 'climate' variable a problematic unordered factor with 20 levels
 donor$climate <- factor(sample(LETTERS[1:20], nrow(donor), replace = TRUE))
 
 # Default approach ('maxcats = NULL')
+# Note that train() issues a warning about long compute time
 timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL))
 ```
 
+    Warning in train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL): 
+    Be careful: Unordered factors are present that could cause long compute times.
+    See 'maxcats' argument in ?train.
+
     elapsed 
-     16.115 
+     15.417 
 
 ``` r
-# With 'maxcats = 10'
+# Using `maxcats = 10`
 timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = 10))
 ```
 
     elapsed 
-      9.257 
+      8.328 
 
-The `lasso` argument allows `train()` to use LASSO regression via
+The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
 quickly eliminate potential predictor variables prior to tree building.
 The idea here is that a predictor whose coefficient is shrunk to zero in
@@ -414,31 +428,32 @@ the LASSO model is unlikely to be highly influential in the tree and can
 be discarded without significant loss of overall model skill. See
 `?train` for more details. As with `maxcats`, there is some (unknown)
 loss of accuracy in exchange for faster computation. This is most
-helpful for larger datasets.
+helpful for larger datasets, especially when some of the variables are
+highly correlated.
 
 ``` r
 # Make 'donor' larger (more rows and columns)
-donor <- recs[sample.int(nrow(recs), 30e3, replace = TRUE), ]
-donor[LETTERS[1:20]] <- runif(20 * nrow(donor))
+donor <- recs[sample.int(nrow(recs), 50e3, replace = TRUE), ]
+donor[LETTERS] <- runif(26 * nrow(donor))
 dim(donor)
 ```
 
-    [1] 30000    44
+    [1] 50000    50
 
 ``` r
 # Default approach (`lasso = NULL`)
-timeMe(train(data = donor, y = fusion.vars))
+timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
 ```
 
     elapsed 
-     45.483 
+     42.593 
 
 ``` r
-# Using `lasso` for fast screening of predictors
-timeMe(train(data = donor, y = fusion.vars, lasso = 0.9))
+# Using `lasso = 0.9`
+timeMe(train(data = donor, y = fusion.vars, mc = TRUE, lasso = 0.9))
 ```
 
     elapsed 
-     24.738 
+     27.746 
 
 ### Happy fusing!
