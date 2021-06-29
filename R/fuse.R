@@ -5,7 +5,9 @@
 #'
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
 #' @param train.object Output from successfull call to \link{train}.
-#' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Note that \code{induce = TRUE} can slow down simulation considerably.
+#' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? \code{induce = TRUE} can be slow for large datasets.
+#' @param induce.vars Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should be induced. The default value (\code{induce.vars = NULL}) induces correlation across all variables.
+#' @param use.biglm Logical. If \code{induce = TRUE}, \code{use.biglm = TRUE} will use \code{\link[biglm]{biglm}} from the \href{https://cran.r-project.org/web/packages/biglm/index.html}{biglm package} for the necessary OLS regressions. This can be faster and more memory efficiency for large datasets. The default (\code{use.biglm = FALSE}) uses \code{\link[stats]{.lm.fit}}, which is still quite fast in most cases.
 #'
 #' @return A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
 #' @examples
@@ -27,15 +29,41 @@
 # induce = TRUE
 # train.object <- train(data = donor, y = setdiff(names(donor), names(recipient)))
 
+# Big data
+# data <- readRDS("~/Documents/Projects/fusionData/rec_data.rds")
+# train.object <- readRDS("~/Documents/Projects/fusionData/fit.rds")
+# induce <- TRUE
+#
+# # EXAMPLE usage
+# #induce.vars <- NULL
+# induce.vars <- c(yord, grep("__", xvars, fixed = TRUE, value = TRUE))
+
 #---------------------
 
-fuse <- function(data, train.object, induce = TRUE) {
+fuse <- function(data,
+                 train.object,
+                 induce = TRUE,
+                 induce.vars = NULL,
+                 use.biglm = FALSE) {
 
   stopifnot(exprs = {
     is.data.frame(data)
     #class(train.object) == ...
     is.logical(induce)
+    !(!induce & !is.null(induce.vars))  # Nonsensical input
+    !(!induce & use.biglm)  # Nonsensical input
+
   })
+
+  # Check if 'biglm' package is required/installed
+  if (use.biglm & !"biglm" %in% installed.packages()[, "Package"]) {
+    stop("The 'biglm' package must be installed when 'use.biglm = TRUE'")
+  }
+
+  #-----
+
+  # Coerce 'data' to data.table, if necessary
+  data <- data.table::as.data.table(data)
 
   # Check that predictor variables are present
   xclass <- train.object$xclass
@@ -44,26 +72,25 @@ fuse <- function(data, train.object, induce = TRUE) {
   miss <- setdiff(xvars, names(data))
   if (length(miss) > 0) stop("The following predictor variables are missing from 'data':\n", paste(miss, collapse = ", "))
 
+  # Restrict 'data' to the xvars and ensure correct ordering of columns consistent with names(xclass)
+  data <- subset(data, select = xvars)
+
+  #-----
+
   # Check for appropriate class/type of predictor variables
-  xtest <- lapply(data[xvars], class)
+  xtest <- lapply(data, class)
   miss <- !map2_lgl(xclass, xtest, identical)
   if (any(miss)) stop("Incompatible data type for the following predictor variables:\n", paste(names(miss)[miss], collapse = ", "))
 
   # Check for appropriate levels of factor predictor variables
-  xtest <- lapply(data[names(xlevels)], levels)
+  xtest <- lapply(subset(data, select = names(xlevels)), levels)
   miss <- !map2_lgl(xlevels, xtest, identical)
   if (any(miss)) stop("Incompatible levels for the following predictor variables\n", paste(names(miss)[miss], collapse = ", "))
-
-  # Restrict 'data' to the xvars
-  data <- data[xvars]
 
   #-----
 
   # Names and order of variables to be fused
   yord <- names(train.object$models)
-
-  # Placeholder columns for the fusion output
-  data[yord] <- NA
 
   # Identify continuous yvars
   ycont <- names(which(sapply(train.object$yclass, function(x) x[1] %in% c("integer", "numeric"))))
@@ -74,10 +101,65 @@ fuse <- function(data, train.object, induce = TRUE) {
     Qx <- c(0, cumsum(Qx / sum(Qx)))
   }
 
-  # Assemble 'ranks' matrix for the xvars
+  #-----
+
+  # Set default 'induce.vars' if initially NULL
+  if (induce & is.null(induce.vars)) induce.vars <- c(xvars, yord)
+
+  # Check that all 'induce.vars' are valid
+  miss <- setdiff(induce.vars, c(xvars, yord))
+  if (any(miss)) stop("The following 'induce.vars' are not valid:\n", paste(names(miss)[miss], collapse = ", "))
+
+  #-----
+
+  # Detect and impute any missing values in 'data'
+  na.cols <- names(which(sapply(data, anyNA)))
+  if (length(na.cols) > 0) {
+    cat("Imputing missing values in predictor variables...\n")
+    warning("Missing values were imputed for the following variables: ", paste(na.cols, collapse = ", "))
+    for (j in na.cols) {
+      x <- data[[j]]
+      ind <- is.na(x)
+      data.table::set(data, i = which(ind), j = j, value = imputationValue(x, ind))
+    }
+  }
+
+  #-----
+
+  # Build 'ranks' data.table for the 'xvars', if 'induce = TRUE'
+  # TO DO: Restrict the variables for which this is applicable?
+  # This is a memory-efficient implementation using data.table
+
   if (induce) {
-    ranks <- lapply(xvars, matFun, data = data)
-    ranks <- do.call(cbind, ranks)
+
+    cat("Building ranks matrix (induce = TRUE)...\n")
+
+    # Correlation variables to retain in initial 'ranks' data.table, based on 'induce.vars' argument
+    retain <- intersect(induce.vars, xvars)
+
+    # Unordered factor variables among retained 'xvars'
+    xunordered <- sapply(xclass[retain], function(x) x[1] == "factor")
+
+    # Build 'ranks' data.table for 'xvars' that are NOT unordered factors
+    ranks <- subset(data, select = names(which(!xunordered)))
+    for (v in names(ranks)) data.table::set(ranks, j = v, value = data.table::frank(ranks[[v]], ties.method = "average"))
+
+    # Create dummy variable columns in 'ranks' for the 'xvars' that ARE unordered factors
+    for (v in names(which(xunordered))) {
+      dt <- subset(data, select = v)
+      u <- xlevels[[v]]
+      newv <- paste0(v, u)
+      data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(dt == x)))
+    }
+
+    # Scale all variable ranks for unit variance and zero mean
+    # Makes computations simpler in induceCor()
+    for (v in names(ranks)) data.table::set(ranks, j = v, value = as.vector(scale(ranks[[v]])))
+
+    # Clean up
+    rm(dt)
+    gc()
+
   }
 
   #-----
@@ -105,6 +187,7 @@ fuse <- function(data, train.object, induce = TRUE) {
 
       # Predicted node for rows in 'data'
       pnode <- predictNode(object = m, newdata = data)
+      gc()
 
       # Catch and fix rare case of missing node (unclear why this might occur)
       miss <- setdiff(pnode, nodes)
@@ -151,12 +234,13 @@ fuse <- function(data, train.object, induce = TRUE) {
       if (!is.null(km)) {
         for (d in km) {
           ind <- match(data[[names(d)[1]]], d[[1]])
-          data[names(d)[2]] <- d[ind, 2]
+          data.table::set(data, j = names(d)[2], value = d[ind, 2])
         }
       }
 
       # Class probabilities
       p <- predict(object = m, newdata = data)
+      gc()
 
       # Simulated value
       ptile <- runif(n = nrow(data))
@@ -174,15 +258,24 @@ fuse <- function(data, train.object, induce = TRUE) {
     #-----
 
     # Assign final simulated vector
-    data[[y]] <- S
+    data.table::set(data, j = y, value = S)
 
     #-----
 
     # Proceed to induce correlation and/or update 'ranks' matrix, if requested
     if (induce) {
 
-      # Create 'ranks' matrix addition for 'y'
-      yrank <- matFun(y, data)
+      # Create appropriate column(s) in 'ranks' for simulated 'y' values
+      # NOTE that this is only done if 'y' is in 'induce.vars'; otherwise, its rank can be ignored
+      if (y %in% induce.vars) {
+        if (yclass[1] == "factor") {
+          u <- levels(S)
+          newv <- paste0(y, u)
+          data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(S == x)))
+        } else {
+          data.table::set(ranks, j = y, value = as.vector(scale(data.table::frank(S, ties.method = "average"))))
+        }
+      }
 
       #-----
 
@@ -192,49 +285,49 @@ fuse <- function(data, train.object, induce = TRUE) {
         # Target rank correlations
         rho <- train.object$ycor[[y]]
 
-        # Restrict adjusted to non-zero observations
-        i <- as.numeric(data[[y]]) != 0
+        # Restrict target correlation to variables present in 'ranks'
+        rho <- rho[names(rho) %in% names(ranks)]
 
-        # Identify and remove any no-variance columns in 'X'
-        X <- ranks[i, names(rho)]
-        #nv <- apply(X, MARGIN = 2, FUN = novary)
-        nv <- apply(X, MARGIN = 2, FUN = function(x) var(x) == 0)  # Slightly faster
-        if (any(nv)) {
-          X <- X[, -which(nv)]
-          rho <- rho[-which(nv)]
+        # Attempt to induce target rank correlations
+        Yout <- induceCor(data = data.table::copy(ranks), rho = rho, y = y, scale.data = FALSE, use.biglm = use.biglm)
+
+        # Only updated y-values if the correlation adjustment was successful (sigma2 >= 0)
+        if (Yout$sigma2 >= 0) {
+
+          # Before and after rank correlations compared to 'rho' target correlation
+          # plot(rho, cor(ranks[, -..y], ranks[[y]])[, 1])  # Before
+          # plot(rho, cor(ranks[, -..y], Yout$Y)[, 1])  # After
+          # abline(0, 1)
+
+          # Re-order original y data to match ranks in Y (this preserve the original distribution)
+          Y <- sort(data[[y]])[data.table::frank(Yout$Y, ties.method = "random")]
+
+          # Confirm that univariate distribution is unchanged
+          # hist(data[i, y])
+          # hist(Y)
+
+          # Comparing before and after y values, original scale
+          # plot(data[i, y], Y)
+          # abline(0, 1, col = 2)
+          # cor(data[i, y], Y)
+
+          # Update original 'y' data with adjusted simulated values
+          data.table::set(data, j = y, value = Y)
+
+          # Update the 'ranks' matrix with ranks derived from adjusted 'Y'
+          if (y %in% names(ranks)) {
+            if (yclass[1] == "factor") {
+              u <- levels(Y)
+              newv <- paste0(y, u)
+              data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(Y == x)))
+            } else {
+              data.table::set(ranks, j = y, value = as.vector(scale(data.table::frank(Y, ties.method = "average"))))
+            }
+          }
+
         }
 
-        # Attempt to induce desired correlation
-        Y <- induceCor(x = X, rho = rho, y = yrank[i, ])
-
-        # Before and after rank correlations compared to 'rho' target correlation
-        # plot(rho, cor(X, yrank[i, ])[, 1])  # Before
-        # plot(rho, cor(X, Y)[, 1])  # After
-        # abline(0, 1)
-
-        # Re-order original y data to match ranks in Y (this preserve the original distribution)
-        Y <- sort(data[i, y])[rank(Y, ties.method = "random")]
-
-        # Confirm that univariate distribution is unchanged
-        # hist(data[i, y])
-        # hist(Y)
-
-        # Comparing before and after y values, original scale
-        # plot(data[i, y], Y)
-        # abline(0, 1, col = 2)
-        # cor(data[i, y], Y)
-
-        # Update original 'y' data with adjusted simulated values
-        data[i, y] <- Y
-
-        # Update 'yrank' object to reflect adjustment
-        yrank <- matFun(y, data)
-
-
       }
-
-      # Update the 'ranks' matrix
-      ranks <- cbind(ranks, yrank)
 
     }
 
@@ -252,7 +345,6 @@ fuse <- function(data, train.object, induce = TRUE) {
 
   # Simulation complete
   # Return only the fusion variables
-  result <- data[yord]
-  return(result)
+  return(as.data.frame(subset(data, select = yord)))
 
 }

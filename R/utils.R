@@ -42,7 +42,7 @@ signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 
 # Function to convert a numeric vector to integer, if possible
 convertInteger <- function(x) {
-  if (all(x[!is.na(x)] %% 1 == 0)) {
+  if (all(x[!is.na(x)] %% 1 == 0) & max(x, na.rm = TRUE) < 2*10^9) {
     return(as.integer(round(x)))
   } else {
     return(x)
@@ -131,14 +131,35 @@ predictNode <- function(object, newdata) {
 
 #------------------
 
+# TO DO: REPLACE use in train() with faster application
 # Function to create appropriate matrix object (perhaps dummy variables) for variable 'v' in data frame 'data'
 # This used within both train() and fuse()
-matFun <- function(v, data) {
-  stopifnot(length(v) == 1)
-  d <- data[v] %>%
-    mutate_if(is.ordered, as.integer) %>%
-    mutate_if(is.numeric, rank)
-  out <- model.matrix(~ 0 + ., data = d)
-  #if (ncol(out) > 1) out <- out[, -1L]  # Drop one factor level
-  return(out)
+# matFun <- function(v, data) {
+#   stopifnot(length(v) == 1L)
+#   x <- data[[v]]
+#   if (is.numeric(x) | is.ordered(x)) {
+#     m <- data.table::frank(x)
+#     dim(m) <- c(length(m), 1L)  # See "Note" in ?matrix about converting vector to matrix
+#     dimnames(m) <- list(NULL, v)
+#   } else {
+#     u <- levels(x)
+#     m <- matrix(data = 0L, nrow = length(x), ncol = length(u), dimnames = list(NULL, paste0(v, u)))
+#     for (i in 1:ncol(m)) m[x == u[i], i] <- 1L
+#   }
+#   return(m)
+# }
+
+#------------------
+
+# Function to detect and impute any missing values in 'data'
+# Performs median imputation of continuous variables and frequency-weighted sampling of categorical variables
+imputationValue <- function(x, na.ind) {
+  if (is.numeric(x)) {
+    m <- median(x, na.rm = TRUE)
+    if (is.integer(x)) as.integer(round(m)) else m
+  } else {
+    tab <- table(x) / sum(!na.ind)
+    m <- sample(names(tab), size = sum(na.ind), replace = TRUE, prob = tab)
+  }
+  return(m)
 }

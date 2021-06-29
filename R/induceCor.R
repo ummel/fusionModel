@@ -25,35 +25,79 @@
 
 #---------------------------
 
-induceCor <- function(x, rho, y = NULL, threshold = 1e-12) {
+# data: a data.table
+# rho: named vector of target correlations; all names must be in 'data'
 
-  if (is.data.frame(x)) x <- as.matrix(x)
-  if (is.vector(x)) x <- matrix(x, ncol = 1)
+induceCor <- function(data, rho, y = NULL, scale.data = FALSE, use.biglm = FALSE, threshold = 1e-12) {
+
+  # if (is.data.frame(x)) x <- as.matrix(x)
+  # if (is.vector(x)) x <- matrix(x, ncol = 1)
 
   stopifnot(exprs = {
+    is.data.frame(data)
+    all(names(rho) %in% names(data))
+    is.null(y) | y %in% names(data)
     class(rho) == "numeric"
-    length(rho) == ncol(x)
     all(rho <= 1)
     all(rho >= -1)
   })
 
-  d <- ncol(x)
-  n <- nrow(x)
+  d <- length(rho)
+  n <- nrow(data)
 
-  # Makes computations simpler
-  x <- scale(x)
+  # Random initial Gaussian for 'y', if none provided
+  if (is.null(y)) data.table::set(data, j = y, value = rnorm(n))
 
-  # Random initial Gaussian, if none provided
-  if (is.null(y)) y <- rnorm(n)
-  y.mu <- mean(y)
-  y.sd <- sd(y)
-  y <- scale(y)
+  # Scale 'y'; retain mean and standard deviation to undo scaling at very end
+  y.mu <- mean(data[[y]])
+  y.sd <- sd(data[[y]])
+
+  # Reorder 'data' columns so the first columns match names in 'rho'
+  # This moves any unspecified columns (e.g. 'y') to after the 'rho'-name columns
+  cols <- c(y, names(rho))
+  suppressWarnings(data.table::set(data, j = setdiff(names(data), cols), value = NULL))  # Remove unnecessary columns
+  data.table::setcolorder(data, cols)  # Order columns
+  data.table::setnames(data, new = make.names(names(data)))  # Ensure syntactically valid names
+
+  # Scale all variables, if requested
+  # Makes computations simpler according to original code
+  # NOTE: When called within fuse(), the 'ranks' input data are already scaled
+  if (scale.data) for (v in names(data)) data.table::set(data, j = v, value = as.vector(scale(data[[v]])))
+
+  #-----
 
   # Remove the effects of `y` on `x`
-  # On speed of various lm() implementations: https://stackoverflow.com/questions/25416413/is-there-a-faster-lm-function
-  #e <- residuals(lm(y ~ x))
-  #e <- lm.fit(x = x, y = y)$residuals  # Considerably faster than lm()
-  e <- .lm.fit(x = x, y = y)$residuals  # Even faster than lm.fit
+
+  if (use.biglm) {
+
+    # Use biglm() to compute residuals
+    # Is faster and more memory efficient for especially large 'data'
+    mod <- biglm::biglm(formula = as.formula(paste(names(data)[1], "~", paste(names(data)[-1], collapse = " + "))), data = data)
+    x <- as.matrix(data[, -1L])
+    y <- data[[y]]
+    rm(data)
+    gc()
+
+    beta <- coef(mod)
+    beta[is.na(beta)] <- 0
+    e <- y - (beta[1L] + drop(x %*% beta[-1L]))  # Model residuals; drop intercept
+
+  } else {
+
+    # Use .lm.fit() to compute residuals
+    # On speed of various conventional lm() implementations: https://stackoverflow.com/questions/25416413/is-there-a-faster-lm-function
+    # NOTE: .lm.fit() is faster than either lm.fit() or lm()
+    x <- as.matrix(data[, -1L])
+    e <- .lm.fit(x = x, y = data[[1L]])$residuals
+    y <- data[[y]]
+    rm(data)
+    gc()
+
+  }
+
+  gc()
+
+  #-----
 
   # Calculate the coefficient `sigma` of `e` so that the correlation of
   # `x` with the linear combination x.dual %*% rho + sigma*e is the desired vector.
@@ -74,7 +118,7 @@ induceCor <- function(x, rho, y = NULL, threshold = 1e-12) {
   }
 
   # Transform 'z' to original units of 'y'
-  result <- as.numeric(z * y.sd + y.mu)
+  result <- list(Y = as.numeric(z * y.sd + y.mu), sigma2 = sigma2)
 
   return(result)
 
