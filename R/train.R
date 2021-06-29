@@ -65,6 +65,13 @@ train <- function(data,
     is.null(lasso) | (lasso >= 0 & lasso <= 1)
   })
 
+  # Check if 'glmnet' package is required/installed
+  if (!is.null(lasso) & !"glmnet" %in% installed.packages()[, "Package"]) {
+    stop("The 'glmnet' package must be installed when 'lasso' is specified")
+  }
+
+  #-----
+
   # Check that no more than one of 'x' or 'ignore' is specified
   if (!is.null(x) & !is.null(ignore)) stop("Only one of 'x' or 'ignore' may be non-NULL")
 
@@ -136,7 +143,7 @@ train <- function(data,
   stopifnot(all(make.names(yvars, unique = TRUE) == yvars))
   stopifnot(all(make.names(xvars, unique = TRUE) == xvars))
 
-  # Print to console
+  # Print variable information to console
   cat("Identified ", length(yvars), " fusion variables\n")
   cat("Identified ", length(xvars), " predictor variables\n")
 
@@ -148,18 +155,12 @@ train <- function(data,
   # Detect and impute any missing values in 'data'
   na.cols <- names(which(sapply(data, anyNA)))
   if (length(na.cols) > 0) {
-    cat("Imputing missing values...\n")
+    cat("Imputing missing values in predictor variables...\n")
     warning("Missing values were imputed for the following variables: ", paste(na.cols, collapse = ", "))
     for (j in na.cols) {
-      v <- data[[j]]
-      ind <- is.na(data[[j]])
-      data[ind, j] <- if (is.numeric(v)) {
-        m <- median(v[!ind])
-        if (is.integer(v)) as.integer(round(m)) else m
-      } else {
-        tab <- table(v) / sum(!ind)
-        m <- sample(names(tab), size = sum(ind), replace = TRUE, prob = tab)
-      }
+      x <- data[[j]]
+      ind <- is.na(x)
+      set(data, i = which(ind), j = j, value = imputationValue(x, ind))
     }
   }
 
@@ -180,6 +181,11 @@ train <- function(data,
   yclass <- lapply(x, class)
   ylevels <- lapply(x[grepl("factor", yclass)], levels)
 
+  # Placeholder list for 'ycor' with slots for continuous and ordered factor fusion variables (but not unordered factors)
+  ycor.vars <- names(which(sapply(yclass, function(x) x[1] != "factor")))
+
+  #-----
+
   # Extract data classes and levels for the 'xvars'
   x <- data[xvars]
   xclass <- lapply(x, class)
@@ -193,6 +199,37 @@ train <- function(data,
     continue <- readline(prompt = "Do you want to continue with 'maxcats = NULL'? (Y/N):\n")
     if (tolower(continue) != "y") stop(call. = FALSE)
   }
+
+  #----------------------------------
+  #----------------------------------
+
+  # RANKS MATRIX
+
+  cat("Building ranks matrix...\n")
+
+  # Unordered factor variables among all variables
+  unordered <- sapply(c(xclass, yclass), function(x) x[1] == "factor")
+
+  # Build 'ranks' data.table for 'xvars' that are NOT unordered factors
+  ranks <- subset(data, select = names(which(!unordered)))
+  for (v in names(ranks)) data.table::set(ranks, j = v, value = data.table::frank(ranks[[v]], ties.method = "average"))
+
+  # Variable associated with each column of 'ranks' matrix
+  # Updated below when dummy variable columns are created
+  ranks.var <- names(ranks)
+
+  # Create dummy variable columns in 'ranks' for the 'xvars' that ARE unordered factors
+  for (v in names(which(unordered))) {
+    dt <- subset(data, select = v)
+    u <- xlevels[[v]]
+    newv <- paste0(v, u)
+    ranks.var <- c(ranks.var, rep(v, length(u)))
+    ranks[newv] <- lapply(u, function(x) as.integer(dt == x))  # Works if 'ranks' is data.frame
+    #data.table::set(ranks, j = newv, value = lapply(u, function(x) as.integer(dt == x)))  # Only works if 'ranks' is a data.table
+  }
+
+  # Safety check
+  stopifnot(length(ranks.var) == ncol(ranks))
 
   #----------------------------------
   #----------------------------------
@@ -221,21 +258,12 @@ train <- function(data,
 
   # Cleanup
   rm(full.varimp)
+  gc()
 
   #----------------------------------
   #----------------------------------
 
   # FIT MODELS
-
-  # Assemble dummy matrix for 'xvars' and 'yvars'
-  ranks <- lapply(c(xvars, yord), matFun, data = data)
-  ranks.var <- unlist(mapply(rep, x = c(xvars, yord), each = sapply(ranks, ncol)), use.names = FALSE)  # Variable associated with each column of 'ranks' matrix
-  ranks <- do.call(cbind, ranks)
-
-  # Placeholder list for 'ycor' with slots for continuous and ordered factor fusion variables (but not unordered factors)
-  ycor.vars <- names(which(sapply(yclass, function(x) x[1] != "factor")))
-
-  #-----
 
   cat("Building fusion models...\n")
 
@@ -300,9 +328,11 @@ train <- function(data,
     # Calculate (rank) correlation between 'y' and existing variables in 'ranks' (if necessary; only continuous and ordered factors)
     # NOTE: Correlation calculation restricted to observations where 'y' is non-zero
     if (y %in% ycor.vars) {
-      ind <- which(as.numeric(data[[y]]) > 0)
-      j <- which(ranks.var == y)  # Column in 'ranks' associated with 'y'
-      p <- suppressWarnings(cor(ranks[ind, 1:(j - 1)], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
+      #ind <- which(as.numeric(data[[y]]) > 0)  #!!! TURN OFF FOR NOW --- TESTING !!!
+      ind <- 1:nrow(data)  # TEMPORARY TESTING - include all observations
+      j <- ranks.var == y  # Column in 'ranks' associated with 'y'
+      #p <- suppressWarnings(cor(ranks[ind, 1:(j - 1)], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
+      p <- suppressWarnings(cor(ranks[ind, !j], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
       p <- cleanNumeric(p[!is.na(p)], tol = 0.001)
     } else {
       p <- NULL
