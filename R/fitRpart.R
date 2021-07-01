@@ -71,11 +71,11 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
   fobj <- as.formula(paste0(y, "~", paste(setdiff(x, lasso.ignore), collapse = "+")))
 
   # Fit rpart() model
-  args.list <- c(list(formula = fobj,
-                      data = data,
-                      weights = data[[w]],
-                      method = ifelse(ycon, "anova", "class")),
-                 args)
+  args.list <- list(formula = fobj,
+                    data = data,
+                    weights = data[[w]],
+                    method = ifelse(ycon, "anova", "class"),
+                    unlist(args))
 
   m <- do.call(rpart::rpart, args = args.list)
 
