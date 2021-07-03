@@ -74,7 +74,7 @@ novary <- function(x) length(unique(na.omit(x))) == 1
 slimRpart <- function(m) {
   m$where <- NULL
   m$call <- NULL
-  m$cptable <- NULL
+  #m$cptable <- NULL
   m$numresp <- NULL
   m$parms <- NULL
   m$functions <- NULL
