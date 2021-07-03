@@ -66,17 +66,20 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
 
   #-----
 
-  # Formual object
-  # NOTE that 'x' predictors are potentially exlcuded via 'lasso.ignore'
+  # Formula object
+  # NOTE that 'x' predictors are potentially excluded via 'lasso.ignore'
   fobj <- as.formula(paste0(y, "~", paste(setdiff(x, lasso.ignore), collapse = "+")))
 
-  # Fit rpart() model
+  # Arguments list for rpart, passed via do.call()
   args.list <- list(formula = fobj,
                     data = data,
                     weights = data[[w]],
-                    method = ifelse(ycon, "anova", "class"),
-                    unlist(args))
+                    method = ifelse(ycon, "anova", "class"))
 
+  # Adds any custom arguments specified in 'args'
+  args.list <- c(args.list, args)
+
+  # Call rpart() with specified arguments
   m <- do.call(rpart::rpart, args = args.list)
 
   # If cross-validation used, select the pruned tree that minimized cross-validation error
