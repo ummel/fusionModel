@@ -6,7 +6,7 @@
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
 #' @param train.object Output from successfull call to \link{train}.
 #' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? \code{induce = TRUE} can be slow for large datasets.
-#' @param induce.vars Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should be induced. The default value (\code{induce.vars = NULL}) induces correlation across all variables.
+#' @param induce.ignore Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.
 #' @param use.biglm Logical. If \code{induce = TRUE}, \code{use.biglm = TRUE} will use \code{\link[biglm]{biglm}} from the \href{https://cran.r-project.org/web/packages/biglm/index.html}{biglm package} for the necessary OLS regressions. This can be faster and more memory efficiency for large datasets. The default (\code{use.biglm = FALSE}) uses \code{\link[stats]{.lm.fit}}, which is still quite fast in most cases.
 #'
 #' @return A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
@@ -33,26 +33,20 @@
 # data <- readRDS("~/Documents/Projects/fusionData/rec_data.rds")
 # train.object <- readRDS("~/Documents/Projects/fusionData/fit.rds")
 # induce <- TRUE
-#
-# # EXAMPLE usage
-# #induce.vars <- NULL
-# induce.vars <- c(yord, grep("__", xvars, fixed = TRUE, value = TRUE))
 
 #---------------------
 
 fuse <- function(data,
                  train.object,
                  induce = TRUE,
-                 induce.vars = NULL,
+                 induce.ignore = NULL,
                  use.biglm = FALSE) {
 
   stopifnot(exprs = {
     is.data.frame(data)
     #class(train.object) == ...
     is.logical(induce)
-    !(!induce & !is.null(induce.vars))  # Nonsensical input
-    !(!induce & use.biglm)  # Nonsensical input
-
+    !(!induce & !is.null(induce.ignore))  # Nonsensical input
   })
 
   # Check if 'biglm' package is required/installed
@@ -103,12 +97,16 @@ fuse <- function(data,
 
   #-----
 
-  # Set default 'induce.vars' if initially NULL
-  if (induce & is.null(induce.vars)) induce.vars <- c(xvars, yord)
-
-  # Check that all 'induce.vars' are valid
-  miss <- setdiff(induce.vars, c(xvars, yord))
-  if (any(miss)) stop("The following 'induce.vars' are not valid:\n", paste(names(miss)[miss], collapse = ", "))
+  # Set 'induce.vars'; these are the variables for which correlation will be induced
+  if (induce) {
+    induce.vars <- if (is.null(induce.ignore)) {
+      c(xvars, yord)
+    } else {
+      validNames(induce.ignore, c(xvars, yord), exclude = TRUE)
+    }
+    stopifnot(length(induce.vars) > 0)
+    cat("Will attempt to induce correlation for a total of", length(induce.vars), "variables\n")
+  }
 
   #-----
 
@@ -245,8 +243,7 @@ fuse <- function(data,
       # Simulated value
       ptile <- runif(n = nrow(data))
       for (i in 2:ncol(p)) p[, i] <- p[, i - 1] + p[, i]
-      for (i in 1:ncol(p)) p[, i] <- ptile > p[, i]
-      S <- rowSums(p) + 1L
+      S <- rowSums(ptile > p) + 1L
       S <- colnames(p)[S]
 
       # Ensure simulated vector is correct data type
