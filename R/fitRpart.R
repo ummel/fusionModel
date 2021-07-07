@@ -122,7 +122,7 @@ collapseCategorical <- function(x, y, w, data, n) {
   # Derive kmeans() clusters
   maxn <- nrow(distinct(d[-1L]))
   if (maxn > n) {
-    k <- kmeans(x = d[-1L], centers = n)
+    k <- kmeans(x = d[-1L], centers = n, nstart = 30)
   } else {
     k <- group_by_at(d, -1L) %>% mutate(cluster = cur_group_id())
   }
