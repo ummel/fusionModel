@@ -72,8 +72,9 @@ fuse <- function(data,
   #-----
 
   # Check for appropriate class/type of predictor variables
+
   xtest <- lapply(data, class)
-  miss <- !map2_lgl(xclass, xtest, identical)
+  miss <- !map2_lgl(xclass, xtest, sameClass)
   if (any(miss)) stop("Incompatible data type for the following predictor variables:\n", paste(names(miss)[miss], collapse = ", "))
 
   # Check for appropriate levels of factor predictor variables

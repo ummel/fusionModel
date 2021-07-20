@@ -163,3 +163,12 @@ imputationValue <- function(x, na.ind) {
   }
   return(m)
 }
+
+#------------------
+
+# Function to treat integer and numeric as equal when checking for identical classes in fuse()
+sameClass <- function(x, y) {
+  if (x[1] == "integer") x <- "numeric"
+  if (y[1] == "integer") y <- "numeric"
+  identical(x, y)
+}
