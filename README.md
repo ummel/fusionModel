@@ -53,12 +53,6 @@ improve performance across intended use cases:
     analysis of predictor importance in fully-specified `rpart` models
     fit upfront.
 
--   For continuous and ordered factor data types, the fusion/simulation
-    step (optionally) identifies a minimal-change “reshuffling” of
-    initial simulated values that induces more realistic rank
-    correlations with other variables. This feature is experimental;
-    initial testing suggests it can improve simulation quality.
-
 -   LASSO regression is (optionally) used to “pre-screen” predictor
     variables prior to calling `rpart()`. Predictors for which the LASSO
     coefficient is shrunk to zero are excluded from consideration. This
@@ -68,6 +62,11 @@ improve performance across intended use cases:
     levels of unordered factor predictor variables. This allows much
     faster tree-building when categorical variables with many levels are
     used to model unordered factor response variables.
+
+-   For continuous and ordered factor data types, the fusion/simulation
+    step (optionally) identifies a minimal-change “reshuffling” of
+    initial simulated values that induces more realistic rank
+    correlations with other variables. *This feature is experimental*.
 
 -   The model-building process is (optionally) fully parallel on
     UNIX-like systems.
@@ -179,34 +178,34 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                employment  propane
-    1   Employed full-time  0.00000
-    2 Not employed/retired  0.00000
-    3 Not employed/retired  0.00000
-    4 Not employed/retired  0.00000
-    5   Employed full-time  0.00000
-    6   Employed full-time 87.60114
+                employment propane
+    1   Employed full-time       0
+    2   Employed full-time       0
+    3 Not employed/retired       0
+    4   Employed part-time       0
+    5   Employed full-time       0
+    6   Employed part-time       0
                                                                                 education
-    1                                             Bachelor’s degree (for example: BA, BS)
+    1 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
     2                                                          High school diploma or GED
-    3                                                          High school diploma or GED
-    4                                                          High school diploma or GED
-    5 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
+    3                                                  Some college or Associate’s degree
+    4                                                  Some college or Associate’s degree
+    5                                                          High school diploma or GED
     6                                                          High school diploma or GED
-                                                                          heating
-    1                                                             Central furnace
-    2                                                   Portable electric heaters
-    3                                                             Central furnace
-    4                                                             Central furnace
-    5                              Steam/hot water system with radiators or pipes
-    6 Built-in electric units installed in walls, ceilings, baseboards, or floors
-      fuel_oil hh_size   refrigerator_age
-    1        0       2   2 to 4 years old
-    2        0       1   2 to 4 years old
-    3        0       3 15 to 19 years old
-    4        0       3   2 to 4 years old
-    5        0       1   5 to 9 years old
-    6    72060       1   2 to 4 years old
+                                       heating fuel_oil hh_size
+    1                          Central furnace        0       4
+    2     Built-in floor/wall pipeless furnace        0       3
+    3 Wood-burning stove (cordwood or pellets)        0       2
+    4                          Central furnace        0       1
+    5                          Central furnace        0       5
+    6                          Central furnace   109231       3
+           refrigerator_age
+    1      5 to 9 years old
+    2 Less than 2 years old
+    3     20 years or older
+    4      5 to 9 years old
+    5    10 to 14 years old
+    6     20 years or older
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -224,10 +223,10 @@ similar in the donor and simulated data.
 
               propane fuel_oil hh_size square_feet electricity natural_gas
     donor      0.8992   0.9483       0           0           0      0.4193
-    simulated  0.8943   0.9499       0           0           0      0.4277
+    simulated  0.8948   0.9476       0           0           0      0.4319
               televisions
     donor          0.0239
-    simulated      0.0251
+    simulated      0.0232
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television. Now let’s look at the means of the non-zero
@@ -235,10 +234,10 @@ values.
 
                propane fuel_oil hh_size square_feet electricity natural_gas
     donor     346.7819 69028.60  2.5774    2081.443    11028.97    576.6752
-    simulated 359.3702 72624.41  2.5601    2078.941    11033.72    574.7071
+    simulated 379.7865 71669.75  2.5939    2075.888    11041.90    586.1215
               televisions
     donor          2.4195
-    simulated      2.4023
+    simulated      2.4129
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
@@ -252,7 +251,7 @@ For the remaining fused variables, we can compare the relative frequency
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0151           0.1641               0.4810         0.3398
+    donor            0.0139           0.1498               0.4965         0.3398
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
@@ -297,15 +296,38 @@ for the purposes of comparison.
 
 ![](man/figures/README-unnamed-chunk-16-1.png)<!-- -->
 
-Finally, for illustrative purposes, we assess the non-linear
-relationship between two continuous variables – “square\_feet” and
-“electricity” – both overall and for geographic areas defined by the
-“urban\_rural” variable. The plot below shows the GAM-smoothed
-relationship for the donor and simulated data. Note the high degree of
-overlap for the confidence interval shading, implying that the
-relationships are statistically indistinguishable.
+Next, for illustrative purposes, we assess the non-linear relationship
+between two continuous variables – “square\_feet” and “electricity” –
+both overall and for geographic areas defined by the “urban\_rural”
+variable. The plot below shows the GAM-smoothed relationship for the
+donor and simulated data. Note the high degree of overlap for the
+confidence interval shading, implying that the relationships are
+statistically indistinguishable.
 
 ![](man/figures/README-unnamed-chunk-17-1.png)<!-- -->
+
+Finally, we can conduct a more extensive multivariate test by comparing
+regression coefficients from models fit to the donor with analogous
+coefficients derived from the simulated data. That is, do the results of
+a regression analysis using the donor data look similar to results
+produced by the simulated data? This is a rather stiff test of
+simulation quality, since the simulated data must replicate multivariate
+relationships across a range of phenomena.
+
+Each continuous or ordered factor variable is entered as the dependent
+variable in an OLS model. A subset of all the other variables (up to
+seven total) is selected via LASSO regression to serve as the
+predictors. The same model is then fit to both the donor and simulated
+data and the coefficients compared. To make the coefficients comparable
+across models, all variables are scaled to zero-mean and unit-variance
+(i.e. standardized coefficients).
+
+![](man/figures/README-unnamed-chunk-18-1.png)<!-- -->
+
+This exercise yields a total of 132 model terms (including intercepts)
+for which coefficients can be compared. The plot above shows that models
+fit to the simulated data do a good job replicating coefficients derived
+from the original data (correlation = 0.96).
 
 ## Generating implicates
 
@@ -336,8 +358,8 @@ an estimate of the variance associated with the outcome.
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-     [1] 0.3611359 0.3594623 0.3609690 0.3432436 0.3519176 0.3535760 0.3381441
-     [8] 0.3545926 0.3641155 0.3635590
+     [1] 0.3512858 0.3385980 0.3155095 0.3437753 0.3144768 0.3303210 0.3403988
+     [8] 0.3282773 0.3299912 0.3400484
 
 ## Data synthesis
 
@@ -375,7 +397,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = FALSE))
 ```
 
     elapsed 
-      7.562 
+      7.632 
 
 ``` r
 # With parallel processing ('mc = TRUE')
@@ -383,7 +405,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
 ```
 
     elapsed 
-      4.043 
+      4.127 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
@@ -410,7 +432,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL))
     See 'maxcats' argument in ?train.
 
     elapsed 
-     15.417 
+     15.172 
 
 ``` r
 # Using `maxcats = 10`
@@ -418,7 +440,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = 10))
 ```
 
     elapsed 
-      8.328 
+      7.818 
 
 The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
@@ -446,7 +468,7 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
 ```
 
     elapsed 
-     42.593 
+     43.026 
 
 ``` r
 # Using `lasso = 0.9`
@@ -454,6 +476,6 @@ timeMe(train(data = donor, y = fusion.vars, mc = TRUE, lasso = 0.9))
 ```
 
     elapsed 
-     27.746 
+     29.095 
 
 ### Happy fusing!
