@@ -51,8 +51,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
 
   #-----
 
-  # If requested, screen 'x' predictors via fast LASSO regression
-  # When 'fast' = TRUE, no screeening occurs if 'y' is an unordered factor
+  # If requested, screen 'x' predictors via LASSO regression
   lasso.ignore <- if (is.null(lasso.threshold)) {
     NULL
   } else {
@@ -60,8 +59,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
                 x = x,
                 w = w,
                 data = data,
-                lasso.threshold = lasso.threshold,
-                fast = TRUE)
+                lasso.threshold = lasso.threshold)
   }
 
   #-----
@@ -137,31 +135,26 @@ collapseCategorical <- function(x, y, w, data, n) {
 #--------------------
 #--------------------
 
-LASSOignore <- function(y, x, w, data, lasso.threshold, fast = TRUE) {
+LASSOignore <- function(y, x, w, data, lasso.threshold) {
 
   Y <- data[[y]]
 
-  # Determine model 'type' (family) and whether to skip model-fitting if fast = TRUE
+  # Prepare 'Y' and 'type' inputs to glmnet() based on the response variable
   if (is.numeric(Y)) {
     type <- "gaussian"
   } else {
-    if (length(levels(Y)) == 2) {
-      type <- "binomial"
+    if (length(levels(Y)) == 2 | is.ordered(Y)) {
+      type <- "gaussian"
+      Y <- as.integer(Y)
     } else {
-      if (is.ordered(Y) & fast) {  # Treats ordered factor as integer
-        type <- "gaussian"
-        Y <- as.integer(Y)
-      } else {
-        type <- ifelse(fast, "skip", "multinomial")  # Skip unordered factor response if 'fast' = TRUE
-      }
+      type <- "skip"  # Skip unordered factor response
     }
   }
 
+  # Fit LASSO model
   if (type == "skip") {
     xdrop <- NULL
   } else {
-
-    # Fit LASSO
     m <- suppressWarnings(
       glmnet::glmnet(
         x = data[x],
