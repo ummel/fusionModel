@@ -7,7 +7,7 @@
 fuse(
   data,
   train.object,
-  induce = TRUE,
+  induce = FALSE,
   induce.ignore = NULL,
   use.biglm = FALSE
 )
