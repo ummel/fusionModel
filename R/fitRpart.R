@@ -98,7 +98,8 @@ fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, las
     args.list <- list(formula = fobj,
                       data = data,
                       weights = data[[w]],
-                      method = ifelse(ycon, "anova", "class"))
+                      method = ifelse(ycon, "anova", "class"),
+                      minsplit = ceiling(args$minbucket * 2))
 
     # Adds any custom arguments specified in 'args'
     args.list <- c(args.list, args)
