@@ -207,18 +207,18 @@ head(sim[, 1:7])
 
                                     education           employment hh_size renter
     1 Bachelor's degree (for example: BA, BS)   Employed full-time       4  FALSE
-    2      Some college or Associate's degree Not employed/retired       2  FALSE
+    2              High school diploma or GED Not employed/retired       2  FALSE
     3      Some college or Associate's degree Not employed/retired       1  FALSE
-    4      Some college or Associate's degree Not employed/retired       2  FALSE
-    5              High school diploma or GED   Employed full-time       4   TRUE
-    6              High school diploma or GED Not employed/retired       2   TRUE
+    4              High school diploma or GED   Employed part-time       2  FALSE
+    5      Some college or Associate's degree   Employed full-time       2   TRUE
+    6      Some college or Associate's degree   Employed part-time       3  FALSE
                          home_type   year_built square_feet
-    1 Single-family detached house 1980 to 1989        6507
-    2 Single-family detached house 1970 to 1979        1487
-    3 Single-family detached house 1950 to 1959         932
-    4 Single-family detached house 1980 to 1989        2512
-    5 Single-family attached house 1960 to 1969        3660
-    6 Single-family attached house 1970 to 1979        1508
+    1 Single-family detached house 2000 to 2009        2913
+    2 Single-family detached house 1990 to 1999        4023
+    3 Single-family detached house 1970 to 1979         861
+    4 Single-family detached house 1950 to 1959        4147
+    5 Single-family detached house  Before 1950        1990
+    6 Single-family detached house 1970 to 1979        1118
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -237,10 +237,10 @@ proportion of zero values is similar in the donor and simulated data.
 
               hh_size square_feet televisions electricity natural_gas fuel_oil
     donor           0           0      0.0239           0      0.4193   0.9483
-    simulated       0           0      0.0218           0      0.4244   0.9490
+    simulated       0           0      0.0257           0      0.4210   0.9488
               propane propane_btu propane_expend
     donor      0.8992      0.8992         0.8992
-    simulated  0.9012      0.9012         0.9012
+    simulated  0.8924      0.8924         0.8924
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television.
@@ -258,10 +258,10 @@ Now, let’s look at the means of the non-zero values.
 
               hh_size square_feet televisions electricity natural_gas fuel_oil
     donor      2.5774    2081.443      2.4195    11028.97    576.6752 502.8666
-    simulated  2.5776    2109.194      2.4265    11229.81    579.4447 510.3228
+    simulated  2.6126    2094.846      2.4276    11118.62    583.3458 470.1199
                propane propane_btu propane_expend
     donor     346.7819    31672.67       672.0280
-    simulated 327.3280    29896.00       641.5715
+    simulated 347.2313    31713.88       669.6607
 
 Notice that the ratio of mean “propane\_btu” to “propane” is the same
 for the donor and simulated datasets (ratio = 91.333). This is as
@@ -288,11 +288,11 @@ sim %>% select(natural_gas, use_ng) %>% distinct() %>% arrange(natural_gas) %>% 
 
       natural_gas use_ng
     1    0.000000  FALSE
-    2    3.461713   TRUE
-    3    3.986444   TRUE
-    4    9.812250   TRUE
-    5   14.130247   TRUE
-    6   15.855222   TRUE
+    2    2.640000   TRUE
+    3    2.964092   TRUE
+    4    3.768143   TRUE
+    5    4.574955   TRUE
+    6    6.972491   TRUE
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
@@ -306,7 +306,7 @@ For the remaining fused variables, we can compare the relative frequency
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0132           0.1560               0.5011         0.3298
+    donor            0.0155           0.1521               0.5018         0.3306
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
@@ -379,7 +379,7 @@ across models, all variables are scaled to zero-mean and unit-variance
 
 ![](man/figures/README-unnamed-chunk-19-1.png)<!-- -->
 
-This exercise yields a total of 170 model terms (including intercepts)
+This exercise yields a total of 176 model terms (including intercepts)
 for which coefficients can be compared. The plot above shows that models
 fit to the simulated data do a good job replicating coefficients derived
 from the original data (correlation = 0.97).
@@ -413,8 +413,8 @@ an estimate of the variance associated with the outcome.
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-     [1] 0.3061088 0.3099399 0.3067627 0.2969049 0.3229623 0.3051855 0.3129946
-     [8] 0.3158640 0.3332810 0.3112197
+     [1] 0.3166509 0.3181510 0.3030600 0.3231514 0.3251453 0.2906758 0.3296911
+     [8] 0.2996570 0.3014928 0.3128896
 
 ## Data synthesis
 
@@ -450,7 +450,7 @@ train(data = donor, y = fusion.vars, cores = 1) %>% timeMe()
 ```
 
     elapsed 
-       6.51 
+      7.396 
 
 ``` r
 # cores = 3
@@ -458,7 +458,7 @@ train(data = donor, y = fusion.vars, cores = 3) %>% timeMe()
 ```
 
     elapsed 
-      3.779 
+      5.066 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
@@ -485,7 +485,7 @@ train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL) %>% timeMe()
     See 'maxcats' argument in ?train.
 
     elapsed 
-     10.137 
+      9.269 
 
 ``` r
 # maxcats = 10
@@ -493,7 +493,7 @@ train(data = donor, y = fusion.vars, cores = 3, maxcats = 10) %>% timeMe()
 ```
 
     elapsed 
-      5.977 
+      6.599 
 
 The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
@@ -521,7 +521,7 @@ train(data = donor, y = fusion.vars, cores = 3, lasso = NULL) %>% timeMe()
 ```
 
     elapsed 
-     33.099 
+     39.726 
 
 ``` r
 # lasso = 0.9
@@ -529,6 +529,6 @@ train(data = donor, y = fusion.vars, cores = 3, lasso = 0.9) %>% timeMe()
 ```
 
     elapsed 
-     25.651 
+     29.498 
 
 ### Happy fusing!
