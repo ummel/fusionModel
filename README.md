@@ -53,27 +53,36 @@ improve performance across intended use cases:
     analysis of predictor importance in fully-specified `rpart` models
     fit upfront.
 
--   LASSO regression is (optionally) used to “pre-screen” predictor
-    variables prior to calling `rpart()`. Predictors for which the LASSO
-    coefficient is shrunk to zero are excluded from consideration. This
-    can speed up tree-building considerably for larger datasets.
+-   LASSO regression is used to “pre-screen” predictor variables prior
+    to calling `rpart()`. Predictors for which the LASSO coefficient is
+    shrunk to zero are excluded from consideration. This can speed up
+    tree-building considerably for larger datasets.
 
--   A K-means clustering strategy is (optionally) used to “collapse” the
-    levels of unordered factor predictor variables. This allows much
-    faster tree-building when categorical variables with many levels are
-    used to model unordered factor response variables.
+-   A K-means clustering strategy is used to “collapse” the levels of
+    unordered factor predictor variables. This allows much faster
+    tree-building when categorical variables with many levels are used
+    to model unordered factor response variables.
+
+-   Highly-linear or otherwise strictly dependent pairwise relationships
+    are automatically detected and preserved in the simulation output.
+    Such relationships can be problematic for decision tree simulation
+    algorithms.
+
+-   When LASSO pre-screening is enabled, the LASSO results are used to
+    determine if a fusion variable should be simulated using a linear
+    model rather than a decision tree. This allows highly-linear
+    multivariate relationships to be modeled as such explicitly.
 
 -   For continuous and ordered factor data types, the fusion/simulation
     step (optionally) identifies a minimal-change “reshuffling” of
     initial simulated values that induces more realistic rank
     correlations with other variables. *This feature is experimental*.
 
--   The model-building process is (optionally) fully parallel on
-    UNIX-like systems.
+-   The model-building process is fully parallel on UNIX-like systems.
 
 -   Key parts of the code utilize
     [data.table](https://cran.r-project.org/web/packages/data.table/index.html)
-    and (optionally)
+    and
     [biglm](https://cran.r-project.org/web/packages/biglm/index.html)
     functionality for more efficient computation with larger datasets.
 
@@ -90,14 +99,14 @@ library(fusionModel)
 
 ## Data fusion example
 
-The fusionModel package contains sample microdata with a mix of data
-types constructed from the 2015 Residential Energy Consumption Survey
-(see `?recs` for details and variable definitions). For real-world use
-cases, the donor and recipient input datasets are typically independent
-and possibly very different in the number of observations. For
-illustrative purposes, we will use the `recs` dataset to create both our
-“donor” and “recipient” data. This will also allow us to isolate the
-performance of fusionModel’s algorithms.
+The fusionModel package contains example microdata constructed from the
+2015 Residential Energy Consumption Survey (see `?recs` for details and
+variable definitions). For real-world use cases, the donor and recipient
+input datasets are typically independent and possibly very different in
+the number of observations. For illustrative purposes, we will use the
+`recs` dataset to create both our “donor” and “recipient” data. This
+will also allow us to isolate the performance of fusionModel’s
+algorithms.
 
 ``` r
 # Donor dataset
@@ -105,7 +114,7 @@ donor <- recs
 dim(donor)
 ```
 
-    [1] 5686   24
+    [1] 5686   28
 
 ``` r
 # Recipient dataset
@@ -114,29 +123,29 @@ recipient <- subset(recs, select = c(division, urban_rural, climate, income, age
 head(recipient)
 ```
 
-                division   urban_rural                  climate            income
-    1            Pacific    Urban Area IECC climate zones 3B-4B  $140,000 or more
-    2 West South Central         Rural IECC climate zones 1A-2A $20,000 - $39,999
-    3 East South Central    Urban Area     IECC climate zone 3A $20,000 - $39,999
-    4 West North Central Urban Cluster     IECC climate zone 4A $40,000 - $59,999
-    5    Middle Atlantic    Urban Area     IECC climate zone 5A $40,000 - $59,999
-    6        New England Urban Cluster IECC climate zones 6A-6B Less than $20,000
-      age                             race
-    1  42                            White
-    2  60                            White
-    3  73                            White
-    4  69 American Indian or Alaska Native
-    5  51                            Asian
-    6  33                            White
+                division urban_rural                  climate            income age
+    1            Pacific       Urban IECC climate zones 3B-4B  $140,000 or more  42
+    2 West South Central       Rural IECC climate zones 1A-2A $20,000 - $39,999  60
+    3 East South Central       Urban     IECC climate zone 3A $20,000 - $39,999  73
+    4 West North Central       Urban     IECC climate zone 4A $40,000 - $59,999  69
+    5    Middle Atlantic       Urban     IECC climate zone 5A $40,000 - $59,999  51
+    6        New England       Urban IECC climate zones 6A-6B Less than $20,000  33
+                                  race
+    1                            White
+    2                            White
+    3                            White
+    4 American Indian or Alaska Native
+    5                            Asian
+    6                            White
 
 The `recipient` dataset contains 6 variables that are shared with
 `donor`. These shared “predictor” variables provide a statistical link
 between the two datasets. fusionModel exploits the information in these
 shared variables.
 
-There are 18 non-shared variables that are unique to `donor`. These are
+There are 22 non-shared variables that are unique to `donor`. These are
 the variables that will be fused to `recipient`. This includes a mix of
-continuous, ordered factor, and unordered factor variables.
+continuous, logical, ordered factor, and unordered factor variables.
 
 ``` r
 # The variables to be fused
@@ -144,11 +153,21 @@ fusion.vars <- setdiff(names(donor), names(recipient))
 fusion.vars
 ```
 
-     [1] "education"        "employment"       "tenure"           "hh_size"         
-     [5] "home_type"        "year_built"       "square_feet"      "insulation"      
-     [9] "televisions"      "refrigerator_age" "heating"          "aircon"          
-    [13] "disconnect"       "unhealthy"        "electricity"      "natural_gas"     
-    [17] "propane"          "fuel_oil"        
+     [1] "education"      "employment"     "hh_size"        "renter"        
+     [5] "home_type"      "year_built"     "square_feet"    "insulation"    
+     [9] "heating"        "equipm"         "aircon"         "centralac_age" 
+    [13] "televisions"    "disconnect"     "electricity"    "natural_gas"   
+    [17] "fuel_oil"       "propane"        "propane_btu"    "propane_expend"
+    [21] "use_ng"         "have_ac"       
+
+``` r
+# The types of variables to be fused
+table(sapply(donor[fusion.vars], vctrs::vec_ptype_abbr))
+```
+
+
+    dbl fct int lgl ord 
+      5   5   4   3   5 
 
 We build our fusion model using the `train()` function. The minimal
 usage is shown below. See `?train` for additional function arguments and
@@ -158,6 +177,14 @@ but can be incorporated via the optional `weights` argument.
 ``` r
 fit <- train(data = donor, y = fusion.vars)
 ```
+
+    22 fusion variables
+    6 initial predictor variables
+    5686 observations
+    Searching for derivative relationships...
+    Detected 3 derivative variable(s) that can be omitted from modeling
+    Determining order of fusion variables...
+    Building fusion models...
 
 The resulting object (`fit`) contains all of the information necessary
 to statistically fuse the `fusion.vars` to *any* recipient dataset
@@ -178,34 +205,20 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                employment propane
-    1   Employed full-time       0
-    2   Employed full-time       0
-    3 Not employed/retired       0
-    4   Employed part-time       0
-    5   Employed full-time       0
-    6   Employed part-time       0
-                                                                                education
-    1 Master’s, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
-    2                                                          High school diploma or GED
-    3                                                  Some college or Associate’s degree
-    4                                                  Some college or Associate’s degree
-    5                                                          High school diploma or GED
-    6                                                          High school diploma or GED
-                                       heating fuel_oil hh_size
-    1                          Central furnace        0       4
-    2     Built-in floor/wall pipeless furnace        0       3
-    3 Wood-burning stove (cordwood or pellets)        0       2
-    4                          Central furnace        0       1
-    5                          Central furnace        0       5
-    6                          Central furnace   109231       3
-           refrigerator_age
-    1      5 to 9 years old
-    2 Less than 2 years old
-    3     20 years or older
-    4      5 to 9 years old
-    5    10 to 14 years old
-    6     20 years or older
+                                    education           employment hh_size renter
+    1 Bachelor's degree (for example: BA, BS)   Employed full-time       4  FALSE
+    2      Some college or Associate's degree Not employed/retired       2  FALSE
+    3      Some college or Associate's degree Not employed/retired       1  FALSE
+    4      Some college or Associate's degree Not employed/retired       2  FALSE
+    5              High school diploma or GED   Employed full-time       4   TRUE
+    6              High school diploma or GED Not employed/retired       2   TRUE
+                         home_type   year_built square_feet
+    1 Single-family detached house 1980 to 1989        6507
+    2 Single-family detached house 1970 to 1979        1487
+    3 Single-family detached house 1950 to 1959         932
+    4 Single-family detached house 1980 to 1989        2512
+    5 Single-family attached house 1960 to 1969        3660
+    6 Single-family attached house 1970 to 1979        1508
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -215,49 +228,91 @@ distributions (see section below on “Generating implicates”).
 ## Validation
 
 Successful fusion should result in simulated/synthetic variables that
-“look like” the donor in key respects. We can run a series of simple
-comparisons to confirm that this is the case. The continuous variables
-in `recs` – like many social survey variables – can be very sparse (lots
-of zeros). Let’s first check that the proportion of zero values is
-similar in the donor and simulated data.
+“look like” the donor in key respects. We can perform a series of
+comparisons to confirm that this is the case.
 
-              propane fuel_oil hh_size square_feet electricity natural_gas
-    donor      0.8992   0.9483       0           0           0      0.4193
-    simulated  0.8948   0.9476       0           0           0      0.4319
-              televisions
-    donor          0.0239
-    simulated      0.0232
+The continuous variables in `recs` – like many social survey variables –
+can be quite sparse (lots of zeros). Let’s first check that the
+proportion of zero values is similar in the donor and simulated data.
+
+              hh_size square_feet televisions electricity natural_gas fuel_oil
+    donor           0           0      0.0239           0      0.4193   0.9483
+    simulated       0           0      0.0218           0      0.4244   0.9490
+              propane propane_btu propane_expend
+    donor      0.8992      0.8992         0.8992
+    simulated  0.9012      0.9012         0.9012
 
 Comparatively few households use propane or fuel oil, and almost
-everyone has a television. Now let’s look at the means of the non-zero
-values.
+everyone has a television.
 
-               propane fuel_oil hh_size square_feet electricity natural_gas
-    donor     346.7819 69028.60  2.5774    2081.443    11028.97    576.6752
-    simulated 379.7865 71669.75  2.5939    2075.888    11041.90    586.1215
-              televisions
-    donor          2.4195
-    simulated      2.4129
+Notice that the proportion of zero values is identical for the “propane”
+(gallons consumed), “propane\_btu” (thousand Btu), and “propane\_expend”
+(dollars spent) variables. These variables *must* be either all zero or
+all non-zero for any given household. Such “structural zeros” are not
+uncommon in survey microdata, and they are typically difficult for
+tree-based modeling techniques to replicate. fusionModel automatically
+detects structural zero patterns and ensures they are correctly
+represented in the fusion output.
+
+Now, let’s look at the means of the non-zero values.
+
+              hh_size square_feet televisions electricity natural_gas fuel_oil
+    donor      2.5774    2081.443      2.4195    11028.97    576.6752 502.8666
+    simulated  2.5776    2109.194      2.4265    11229.81    579.4447 510.3228
+               propane propane_btu propane_expend
+    donor     346.7819    31672.67       672.0280
+    simulated 327.3280    29896.00       641.5715
+
+Notice that the ratio of mean “propane\_btu” to “propane” is the same
+for the donor and simulated datasets (ratio = 91.333). This is as
+expected, since the two variables report the same phenomena (propane
+consumption) with different units of measurement (gallons vs. Btu). That
+is, the relationship is linear. However, decision trees struggle to
+capture *strictly* linear relationships. fusionModel automatically
+detects highly-linear pairwise relationships and models them explicitly
+using linear models rather than decision trees.
+
+Related, fusionModel also detects when one variable is explicitly
+“derivative” of another. For example, the “have\_ac” variable can de
+deduced entirely from the “aircon” variable. Rather than model
+“have\_ac” separately, fusionModel simply merges the known “have\_ac”
+outcomes to the simulated “aircon” values. Derivative relationships are
+also detected for zero/non-zero outcomes (a tricky case for decision
+trees). For example, “natural\_gas” can only be non-zero when “use\_ng”
+is TRUE. This dependency is respected in the fusion output.
+
+``` r
+# Confirm zero/non-zero relationship is respected for "natural_gas" and "use_ng"
+sim %>% select(natural_gas, use_ng) %>% distinct() %>% arrange(natural_gas) %>% head()
+```
+
+      natural_gas use_ng
+    1    0.000000  FALSE
+    2    3.461713   TRUE
+    3    3.986444   TRUE
+    4    9.812250   TRUE
+    5   14.130247   TRUE
+    6   15.855222   TRUE
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
 Recall that “propane” and “fuel\_oil” are quite sparse, which generally
 results in noisier simulation.
 
-![](man/figures/README-unnamed-chunk-9-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-10-1.png)<!-- -->
 
 For the remaining fused variables, we can compare the relative frequency
 (proportion) of different outcomes in the donor and simulated data. Here
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0139           0.1498               0.4965         0.3398
+    donor            0.0132           0.1560               0.5011         0.3298
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
 and summarized in a single plot.
 
-![](man/figures/README-unnamed-chunk-11-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-12-1.png)<!-- -->
 
 So far, we’ve only looked at univariate distributions. The much trickier
 task in data synthesis is to replicate *interactions* between variables
@@ -268,17 +323,17 @@ the value calculated for the donor and simulated data. The following
 plot shows just that, including pairwise correlations between fused
 variables and *predictor* variables.
 
-![](man/figures/README-unnamed-chunk-12-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-13-1.png)<!-- -->
 
 The same kind of bivariate comparisons can be made for discrete
 variables by looking at the relative frequency of the cells in all
 possible 2-way contingency tables. And *voila*:
 
-![](man/figures/README-unnamed-chunk-13-1.png)<!-- -->
-
-Extending to 3-way contingency tables, things get a bit noisier.
-
 ![](man/figures/README-unnamed-chunk-14-1.png)<!-- -->
+
+Extending to 3-way contingency tables, things get a little bit noisier.
+
+![](man/figures/README-unnamed-chunk-15-1.png)<!-- -->
 
 Bivariate relationships between continuous and categorical variables can
 be assessed by plotting the distribution of the former for each level of
@@ -286,7 +341,7 @@ the latter – for example, with a boxplot. The plot below shows how
 electricity consumption varies with a household’s air conditioning
 technology for both the donor and simulated data.
 
-![](man/figures/README-unnamed-chunk-15-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-16-1.png)<!-- -->
 
 We can generalize this kind of comparison by calculating “level-wise
 means” for the donor and simulated data (again, including predictor
@@ -294,17 +349,17 @@ means” for the donor and simulated data (again, including predictor
 widely-varying scales, they are scaled to mean zero and unit variance
 for the purposes of comparison.
 
-![](man/figures/README-unnamed-chunk-16-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-17-1.png)<!-- -->
 
 Next, for illustrative purposes, we assess the non-linear relationship
 between two continuous variables – “square\_feet” and “electricity” –
-both overall and for geographic areas defined by the “urban\_rural”
+both overall and for rural and urban areas defined by the “urban\_rural”
 variable. The plot below shows the GAM-smoothed relationship for the
 donor and simulated data. Note the high degree of overlap for the
 confidence interval shading, implying that the relationships are
 statistically indistinguishable.
 
-![](man/figures/README-unnamed-chunk-17-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-18-1.png)<!-- -->
 
 Finally, we can conduct a more extensive multivariate test by comparing
 regression coefficients from models fit to the donor with analogous
@@ -322,12 +377,12 @@ data and the coefficients compared. To make the coefficients comparable
 across models, all variables are scaled to zero-mean and unit-variance
 (i.e. standardized coefficients).
 
-![](man/figures/README-unnamed-chunk-18-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-19-1.png)<!-- -->
 
-This exercise yields a total of 132 model terms (including intercepts)
+This exercise yields a total of 170 model terms (including intercepts)
 for which coefficients can be compared. The plot above shows that models
 fit to the simulated data do a good job replicating coefficients derived
-from the original data (correlation = 0.96).
+from the original data (correlation = 0.97).
 
 ## Generating implicates
 
@@ -358,14 +413,14 @@ an estimate of the variance associated with the outcome.
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-     [1] 0.3512858 0.3385980 0.3155095 0.3437753 0.3144768 0.3303210 0.3403988
-     [8] 0.3282773 0.3299912 0.3400484
+     [1] 0.3061088 0.3099399 0.3067627 0.2969049 0.3229623 0.3051855 0.3129946
+     [8] 0.3158640 0.3332810 0.3112197
 
 ## Data synthesis
 
 To generate a wholly synthetic version of `recs`, we proceed as above
 but use only a single predictor variable. That predictor is then
-manually sampled to “seed” the recipient dataset.
+manually sampled to “seed” the recipient dataset for fusion.
 
 ``` r
 # Create fusion model with a single predictor ("division" in this case)
@@ -383,29 +438,27 @@ sim <- fuse(data = recipient, train.object = fit)
 The `train()` function has a number of optional arguments that can be
 used to speed up the model building process. One option is to throw
 additional computing resources at the problem via parallel processing
-using the `mc` (“multicore”) argument. As of v0.2, this is only enabled
-for UNIX-like systems (i.e. it fails on Windows). Note that
-`train(..., mc = TRUE)` will utilize all of the available cores except
-one.
+using the `cores` argument. This is only enabled for UNIX-like systems
+(i.e. will operate serially on Windows).
 
 ``` r
 # Function to return computation time
 timeMe <- function(...) system.time(capture.output(...))["elapsed"]
 
-# Without parallel processing (default; 'mc = FALSE')
-timeMe(train(data = donor, y = fusion.vars, mc = FALSE))
+# cores = 1
+train(data = donor, y = fusion.vars, cores = 1) %>% timeMe()
 ```
 
     elapsed 
-      7.632 
+       6.51 
 
 ``` r
-# With parallel processing ('mc = TRUE')
-timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
+# cores = 3
+train(data = donor, y = fusion.vars, cores = 3) %>% timeMe()
 ```
 
     elapsed 
-      4.127 
+      3.779 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
@@ -422,25 +475,25 @@ unordered factor with many (e.g. &gt; 15) levels.
 # Make the 'climate' variable a problematic unordered factor with 20 levels
 donor$climate <- factor(sample(LETTERS[1:20], nrow(donor), replace = TRUE))
 
-# Default approach ('maxcats = NULL')
+# maxcats = NULL
 # Note that train() issues a warning about long compute time
-timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL))
+train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL) %>% timeMe()
 ```
 
-    Warning in train(data = donor, y = fusion.vars, mc = TRUE, maxcats = NULL): 
+    Warning in train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL): 
     Be careful: Unordered factors are present that could cause long compute times.
     See 'maxcats' argument in ?train.
 
     elapsed 
-     15.172 
+     10.137 
 
 ``` r
-# Using `maxcats = 10`
-timeMe(train(data = donor, y = fusion.vars, mc = TRUE, maxcats = 10))
+# maxcats = 10
+train(data = donor, y = fusion.vars, cores = 3, maxcats = 10) %>% timeMe()
 ```
 
     elapsed 
-      7.818 
+      5.977 
 
 The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
@@ -460,22 +513,22 @@ donor[LETTERS] <- runif(26 * nrow(donor))
 dim(donor)
 ```
 
-    [1] 50000    50
+    [1] 50000    54
 
 ``` r
-# Default approach (`lasso = NULL`)
-timeMe(train(data = donor, y = fusion.vars, mc = TRUE))
+# lasso = NULL
+train(data = donor, y = fusion.vars, cores = 3, lasso = NULL) %>% timeMe()
 ```
 
     elapsed 
-     43.026 
+     33.099 
 
 ``` r
-# Using `lasso = 0.9`
-timeMe(train(data = donor, y = fusion.vars, mc = TRUE, lasso = 0.9))
+# lasso = 0.9
+train(data = donor, y = fusion.vars, cores = 3, lasso = 0.9) %>% timeMe()
 ```
 
     elapsed 
-     29.095 
+     25.651 
 
 ### Happy fusing!

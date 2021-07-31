@@ -4,10 +4,9 @@
 #' Fuse variables to a recipient dataset.
 #'
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
-#' @param train.object Output from successfull call to \link{train}.
-#' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? \code{induce = TRUE} can be slow for large datasets.
+#' @param train.object Output from a successful call to \link{train}.
+#' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Warning: \code{induce = TRUE} can be slow for large datasets.
 #' @param induce.ignore Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.
-#' @param use.biglm Logical. If \code{induce = TRUE}, \code{use.biglm = TRUE} will use \code{\link[biglm]{biglm}} from the \href{https://cran.r-project.org/web/packages/biglm/index.html}{biglm package} for the necessary OLS regressions. This can be faster and more memory efficiency for large datasets. The default (\code{use.biglm = FALSE}) uses \code{\link[stats]{.lm.fit}}, which is still quite fast in most cases.
 #'
 #' @return A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
 #' @examples
@@ -24,35 +23,30 @@
 
 # library(fusionModel)
 # source("R/utils.R")
-# donor <- recs
-# data <- recipient <- subset(recs, select = c(urban_rural, income, age, race, education))
-# induce = TRUE
-# train.object <- train(data = donor, y = setdiff(names(donor), names(recipient)))
 
-# Big data
-# data <- readRDS("~/Documents/Projects/fusionData/rec_data.rds")
-# train.object <- readRDS("~/Documents/Projects/fusionData/fit.rds")
-# induce <- TRUE
+# Example inputs
+# donor <- recs
+# data <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
+# induce = FALSE
+# induce.ignore = NULL
+# fusion.vars <- setdiff(names(donor), names(recipient))
+# train.object <- train(data = donor, y = fusion.vars)
+
+# data = readRDS("~/Documents/Projects/fusionData/recs_recipient.rds")
+# train.object <- readRDS("~/Documents/Projects/fusionData/recs_fit.rds")
 
 #---------------------
 
 fuse <- function(data,
                  train.object,
                  induce = FALSE,
-                 induce.ignore = NULL,
-                 use.biglm = FALSE) {
+                 induce.ignore = NULL) {
 
   stopifnot(exprs = {
     is.data.frame(data)
-    #class(train.object) == ...
     is.logical(induce)
     !(!induce & !is.null(induce.ignore))  # Nonsensical input
   })
-
-  # Check if 'biglm' package is required/installed
-  if (use.biglm & !"biglm" %in% installed.packages()[, "Package"]) {
-    stop("The 'biglm' package must be installed when 'use.biglm = TRUE'")
-  }
 
   #-----
 
@@ -84,16 +78,19 @@ fuse <- function(data,
 
   #-----
 
-  # Names and order of variables to be fused
-  yord <- names(train.object$models)
+  # Names and order of modeled variables to be fused
+  yord <- c(names(train.object$models), names(train.object$derivative$model))
 
   # Identify continuous yvars
   ycont <- names(which(sapply(train.object$yclass, function(x) x[1] %in% c("integer", "numeric"))))
 
   # Create the percentile values associated with the quantile function values
   if (length(ycont) > 0) {
-    Qx <- dnorm(seq(-3, 3, length.out = nrow(train.object$models[[ycont[1]]]$Q) - 1))
-    Qx <- c(0, cumsum(Qx / sum(Qx)))
+    Qx <- map(train.object$models[ycont], ~ nrow(.x$Q)) %>% compact()
+    Qx <- if(length(Qx) > 0) {
+      Qx <- dnorm(seq(-3, 3, length.out = Qx[[1]] - 1))
+      Qx <- c(0, cumsum(Qx / sum(Qx)))
+    }
   }
 
   #-----
@@ -114,12 +111,11 @@ fuse <- function(data,
   # Detect and impute any missing values in 'data'
   na.cols <- names(which(sapply(data, anyNA)))
   if (length(na.cols) > 0) {
-    cat("Imputing missing values in predictor variables...\n")
-    warning("Missing values were imputed for the following variables: ", paste(na.cols, collapse = ", "))
+    cat("Missing values imputed for the following predictors:\n", paste(na.cols, collapse = ", "), "\n")
     for (j in na.cols) {
       x <- data[[j]]
       ind <- is.na(x)
-      data.table::set(data, i = which(ind), j = j, value = imputationValue(x, ind))
+      data.table::set(data, i = which(ind), j = j, value = imputationValue(x, na.ind = ind))
     }
   }
 
@@ -163,6 +159,30 @@ fuse <- function(data,
 
   #-----
 
+  # Extract names of the numeric predictor variables for which binary versions are required
+
+  # Variables for which binary versions are used in models
+  xbin.model <- train.object$models %>%
+    map("xbin") %>%
+    unlist(use.names = FALSE)
+
+  # Variables for which binary versions are used in merges
+  temp <- train.object$derivative$merge %>%
+    map(names) %>%
+    unlist(use.names = FALSE)
+  xbin.merge <- grep("_BINARY_", temp, value = TRUE)
+  xbin.merge <- gsub("_BINARY_", "", xbin.merge)
+
+  # Full vector of variables for which binary versions are required
+  xbin <- unique(c(xbin.model, xbin.merge))
+
+  # Create binary versions of any 'xbin' among the initial predictor variables
+  vbin <- intersect(xbin, names(data))
+  for (v in vbin) data.table::set(data, j = paste0(v, "_BINARY_"), value = data[[v]] == 0)
+
+  #-------------------------
+  #-------------------------
+
   cat("Fusing donor variables to recipient...\n")
 
   # Progress bar printed to console
@@ -174,53 +194,95 @@ fuse <- function(data,
 
     yclass <- train.object$yclass[[y]]
 
-    m <- train.object$models[[y]]
+    m <- if (y %in% names(train.object$models)) train.object$models[[y]] else train.object$derivative$model[[y]]
+
+    #-----
+
+    # Extract the 'xmerge' object, if available
+    # This is used to merge known 'y' values up front, prior to probabilistic simulation
+    # Object 'ind' gives the row numbers for which values are not already known and must be simulated
+    xmerge <- m$xmerge
+    if (!is.null(xmerge)) {
+      data <- merge(data, xmerge, by = names(xmerge)[1], all.x = TRUE, sort = FALSE)
+      ind <- which(is.na(data[[y]]))
+    } else {
+      ind <- 1L:nrow(data)
+    }
 
     #-----
 
     # If 'y' is continuous...
     if (cont) {
 
-      # Vector of nodes in model 'm'
-      nodes <- as.integer(colnames(m$Q))
+      if (class(m) == "rpart") {
 
-      # Predicted node for rows in 'data'
-      pnode <- predictNode(object = m, newdata = data)
-      gc()
+        # Vector of nodes in model 'm'
+        nodes <- as.integer(colnames(m$Q))
 
-      # Catch and fix rare case of missing node (unclear why this might occur)
-      miss <- setdiff(pnode, nodes)
-      for (n in miss) pnode[pnode == n] <- nodes[which.min(abs(n - nodes))]
-      stopifnot(all(pnode %in% nodes))
+        # Predicted node for rows in 'data'
+        pnode <- predictNode(object = m, newdata = data[ind, ])
+        gc()
 
-      # Placeholder vector for simulated values
-      S <- vector(mode = "numeric", length = nrow(data))
+        # Catch and fix rare case of missing node (unclear why this might occur)
+        miss <- setdiff(pnode, nodes)
+        for (n in miss) pnode[pnode == n] <- nodes[which.min(abs(n - nodes))]
+        stopifnot(all(pnode %in% nodes))
 
-      # Fit density to observations in each node
-      for (n in nodes) {
+        # Placeholder vector for simulated values
+        S <- vector(mode = "numeric", length = length(pnode))
 
-        # Index identifying observations in node 'n'
-        ind <- pnode == n
+        # Fit density to observations in each node
+        for (n in nodes) {
 
-        if (any(ind)) {
+          # Index identifying observations in node 'n'
+          i <- pnode == n
 
-          # Extract inputs needed for quantile function and proportion of zeros
-          Q <- m$Q[, as.character(n)]
+          if (any(i)) {
 
-          # Simulated value
-          S[ind] <- approx(x = Qx, y = Q, xout = runif(n = sum(ind)))$y
+            # Extract inputs needed for quantile function and proportion of zeros
+            Q <- m$Q[, as.character(n)]
+
+            # Randomly simulate values from the conditional distribution
+            # Note that this is repeated as necessary to ensure 's' does not contain any values already assigned (exclusively) via 'xmerge'
+            f <- approxfun(x = Qx, y = Q)
+            s <- f(runif(n = sum(i)))
+            while (any(s %in% xmerge[[y]])) {
+              j <- s %in% xmerge[[y]]
+              s[j] <- f(runif(n = sum(j)))
+            }
+
+            # Assign simulated values to 'S'
+            S[i] <- s
+
+          }
 
         }
 
+        #---
+
+        # Adjust simulated values to enforce the "outer.range" constraint
+        # This isn't strictly necessary with rpart() simulated values, because the constraint is enforced in the quantile values themselves
+        # It might be relevant, however, when a linear model is used for simulation (? - unclear)
+        # outer.range <- train.object$youter[[y]]
+        # S <- pmin(pmax(S, outer.range[1]), outer.range[2])
+
+        # Adjust simulated values to enforce the "inner.range" constraint
+        inner.range <- train.object$yinner[[y]]
+        S[S > inner.range[1] & S < 0] <- inner.range[1]
+        S[S > 0 & S < inner.range[2]] <- inner.range[2]
+
+      } else {
+
+        # Make predictions using linear (biglm) model in 'm'
+        fobj <- formula(paste("~", as.character(m$terms)[3L]))
+        newmf <- model.frame(formula = fobj, data[ind, ])
+        newmm <- model.matrix(fobj, newmf)
+        S <- drop(newmm %*% replace_na(coef(m), 0))
+
       }
 
-      # Adjust simulated values to enforce the "inner.range" constraint
-      inner.range <- train.object$yinner[[y]]
-      S[S > inner.range[1] & S < 0] <- inner.range[1]
-      S[S > 0 & S < inner.range[2]] <- inner.range[2]
-
       # Ensure simulated column is correct data type
-      if (yclass == "integer") S <- round(as.integer(S))
+      if (yclass == "integer") S <- as.integer(round(S))
 
     }
 
@@ -228,35 +290,54 @@ fuse <- function(data,
 
     if (!cont) {
 
-      # Add the clustered predictors, if necessary
-      km <- m$kmeans.xwalk
-      if (!is.null(km)) {
-        for (d in km) {
-          ind <- match(data[[names(d)[1]]], d[[1]])
-          data.table::set(data, j = names(d)[2], value = d[ind, 2])
+      if (class(m) == "rpart") {
+
+        # Add the clustered predictors, if necessary
+        km <- m$kmeans.xwalk
+        if (!is.null(km)) {
+          for (d in km) {
+            k <- match(data[[names(d)[1]]], d[[1]])
+            data.table::set(data, j = names(d)[2], value = d[k, 2])
+          }
         }
+
+        # Class probabilities
+        p <- predict(object = m, newdata = data[ind, ])
+        gc()
+
+        # Simulated value
+        ptile <- runif(n = length(ind))
+        for (i in 2:ncol(p)) p[, i] <- p[, i - 1] + p[, i]
+        S <- rowSums(ptile > p) + 1L
+        S <- colnames(p)[S]
+
+      } else {
+
+        # Make predictions using linear (biglm) model in 'm'
+        # Note that 'm' predicts the integerized factor/logical values, so it must be converted to the correct label
+        fobj <- formula(paste(as.character(m$terms)[-2], collapse = ""))
+        newmf <- model.frame(formula = fobj, data[ind, ])
+        newmm <- model.matrix(fobj, newmf)
+        S <- drop(newmm %*% replace_na(coef(m), 0))
+        S <- round(S)  # Round prediction to integer
+
+        lev <- if ("factor" %in% yclass) train.object$ylevels[[y]] else c(FALSE, TRUE)  # Factor/logical labels
+        S <- pmin(pmax(S, 1), length(lev))  # Ensure plausible integer values
+        S <- lev[S]  # Convert to factor level
+
       }
 
-      # Class probabilities
-      p <- predict(object = m, newdata = data)
-      gc()
-
-      # Simulated value
-      ptile <- runif(n = nrow(data))
-      for (i in 2:ncol(p)) p[, i] <- p[, i - 1] + p[, i]
-      S <- rowSums(ptile > p) + 1L
-      S <- colnames(p)[S]
-
       # Ensure simulated vector is correct data type
-      # 'S' is a character vector by default; must be coerced to factor
+      # 'S' is a character vector by default; must be coerced to factor or logical
       if ("factor" %in% yclass) S <- factor(S, levels = train.object$ylevels[[y]], ordered = "ordered" %in% yclass)
+      if ("logical" %in% yclass) S <- as.logical(S)
 
     }
 
     #-----
 
-    # Assign final simulated vector
-    data.table::set(data, j = y, value = S)
+    # Assign simulated vector to 'data'
+    data.table::set(data, i = ind, j = y, value = S)
 
     #-----
 
@@ -288,13 +369,13 @@ fuse <- function(data,
 
         # Restrict correlation correction to non-zero observations in 'y'
         # NOTE: Setting of this option should be consistent with analogous line in train()
-        ind <- which(as.numeric(data[[y]]) != 0)
+        #ind <- which(as.numeric(data[[y]]) != 0)
 
         # No restriction on correlation correction
-        #ind <- 1:nrow(data)
+        ind <- 1:nrow(data)
 
         # Attempt to induce target rank correlations
-        Yout <- induceCor(data = data.table::copy(ranks[ind, ]), rho = rho, y = y, scale.data = FALSE, use.biglm = use.biglm)
+        Yout <- induceCor(data = data.table::copy(ranks[ind, ]), rho = rho, y = y, scale.data = FALSE)
 
         # Only updated y-values if the correlation adjustment was successful (sigma2 >= 0)
         if (Yout$sigma2 >= 0) {
@@ -342,6 +423,14 @@ fuse <- function(data,
 
     #-----
 
+    # If 'y' is one of the 'xbin', add a binary version of simulated values to 'data'
+    if (y %in% xbin) {
+      data.table::set(data, j = paste0(y, "_BINARY_"), value = data[[y]] == 0)
+      xbin <- setdiff(xbin, y)
+    }
+
+    #-----
+
     # Update for() loop progress bar
     pbapply::setTimerProgressBar(pb, match(y, yord))
 
@@ -350,10 +439,24 @@ fuse <- function(data,
   # Close progress bar
   pbapply::closepb(pb)
 
+  #-------------------------
+  #-------------------------
+
+  # Add any constant fusion variables
+  for (v in names(train.object$derivative$constant)) {
+    set(data, j = v, value = train.object$derivative$constant[[v]])
+  }
+
+  # Merge categorical fusion variables that are identified by a 1-to-1 linear relationship with another categorical variable
+  for (m in train.object$derivative$merge) {
+    data <- merge(data, m, by = names(m)[1], all.x = TRUE, sort = FALSE)
+  }
+
   #-----
 
   # Simulation complete
   # Return only the fusion variables
-  return(as.data.frame(subset(data, select = yord)))
+  #return(as.data.frame(data))
+  return(as.data.frame(subset(data, select = names(train.object$yclass))))
 
 }

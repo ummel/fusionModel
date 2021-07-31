@@ -1,4 +1,4 @@
-fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args) {
+fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, lasso.threshold = 1, args) {
 
   # Turned off since not necessary when used within train()
   # stopifnot(exprs = {
@@ -10,6 +10,7 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
   #   w %in% names(data)
   #   is.numeric(maxcats)
   #   maxcats > 1 & maxcats %% 1 == 0
+  #   is.null(n) | (n > length(x) & n <= nrow(data))
   # })
 
   # Is 'y' continuous?
@@ -21,86 +22,115 @@ fitRpart <- function(y, x, w, data, maxcats = NULL, lasso.threshold = NULL, args
     select(all_of(c(w, y, x))) %>%
     filter(!is.na(data[[y]]))
 
-  #-----
-
-  # Collapse categorical predictor categories, if necessary
-  # Only necessary if the response variable (y) is categorical
-  kmeans.xwalk <- NULL
-  if (unordered  & !is.null(maxcats)) {
-
-    # Number of categorical levels for each allowable, non-numeric predictor
-    cats.count <- sapply(data[x], function(x) length(levels(x)))
-
-    # Categorical predictor variables that need to be collapsed prior to fitting rpart() model
-    xlarge <- names(cats.count[cats.count > maxcats])
-
-    if (length(xlarge) > 0) {
-      kmeans.xwalk <- lapply(xlarge, collapseCategorical, y = y, w = w, data = data, n = maxcats)
-      names(kmeans.xwalk) <- xlarge
-      for (d in kmeans.xwalk) {
-        v <- names(d)[1]
-        data <- left_join(data, d, by = v)
-        x[x == v] <- names(d)[2]
-      }
-      data[xlarge] <- NULL
-    } else {
-      kmeans.xwalk <- NULL
-    }
-
+  # Downsample 'data', if requested
+  if (is.null(n)) n <- nrow(data)
+  if (n < nrow(data)) {
+    data <- data %>%
+      slice_sample(n = n, replace = TRUE)
   }
 
   #-----
 
-  # If requested, screen 'x' predictors via LASSO regression
-  lasso.ignore <- if (is.null(lasso.threshold)) {
+  # Output from the LASSO step can be:
+  # NULL or character vector: 'x' variables to ignore in subsequent rpart() call
+  # biglm() model that predicts response variable using only linear relationships
+
+  lasso.out <- if (is.null(lasso.threshold)) {
     NULL
   } else {
-    LASSOignore(y = y,
-                x = x,
-                w = w,
-                data = data,
-                lasso.threshold = lasso.threshold)
+    fitLASSO(y = y,
+             x = x,
+             w = w,
+             data = data,
+             lasso.threshold = lasso.threshold,
+             linear = linear)
   }
 
   #-----
 
-  # Formula object
-  # NOTE that 'x' predictors are potentially excluded via 'lasso.ignore'
-  fobj <- as.formula(paste0(y, "~", paste(setdiff(x, lasso.ignore), collapse = "+")))
+  if (class(lasso.out) == "biglm") {
 
-  # Arguments list for rpart, passed via do.call()
-  args.list <- list(formula = fobj,
-                    data = data,
-                    weights = data[[w]],
-                    method = ifelse(ycon, "anova", "class"))
+    return(lasso.out)
 
-  # Adds any custom arguments specified in 'args'
-  args.list <- c(args.list, args)
-
-  # Call rpart() with specified arguments
-  m <- do.call(rpart::rpart, args = args.list)
-
-  # If cross-validation used, select the pruned tree that minimized cross-validation error
-  if ("xerror" %in% colnames(m$cptable)) {
-    m <- rpart::prune(m, cp = m$cptable[which.min(m$cptable[, "xerror"]), "CP"])
-  }
-
-  #-----
-
-  if ("variable.importance" %in% names(m)) {
-    m$variable.importance <- m$variable.importance / sum(m$variable.importance)
   } else {
-    m$variable.importance <- rep(0L, length(x))
-    names(m$variable.importance) <- x
+
+    # Collapse categorical predictor categories, if necessary
+    # Only necessary if the response variable (y) is categorical
+    kmeans.xwalk <- NULL
+    if (unordered  & !is.null(maxcats)) {
+
+      # Number of categorical levels for each allowable, non-numeric predictor
+      cats.count <- sapply(data[x], function(x) length(levels(x)))
+
+      # Categorical predictor variables that need to be collapsed prior to fitting rpart() model
+      xlarge <- names(cats.count[cats.count > maxcats])
+
+      if (length(xlarge) > 0) {
+
+        for (i in xlarge) collapseCategorical(x = i, y = y, w = w, data = data, n = maxcats)
+
+        kmeans.xwalk <- lapply(xlarge, collapseCategorical, y = y, w = w, data = data, n = maxcats)
+        names(kmeans.xwalk) <- xlarge
+        for (d in kmeans.xwalk) {
+          v <- names(d)[1]
+          data <- left_join(data, d, by = v)
+          x[x == v] <- names(d)[2]
+        }
+        data[xlarge] <- NULL
+      } else {
+        kmeans.xwalk <- NULL
+      }
+
+    }
+
+    #-----
+
+    # Formula object
+    # NOTE that 'x' predictors are potentially excluded via 'lasso.out'
+    xpred <- setdiff(x, lasso.out)
+    fobj <- as.formula(paste0(y, "~", paste(xpred, collapse = "+")))
+
+    # NOT USED: Experimenting with forcing aggressive splitting of certain predictors via 'cost' argument
+    # cost <- rep(1, length(xpred))
+    # cost <- replace(cost, force %in% xpred, 1e-14)  # Arbitrary low cost value to force early inclusion of 'force' variables
+
+    # Arguments list for rpart, passed via do.call()
+    args.list <- list(formula = fobj,
+                      data = data,
+                      weights = data[[w]],
+                      method = ifelse(ycon, "anova", "class"))
+
+    # Adds any custom arguments specified in 'args'
+    args.list <- c(args.list, args)
+
+    # Call rpart() with specified arguments
+    m <- do.call(rpart::rpart, args = args.list)
+
+    # If cross-validation used, select the pruned tree that minimized cross-validation error
+    if ("xerror" %in% colnames(m$cptable)) {
+      m <- rpart::prune(m, cp = m$cptable[which.min(m$cptable[, "xerror"]), "CP"])
+    }
+
+    #-----
+
+    if ("variable.importance" %in% names(m)) {
+      m$variable.importance <- m$variable.importance / sum(m$variable.importance)
+    } else {
+      m$variable.importance <- rep(0L, length(x))
+      names(m$variable.importance) <- x
+    }
+
+    # Add the 'y' variable names to rpart object
+    m$yvar <- y
+
+    # Add the collapsed predictor crosswalk, if present
+    if (unordered) m$kmeans.xwalk <- kmeans.xwalk
+
+    m <- slimRpart(m)
+
+    return(m)
+
   }
-
-  # Add the 'y' variable names to rpart object
-  m$yvar <- y
-
-  # Add the collapsed predictor crosswalk, if present
-  if (unordered) m$kmeans.xwalk <- kmeans.xwalk
-
-  return(m)
 
 }
 
@@ -135,7 +165,7 @@ collapseCategorical <- function(x, y, w, data, n) {
 #--------------------
 #--------------------
 
-LASSOignore <- function(y, x, w, data, lasso.threshold) {
+fitLASSO <- function(y, x, w, data, lasso.threshold, linear) {
 
   Y <- data[[y]]
 
@@ -151,39 +181,87 @@ LASSOignore <- function(y, x, w, data, lasso.threshold) {
     }
   }
 
-  # Fit LASSO model
-  if (type == "skip") {
-    xdrop <- NULL
-  } else {
+  # Assign the transformed y-value to 'data'
+  data[[y]] <- Y
+
+  #----
+
+  out <- NULL
+
+  if (type != "skip") {
+
+    # Fit LASSO glmnet model
     m <- suppressWarnings(
       glmnet::glmnet(
         x = data[x],
-        y = Y,
+        y = data[[y]],
         family = type,
         weights = data[[w]],
         alpha = 1,
-        pmax = length(x) - 1,  # Ensures there is at least one non-zero variable along with the intercept
-        type.multinomial = "grouped"  # Only relevant when 'type' = "multinomial"
+        lambda.min.ratio = 1e-5,
+        pmax = length(x) - 1  # Ensures there is at least one non-zero variable along with the intercept
       )
     )
 
-    # Find preferred lambda
-    ind <- which(m$dev.ratio / max(m$dev.ratio) >= lasso.threshold)[1]
-    # plot(m$dev.ratio, type = "l")
-    # abline(v = ind, h = m$dev.ratio[ind], lty = 2)
-    # m$lambda[ind]
+    #-----
 
-    # Get model coefficients for preferred lambda
-    mcoef <- glmnet::coef.glmnet(m, s = m$lambda[ind])
+    # If the LASSO is highly-predictive, attempt to return a slimmed linear model with estimated variable importance
+    if (linear & any(m$dev.ratio > 0.99)) {  # Should specify threshold
 
-    # In categorical response case, sum coefficients across levels
-    if (is.list(mcoef)) mcoef <- Reduce("+", mcoef)
+      # Determine which predictors have non-zero coefficients in the LASSO results
+      cf <- glmnet::coef.glmnet(m, s = min(m$lambda))
+      lm.x <- setdiff(rownames(cf)[as.vector(cf != 0)], "(Intercept)")
 
-    # Predictor variables to ignore (LASSO coefficient = 0)
-    xdrop <- rownames(mcoef)[-1L][as.vector(mcoef == 0)[-1L]]
+      # Fit linear model using only the non-zero predictors
+      fobj <- formula(paste(y, "~", paste(lm.x, collapse = "+")))
+      m.biglm <- biglm::biglm(formula = fobj,
+                              data = data,
+                              weights = ~ ._wgt_.)
+
+      # Check that the R2 of the final linear model still exceeds threshold; if not, proceed with the glmnet LASSO results (below)
+      # Variable importance is approximated by absolute value of the t-statistic (see here: https://www.rdocumentation.org/packages/caret/versions/6.0-88/topics/varImp)
+      sum.biglm <- try(summary(m.biglm), silent = TRUE)
+      if (class(sum.biglm) != "try-error"){
+        if (sum.biglm$rsq > 0.99) {
+          cf <- sum.biglm$mat
+          tval <- replace_na(abs(cf[, "Coef"] / cf[, "SE"]), 0)
+          #tval[sum.biglm$mat[, "p"] > 0.05] <- 0
+          tval.mean <- setNames(tapply(tval, m.biglm$assign, FUN = max), c("Intercept", lm.x))
+          tval.mean <- tval.mean[-1]  # Drop the intercept
+          vimp <- tval.mean / sum(tval.mean)
+          vimp <- vimp[vimp > 0]
+          m.biglm$variable.importance <- vimp
+          out <- m.biglm
+        }
+      }
+    }
+
+    #-----
+
+    # If no highly-predictive linear model is possible (or desired) use LASSO results to determine which predictors to ignore when fitting rpart()
+    if (is.null(out)) {
+
+      # Otherwise, determine which predictor variables can be dropped prior to fitting decision tree
+
+      # Find preferred lambda
+      ind <- which(m$dev.ratio / max(m$dev.ratio) >= lasso.threshold)[1]
+      # plot(m$dev.ratio, type = "l")
+      # abline(v = ind, h = m$dev.ratio[ind], lty = 2)
+      # m$lambda[ind]
+
+      # Get model coefficients for preferred lambda
+      mcoef <- glmnet::coef.glmnet(m, s = m$lambda[ind])
+
+      # In categorical response case, sum coefficients across levels
+      if (is.list(mcoef)) mcoef <- Reduce("+", mcoef)
+
+      # Predictor variables to ignore (LASSO coefficient = 0)
+      out <- rownames(mcoef)[-1L][as.vector(mcoef == 0)[-1L]]
+
+    }
+
+    return(out)
 
   }
-
-  return(xdrop)
 
 }

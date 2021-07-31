@@ -62,6 +62,8 @@ fitDensity <- function(x,
     y <- y / sum(y * dx)  # This adjusts the densities so the cumulative probability sums to 1
     pcum <- c(0, cumsum(y * dx))  # Cumulative probability at each value of 'x'
 
+    #plot(pcum, x)
+
     # Quantile values associated with each of 'N' percentiles given by 'p'
     # See plot(diff(p)) to confirm that the tails are over-sampled by design
     # This is because the tails are typically more spread out than the center of the distribution (i.e. we want more resolution in the tails)
@@ -105,7 +107,7 @@ fitDensity <- function(x,
 
     # TESTING: Draw random sample from the inverse CDF
     # ptile <- runif(1e3)
-    # z <- round(approx(x = p, y = Q, xout = ptile)$y)
+    # z <- approx(x = p, y = Q, xout = ptile)$y
     # table(z) / length(z)
     # weighted.mean(x0 == 0, w)
     # mean(z == 0)

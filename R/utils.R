@@ -69,23 +69,33 @@ novary <- function(x) length(unique(na.omit(x))) == 1
 
 #------------------
 
-# Remove elements of rpart() mode object to reduce size while still allowing prediction
-#sapply(m, object.size)
+# Remove elements of rpart() model object to reduce size while still allowing prediction
 slimRpart <- function(m) {
-  m$where <- NULL
   m$call <- NULL
-  #m$cptable <- NULL
   m$numresp <- NULL
   m$parms <- NULL
   m$functions <- NULL
   m$ordered <- NULL
   m$y <- NULL
-  attr(m, "xlevels") <- NULL
+  #attr(m, "xlevels") <- NULL
   if ("splits" %in% names(m)) m$splits[, c('improve', 'adj')] <- 0
   if ("frame" %in% names(m)) m$frame[, c('n', 'wt', 'dev', 'complexity')] <- 0
   if ("terms" %in% names(m)) attributes(m$terms)['.Environment'] <- NULL
   return(m)
 }
+
+#------------------
+
+# Remove elements of biglm() model object to reduce size while still allowing prediction
+# slimBiglm <- function(m) {
+#   m$call <- NULL
+#   m$assign <- NULL
+#   m$df.resid <- NULL
+#   m$weights <- NULL
+#   m$n <- NULL
+#   m$names <- NULL
+#   return(m)
+# }
 
 #------------------
 
@@ -156,7 +166,7 @@ predictNode <- function(object, newdata) {
 imputationValue <- function(x, na.ind) {
   if (is.numeric(x)) {
     m <- median(x, na.rm = TRUE)
-    if (is.integer(x)) as.integer(round(m)) else m
+    m <- ifelse(is.integer(x), as.integer(round(m)), m)
   } else {
     tab <- table(x) / sum(!na.ind)
     m <- sample(names(tab), size = sum(na.ind), replace = TRUE, prob = tab)

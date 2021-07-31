@@ -28,7 +28,7 @@
 # data: a data.table
 # rho: named vector of target correlations; all names must be in 'data'
 
-induceCor <- function(data, rho, y = NULL, scale.data = FALSE, use.biglm = FALSE, threshold = 1e-12) {
+induceCor <- function(data, rho, y = NULL, scale.data = FALSE, threshold = 1e-12) {
 
   # if (is.data.frame(x)) x <- as.matrix(x)
   # if (is.vector(x)) x <- matrix(x, ncol = 1)
@@ -68,34 +68,27 @@ induceCor <- function(data, rho, y = NULL, scale.data = FALSE, use.biglm = FALSE
 
   # Remove the effects of `y` on `x`
 
-  if (use.biglm) {
-
-    # Use biglm() to compute residuals
-    # Is faster and more memory efficient for especially large 'data'
-    mod <- biglm::biglm(formula = as.formula(paste(names(data)[1], "~", paste(names(data)[-1], collapse = " + "))), data = data)
-    x <- as.matrix(data[, -1L])
-    y <- data[[y]]
-    rm(data)
-    gc()
-
-    beta <- coef(mod)
-    beta[is.na(beta)] <- 0
-    e <- y - (beta[1L] + drop(x %*% beta[-1L]))  # Model residuals; drop intercept
-
-  } else {
-
-    # Use .lm.fit() to compute residuals
-    # On speed of various conventional lm() implementations: https://stackoverflow.com/questions/25416413/is-there-a-faster-lm-function
-    # NOTE: .lm.fit() is faster than either lm.fit() or lm()
-    x <- as.matrix(data[, -1L])
-    e <- .lm.fit(x = x, y = data[[1L]])$residuals
-    y <- data[[y]]
-    rm(data)
-    gc()
-
-  }
-
+  # Use biglm() to compute residuals
+  # Is faster and more memory efficient for especially large 'data'
+  mod <- biglm::biglm(formula = as.formula(paste(names(data)[1], "~", paste(names(data)[-1], collapse = " + "))), data = data)
+  x <- as.matrix(data[, -1L])
+  y <- data[[y]]
+  rm(data)
   gc()
+
+  beta <- coef(mod)
+  beta[is.na(beta)] <- 0
+  e <- y - (beta[1L] + drop(x %*% beta[-1L]))  # Model residuals; drop intercept
+
+  # # Use .lm.fit() to compute residuals
+  # # On speed of various conventional lm() implementations: https://stackoverflow.com/questions/25416413/is-there-a-faster-lm-function
+  # # NOTE: .lm.fit() is faster than either lm.fit() or lm()
+  # x <- as.matrix(data[, -1L])
+  # e <- .lm.fit(x = x, y = data[[1L]])$residuals
+  # y <- data[[y]]
+  # rm(data)
+  # gc()
+
 
   #-----
 

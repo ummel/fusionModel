@@ -10,28 +10,37 @@ train(
   x = NULL,
   ignore = NULL,
   weight = NULL,
-  mc = FALSE,
-  maxcats = NULL,
-  lasso = NULL,
+  cores = 1,
+  lasso = 1,
+  maxcats = 10,
+  complexity = 1e-05,
+  node.obs = c(50, 10),
+  initial = c(0.5, 0.001),
   ...
 )
 }
 \arguments{
-\item{data}{Data frame. Donor dataset. All categorical variables should be factors and ordered whenever possible.}
+\item{data}{Data frame. Donor dataset. All categorical variables must be factors and ordered whenever possible.}
 
-\item{y}{Character vector. The variables to fused to recipient dataset. Can include \link[base:regex]{regular expressions}.}
+\item{y}{Character vector. The variables to fuse to a recipient dataset. Can include \link[base:regex]{regular expressions}.}
 
-\item{x}{Character vector. Predictor variables common to donor and recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
+\item{x}{Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
 
 \item{ignore}{Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
 
 \item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
 
-\item{mc}{Logical. Should multicore processing be used? Implementation uses \code{\link[parallel]{mclapply}}, so \code{mc = TRUE} will fail on Windows.}
+\item{cores}{Integer. Number of cores used for potential parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.}
+
+\item{lasso}{Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL, no pre-screening is performed. Default value \code{lasso = 1} invokes the least-restrictive LASSO. See Details.}
 
 \item{maxcats}{Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
 
-\item{lasso}{Numeric (0-1) or NULL. Controls extent of (fast) predictor variable pre-screening via LASSO regression. If NULL (default), no pre-screening is performed. See Details.}
+\item{complexity}{Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.}
+
+\item{node.obs}{Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.}
+
+\item{initial}{Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.}
 
 \item{...}{Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.}
 }
@@ -42,7 +51,9 @@ A list containing trained model information to be passed to \link{fuse}.
 Train a fusion model on donor data.
 }
 \details{
-When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric and ordered factor response variables. No predictor pre-screening occurs when the response is an unordered factor.
+When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric, logical, and ordered factor response variables (the latter integerized).
+
+Since determination of the fusion order only makes use of variable importance results from the initial (fully-specified) models, employing a random subset of observations and less complex models (controlled via \code{initial}) can yield a competitive fusion order at less expense.
 }
 \examples{
 donor <- recs

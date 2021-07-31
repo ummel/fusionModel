@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Fuse Variables from One Dataset to Another
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: 
     person(given = "Kevin",
            family = "Ummel",
@@ -14,14 +14,14 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Depends: 
     R (>= 2.10),
+    biglm,
+    data.table,
     dplyr,
     purrr,
     tibble,
     tidyr
 Imports: 
-    rpart,
-    data.table,
-    pbapply
-Suggests:
+    pbapply,
     glmnet,
-    biglm
+    rpart
+

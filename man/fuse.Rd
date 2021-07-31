@@ -4,24 +4,16 @@
 \alias{fuse}
 \title{Fuse variables to a recipient dataset}
 \usage{
-fuse(
-  data,
-  train.object,
-  induce = FALSE,
-  induce.ignore = NULL,
-  use.biglm = FALSE
-)
+fuse(data, train.object, induce = FALSE, induce.ignore = NULL)
 }
 \arguments{
 \item{data}{Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.}
 
-\item{train.object}{Output from successfull call to \link{train}.}
+\item{train.object}{Output from a successful call to \link{train}.}
 
-\item{induce}{Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? \code{induce = TRUE} can be slow for large datasets.}
+\item{induce}{Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Warning: \code{induce = TRUE} can be slow for large datasets.}
 
 \item{induce.ignore}{Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.}
-
-\item{use.biglm}{Logical. If \code{induce = TRUE}, \code{use.biglm = TRUE} will use \code{\link[biglm]{biglm}} from the \href{https://cran.r-project.org/web/packages/biglm/index.html}{biglm package} for the necessary OLS regressions. This can be faster and more memory efficiency for large datasets. The default (\code{use.biglm = FALSE}) uses \code{\link[stats]{.lm.fit}}, which is still quite fast in most cases.}
 }
 \value{
 A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
