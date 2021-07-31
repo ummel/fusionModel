@@ -74,7 +74,7 @@ train <- function(data,
                   cores = 1,
                   lasso = 1,
                   maxcats = 10,
-                  complexity = 1e-5,
+                  complexity = 0,
                   node.obs = c(50, 10),
                   initial = c(0.5, 0.001),
                   ...) {
