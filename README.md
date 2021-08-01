@@ -205,20 +205,34 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                                    education           employment hh_size renter
-    1 Bachelor's degree (for example: BA, BS)   Employed full-time       4  FALSE
-    2              High school diploma or GED Not employed/retired       2  FALSE
-    3      Some college or Associate's degree Not employed/retired       1  FALSE
-    4              High school diploma or GED   Employed part-time       2  FALSE
-    5      Some college or Associate's degree   Employed full-time       2   TRUE
-    6      Some college or Associate's degree   Employed part-time       3  FALSE
-                         home_type   year_built square_feet
-    1 Single-family detached house 2000 to 2009        2913
-    2 Single-family detached house 1990 to 1999        4023
-    3 Single-family detached house 1970 to 1979         861
-    4 Single-family detached house 1950 to 1959        4147
-    5 Single-family detached house  Before 1950        1990
-    6 Single-family detached house 1970 to 1979        1118
+                                          aircon           employment
+    1            Central air conditioning system Not employed/retired
+    2            Central air conditioning system Not employed/retired
+    3 Both a central system and individual units Not employed/retired
+    4            Central air conditioning system Not employed/retired
+    5            Central air conditioning system   Employed full-time
+    6   Individual window/wall or portable units Not employed/retired
+                                 heating
+    1 Natural gas from underground pipes
+    2           Do not use space heating
+    3 Natural gas from underground pipes
+    4                        Electricity
+    5 Natural gas from underground pipes
+    6                  Fuel oil/kerosene
+                                                                                education
+    1                                             Bachelor's degree (for example: BA, BS)
+    2                                                          High school diploma or GED
+    3                                                          High school diploma or GED
+    4                                                  Some college or Associate's degree
+    5 Master's, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
+    6                                                Less than high school diploma or GED
+      hh_size   year_built                                    home_type
+    1       3 2000 to 2009                 Single-family detached house
+    2       1 2000 to 2009                 Single-family detached house
+    3       1 2000 to 2009                 Single-family detached house
+    4       1 1970 to 1979                 Single-family attached house
+    5       3 1980 to 1989                 Single-family detached house
+    6       2  Before 1950 Apartment in a building with 5 or more units
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
@@ -235,12 +249,12 @@ The continuous variables in `recs` – like many social survey variables –
 can be quite sparse (lots of zeros). Let’s first check that the
 proportion of zero values is similar in the donor and simulated data.
 
-              hh_size square_feet televisions electricity natural_gas fuel_oil
-    donor           0           0      0.0239           0      0.4193   0.9483
-    simulated       0           0      0.0257           0      0.4210   0.9488
-              propane propane_btu propane_expend
-    donor      0.8992      0.8992         0.8992
-    simulated  0.8924      0.8924         0.8924
+              hh_size natural_gas square_feet electricity televisions
+    donor           0      0.4193           0           0      0.0239
+    simulated       0      0.4193           0           0      0.0241
+              propane_expend fuel_oil propane propane_btu
+    donor             0.8992   0.9483  0.8992      0.8992
+    simulated         0.8996   0.9543  0.8996      0.8996
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television.
@@ -256,12 +270,12 @@ represented in the fusion output.
 
 Now, let’s look at the means of the non-zero values.
 
-              hh_size square_feet televisions electricity natural_gas fuel_oil
-    donor      2.5774    2081.443      2.4195    11028.97    576.6752 502.8666
-    simulated  2.6126    2094.846      2.4276    11118.62    583.3458 470.1199
-               propane propane_btu propane_expend
-    donor     346.7819    31672.67       672.0280
-    simulated 347.2313    31713.88       669.6607
+              hh_size natural_gas square_feet electricity televisions
+    donor      2.5774    576.6752    2081.443    11028.97      2.4195
+    simulated  2.6017    589.5476    2112.704    11073.57      2.3975
+              propane_expend fuel_oil  propane propane_btu
+    donor           672.0280 502.8666 346.7819    31672.67
+    simulated       657.8552 489.4481 337.5437    30829.06
 
 Notice that the ratio of mean “propane\_btu” to “propane” is the same
 for the donor and simulated datasets (ratio = 91.333). This is as
@@ -289,10 +303,10 @@ sim %>% select(natural_gas, use_ng) %>% distinct() %>% arrange(natural_gas) %>% 
       natural_gas use_ng
     1    0.000000  FALSE
     2    2.640000   TRUE
-    3    2.964092   TRUE
-    4    3.768143   TRUE
-    5    4.574955   TRUE
-    6    6.972491   TRUE
+    3    3.162125   TRUE
+    4    4.326402   TRUE
+    5    6.998909   TRUE
+    6    9.747504   TRUE
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
@@ -306,7 +320,7 @@ For the remaining fused variables, we can compare the relative frequency
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0155           0.1521               0.5018         0.3306
+    donor            0.0135           0.1583               0.4829         0.3452
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
@@ -379,7 +393,7 @@ across models, all variables are scaled to zero-mean and unit-variance
 
 ![](man/figures/README-unnamed-chunk-19-1.png)<!-- -->
 
-This exercise yields a total of 176 model terms (including intercepts)
+This exercise yields a total of 170 model terms (including intercepts)
 for which coefficients can be compared. The plot above shows that models
 fit to the simulated data do a good job replicating coefficients derived
 from the original data (correlation = 0.97).
@@ -413,8 +427,8 @@ an estimate of the variance associated with the outcome.
 sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
 ```
 
-     [1] 0.3166509 0.3181510 0.3030600 0.3231514 0.3251453 0.2906758 0.3296911
-     [8] 0.2996570 0.3014928 0.3128896
+     [1] 0.3093227 0.3212223 0.3176410 0.3089330 0.3022301 0.3267609 0.3126228
+     [8] 0.3064828 0.3473511 0.2977401
 
 ## Data synthesis
 
@@ -450,7 +464,7 @@ train(data = donor, y = fusion.vars, cores = 1) %>% timeMe()
 ```
 
     elapsed 
-      7.396 
+      6.452 
 
 ``` r
 # cores = 3
@@ -458,7 +472,7 @@ train(data = donor, y = fusion.vars, cores = 3) %>% timeMe()
 ```
 
     elapsed 
-      5.066 
+      3.693 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
@@ -485,7 +499,7 @@ train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL) %>% timeMe()
     See 'maxcats' argument in ?train.
 
     elapsed 
-      9.269 
+     10.504 
 
 ``` r
 # maxcats = 10
@@ -493,7 +507,7 @@ train(data = donor, y = fusion.vars, cores = 3, maxcats = 10) %>% timeMe()
 ```
 
     elapsed 
-      6.599 
+      5.786 
 
 The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
@@ -521,7 +535,7 @@ train(data = donor, y = fusion.vars, cores = 3, lasso = NULL) %>% timeMe()
 ```
 
     elapsed 
-     39.726 
+     36.935 
 
 ``` r
 # lasso = 0.9
@@ -529,6 +543,6 @@ train(data = donor, y = fusion.vars, cores = 3, lasso = 0.9) %>% timeMe()
 ```
 
     elapsed 
-     29.498 
+     29.091 
 
 ### Happy fusing!
