@@ -455,8 +455,10 @@ fuse <- function(data,
   #-----
 
   # Simulation complete
-  # Return only the fusion variables
-  #return(as.data.frame(data))
-  return(as.data.frame(subset(data, select = names(train.object$yclass))))
+  # Return only the fusion variables, in the order in which they were added to 'data'
+  return(data %>%
+           subset(select = intersect(names(data), names(train.object$yclass))) %>%
+           as.data.frame()
+  )
 
 }
