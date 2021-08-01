@@ -403,7 +403,8 @@ train <- function(data,
     if (!is.null(xbinary)) {
       m$xbin <- xbin
       m$xmerge <- xmerge
-      if (class(m) == "rpart" & (is.factor(xmerge[[2]]) | is.logical(xmerge[[2]]))) {
+      #if (class(m) == "rpart" & ((is.factor(xmerge[[2]] & !is.ordered(xmerge[[2]])) | is.logical(xmerge[[2]]))) {  # Not clear if is.logical condition is correct here! Not thoroughly tested
+      if (class(m) == "rpart" & (is.factor(xmerge[[2]]) & !is.ordered(xmerge[[2]]))) {  # Omitting is.logical condition until clear it is necessary
         attr(m, "ylevels") <- setdiff(attr(m, "ylevels"), xmerge[[2]])
       }
     }
