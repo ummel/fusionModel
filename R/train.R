@@ -14,7 +14,6 @@
 #' @param complexity Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.
 #' @param node.obs Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.
 #' @param initial Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.
-#' @param ... Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.
 #'
 #' @details When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric, logical, and ordered factor response variables (the latter integerized).
 #' @details Since determination of the fusion order only makes use of variable importance results from the initial (fully-specified) models, employing a random subset of observations and less complex models (controlled via \code{initial}) can yield a competitive fusion order at less expense.
@@ -76,8 +75,7 @@ train <- function(data,
                   maxcats = 10,
                   complexity = 0,
                   node.obs = c(50, 10),
-                  initial = c(0.5, 0.001),
-                  ...) {
+                  initial = c(0.5, 0.001)) {
 
   stopifnot(exprs = {
     is.data.frame(data)

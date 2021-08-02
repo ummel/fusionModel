@@ -15,8 +15,7 @@ train(
   maxcats = 10,
   complexity = 0,
   node.obs = c(50, 10),
-  initial = c(0.5, 0.001),
-  ...
+  initial = c(0.5, 0.001)
 )
 }
 \arguments{
@@ -41,8 +40,6 @@ train(
 \item{node.obs}{Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.}
 
 \item{initial}{Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.}
-
-\item{...}{Optional arguments passed to \code{\link[rpart]{rpart}} to control tree-building. By default \code{cp = 0}, \code{xval = 0}, \code{minbucket = 50} (\code{minbucket = 10} for discrete models), and all other arguments are left at default values.}
 }
 \value{
 A list containing trained model information to be passed to \link{fuse}.
