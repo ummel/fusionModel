@@ -71,11 +71,11 @@ train <- function(data,
                   ignore = NULL,
                   weight = NULL,
                   cores = 1,
-                  lasso = 1,
-                  maxcats = 10,
+                  lasso = NULL,
+                  maxcats = 12,
                   complexity = 0,
-                  node.obs = c(50, 10),
-                  initial = c(0.5, 0.001)) {
+                  node.obs = c(20, 5),
+                  initial = c(1, 0)) {
 
   stopifnot(exprs = {
     is.data.frame(data)
