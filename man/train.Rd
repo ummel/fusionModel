@@ -14,6 +14,8 @@ train(
   lasso = NULL,
   maxcats = 12,
   complexity = 0,
+  cvfolds = 0,
+  cvfactor = 0,
   node.obs = c(20, 5),
   initial = c(1, 0)
 )
@@ -31,11 +33,15 @@ train(
 
 \item{cores}{Integer. Number of cores used for potential parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.}
 
-\item{lasso}{Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL, no pre-screening is performed. Default value \code{lasso = 1} invokes the least-restrictive LASSO. See Details.}
+\item{lasso}{Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.}
 
 \item{maxcats}{Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
 
 \item{complexity}{Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.}
+
+\item{cvfolds}{Integer. Number of cross-validation folds used by \code{\link[rpart]{rpart}} to determine optimal tree complexity. Default is no cross-validation (\code{cvfolds = 0}).}
+
+\item{cvfactor}{Numeric. Controls how decision trees are pruned when \code{cvfolds > 0}. \code{cvfactor = 0} (the default) selects the tree complexity that minimizes the cross-validation error. \code{cvfactor = 1} is equivalent to Breiman's "1-SE" rule.}
 
 \item{node.obs}{Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.}
 

@@ -1,4 +1,4 @@
-fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, lasso.threshold = 1, args) {
+fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, lasso.threshold = 1, cvfactor = 0, args) {
 
   # Turned off since not necessary when used within train()
   # stopifnot(exprs = {
@@ -107,9 +107,14 @@ fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, las
     # Call rpart() with specified arguments
     m <- do.call(rpart::rpart, args = args.list)
 
-    # If cross-validation used, select the pruned tree that minimized cross-validation error
+    # If cross-validation used, select the pruned tree that is within cvfactor-SE of the minimum cross-validation error
+    # Note that this technically forces at least one split in the tree
+    # See here: https://stats.stackexchange.com/questions/17904/one-standard-error-rule-for-variable-selection
     if ("xerror" %in% colnames(m$cptable)) {
-      m <- rpart::prune(m, cp = m$cptable[which.min(m$cptable[, "xerror"]), "CP"])
+      imin <- which.min(m$cptable[, "xerror"])
+      xse <- m$cptable[imin, "xstd"] / sqrt(args$xval - 1)  # Approximate SE derived from cross-validated SD and number of folds
+      ind <- sum(m$cptable[1:imin, "xerror"] >= m$cptable[imin, "xerror"] + cvfactor * xse)
+      m <- rpart::prune(m, cp = m$cptable[max(2, ind), "CP"])
     }
 
     #-----

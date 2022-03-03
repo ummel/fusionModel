@@ -9,9 +9,11 @@
 #' @param ignore Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
 #' @param cores Integer. Number of cores used for potential parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.
-#' @param lasso Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL, no pre-screening is performed. Default value \code{lasso = 1} invokes the least-restrictive LASSO. See Details.
+#' @param lasso Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.
 #' @param maxcats Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.
 #' @param complexity Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.
+#' @param cvfolds Integer. Number of cross-validation folds used by \code{\link[rpart]{rpart}} to determine optimal tree complexity. Default is no cross-validation (\code{cvfolds = 0}).
+#' @param cvfactor Numeric. Controls how decision trees are pruned when \code{cvfolds > 0}. \code{cvfactor = 0} (the default) selects the tree complexity that minimizes the cross-validation error. \code{cvfactor = 1} is equivalent to Breiman's "1-SE" rule.
 #' @param node.obs Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.
 #' @param initial Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.
 #'
@@ -74,6 +76,8 @@ train <- function(data,
                   lasso = NULL,
                   maxcats = 12,
                   complexity = 0,
+                  cvfolds = 0,
+                  cvfactor = 0,
                   node.obs = c(20, 5),
                   initial = c(1, 0)) {
 
@@ -82,6 +86,8 @@ train <- function(data,
     !missing(y)
     is.null(maxcats) | (maxcats > 1 & maxcats %% 1 == 0)
     cores > 0 & cores %% 1 == 0
+    cvfolds >= 0 & cvfolds %% 1 == 0
+    cvfactor >= 0 & length(cvfactor) == 1
     is.null(lasso) | (lasso > 0 & lasso <= 1)
     complexity >= 0
     length(node.obs) == 2 & all(node.obs > 0)
@@ -305,9 +311,10 @@ train <- function(data,
                   maxcats = maxcats,
                   linear = FALSE,
                   lasso.threshold = lasso,
+                  cvfactor = cvfactor,
                   args = list(cp = initial[2],
                               minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
-                              xval = 0,
+                              xval = cvfolds,
                               maxcompete = 0)
     )
   }, cl = cores) %>%
@@ -387,9 +394,10 @@ train <- function(data,
                   n = nrow(d),
                   linear = TRUE,
                   lasso.threshold = lasso,
+                  cvfactor = cvfactor,
                   args = list(cp = complexity,
                               minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
-                              xval = 0,
+                              xval = cvfolds,
                               maxcompete = 0)
     )
 
