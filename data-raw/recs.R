@@ -1,6 +1,6 @@
 recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/2015/RECS_2015_H_processed.fst") |>
   dplyr::select(
-    #weight,
+    weight,
     moneypy,
     hhage,
     householder_race,
@@ -16,7 +16,6 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     totsqft_en,
     adqinsul,
     fuelheat,
-    equipm,
     cooltype,
     agecenac,
     tvcolor,
@@ -27,10 +26,10 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     gallonlp,
     btulp,
     dollarlp,
-    sdescent
+    sdescent,
+    rep_1:rep_96
   ) |>
   dplyr::rename(
-    #sample_weight = weight,
     income = moneypy,
     age = hhage,
     race = householder_race,
@@ -65,6 +64,7 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     race = factor(trimws(gsub("Alone", "", race))),
     sdescent = NULL
   ) |>
-  as.data.frame()
+  select(-starts_with("rep_"), starts_with("rep_"))
+  #as.data.frame()
 
 usethis::use_data(recs, overwrite = TRUE)

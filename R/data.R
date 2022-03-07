@@ -2,10 +2,11 @@
 #'
 #' Pre-processed, household-level microdata containing a selection of 28
 #' variables derived from the 2015 RECS. A variety of data types are included.
-#' There are no missing values.
+#' There are no missing values. Variable names have been altered from the original.
 #'
-#' @format A data frame with 5,686 rows and 28 variables:
+#' @format A tibble with 5,686 rows and 124 variables:
 #' \describe{
+#'   \item{weight}{Primary sampling weight}
 #'   \item{income}{Annual gross household income for the last year}
 #'   \item{age}{Respondent age}
 #'   \item{race}{Respondent race}
@@ -31,6 +32,9 @@
 #'   \item{propane}{Total annual propane usage, in gallons}
 #'   \item{propane_btu}{Total annual propane usage, in thousand Btu}
 #'   \item{propane_expend}{Total annual propane expenditure, in dollars}
+#'   \item{use_ng}{Logical indicating if household uses natural gas}
+#'   \item{have_ac}{Logical indicating if household has air conditioning}
+#'   \item{rep_1:rep_96}{Replicate weights for uncertainty estimation}
 #'   }
 #' @source \url{https://www.eia.gov/consumption/residential/data/2015/}
 "recs"
