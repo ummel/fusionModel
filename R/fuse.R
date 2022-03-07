@@ -1,20 +1,38 @@
 #' Fuse variables to a recipient dataset
 #'
 #' @description
-#' Fuse variables to a recipient dataset.
+#' Fuse variables to a recipient dataset. \code{fuseM()} provides a convenience wrapper for generating multiple implicates.
 #'
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
 #' @param train.object Output from a successful call to \link{train}.
 #' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Warning: \code{induce = TRUE} can be slow for large datasets.
 #' @param induce.ignore Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.
+#' @param verbose Logical. Should updates be printed to console?
+#' @param ... Arguments passed to \code{fuse()}.
+
+#' @param M Integer. Number of implicates to simulate.
+#' @param cores Integer. Number of cores used for parallel operations.
 #'
-#' @return A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
+#' @return For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
+#' @return For \code{fuseM()}, a list of length \code{M} with each slot containing an implicate produced by a unique call to \code{fuse()}. If \code{M = 1}, a data frame is returned.
+
 #' @examples
-#' donor <- recs
-#' recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
-#' fusion.vars <- setdiff(names(donor), names(recipient))
-#' fit <- train(data = donor, y = fusion.vars)
+#' # Build a fusion model using RECS microdata
+#' ?recs
+#' fusion.vars <- c("electricity", "natural_gas", "aircon")
+#' predictor.vars <- names(recs)[2:12]
+#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
+#'
+#' # Generate single implicate of synthetic 'fusion.vars',
+#' #  using original RECS data as the recipient
+#' recipient <- recs[predictor.vars]
 #' sim <- fuse(data = recipient, train.object = fit)
+#' head(sim)
+#'
+#' # Generate multiple implicates
+#' sim <- fuseM(data = recipient, train.object = fit, M = 5)
+#' length(sim)
+#' head(sim[[1]])
 #' @export
 
 #---------------------
@@ -40,7 +58,8 @@
 fuse <- function(data,
                  train.object,
                  induce = FALSE,
-                 induce.ignore = NULL) {
+                 induce.ignore = NULL,
+                 verbose = TRUE) {
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -85,9 +104,10 @@ fuse <- function(data,
   ycont <- names(which(sapply(train.object$yclass, function(x) x[1] %in% c("integer", "numeric"))))
 
   # Create the percentile values associated with the quantile function values
+  # Note: Only really necessary if using smoothing
   if (length(ycont) > 0) {
     Qx <- map(train.object$models[ycont], ~ nrow(.x$Q)) %>% compact()
-    Qx <- if(length(Qx) > 0) {
+    Qx <- if (length(Qx) > 0) {
       Qx <- dnorm(seq(-3, 3, length.out = Qx[[1]] - 1))
       Qx <- c(0, cumsum(Qx / sum(Qx)))
     }
@@ -103,7 +123,7 @@ fuse <- function(data,
       validNames(induce.ignore, c(xvars, yord), exclude = TRUE)
     }
     stopifnot(length(induce.vars) > 0)
-    cat("Will attempt to induce correlation for a total of", length(induce.vars), "variables\n")
+    if (verbose) cat("Will attempt to induce correlation for a total of", length(induce.vars), "variables\n")
   }
 
   #-----
@@ -111,7 +131,7 @@ fuse <- function(data,
   # Detect and impute any missing values in 'data'
   na.cols <- names(which(sapply(data, anyNA)))
   if (length(na.cols) > 0) {
-    cat("Missing values imputed for the following predictors:\n", paste(na.cols, collapse = ", "), "\n")
+    if (verbose) cat("Missing values imputed for the following predictors:\n", paste(na.cols, collapse = ", "), "\n")
     for (j in na.cols) {
       x <- data[[j]]
       ind <- is.na(x)
@@ -127,7 +147,7 @@ fuse <- function(data,
 
   if (induce) {
 
-    cat("Building ranks matrix (induce = TRUE)...\n")
+    if (verbose) cat("Building ranks matrix (induce = TRUE)...\n")
 
     # Correlation variables to retain in initial 'ranks' data.table, based on 'induce.vars' argument
     retain <- intersect(induce.vars, xvars)
@@ -183,10 +203,10 @@ fuse <- function(data,
   #-------------------------
   #-------------------------
 
-  cat("Fusing donor variables to recipient...\n")
+  if (verbose) cat("Fusing donor variables to recipient...\n")
 
   # Progress bar printed to console
-  pb <- pbapply::timerProgressBar(min = 0, max = length(yord), char = "+", width = 50, style = 3)
+  if (verbose) pb <- pbapply::timerProgressBar(min = 0, max = length(yord), char = "+", width = 50, style = 3)
 
   for (y in yord) {
 
@@ -216,17 +236,23 @@ fuse <- function(data,
 
       if (class(m) == "rpart") {
 
+        smoothed <- is.null(names(m$Q))
+
         # Vector of nodes in model 'm'
-        nodes <- as.integer(colnames(m$Q))
+        nodes <- as.integer(c(names(m$Q), colnames(m$Q)))
 
         # Predicted node for rows in 'data'
         pnode <- predictNode(object = m, newdata = data[ind, ])
         gc()
 
-        # Catch and fix rare case of missing node (unclear why this might occur)
+        # Catch and fix/kludge rare case of missing node (unclear why this occurs)
+        # Note that the 'popsynth' package has a fix for the same issue: https://github.com/cran/synthpop/blob/master/R/functions.syn.r
+        # Erroneous nodes are re-assigned to the valid node with the closest predicted 'yval'
         miss <- setdiff(pnode, nodes)
-        for (n in miss) pnode[pnode == n] <- nodes[which.min(abs(n - nodes))]
+        for (n in miss) pnode[pnode == n] <- nodes[which.min(abs(m$frame[n, "yval"] - m$frame[nodes, "yval"]))]
         stopifnot(all(pnode %in% nodes))
+
+        #---
 
         # Placeholder vector for simulated values
         S <- vector(mode = "numeric", length = length(pnode))
@@ -239,16 +265,31 @@ fuse <- function(data,
 
           if (any(i)) {
 
-            # Extract inputs needed for quantile function and proportion of zeros
-            Q <- m$Q[, as.character(n)]
+            if (smoothed) {
 
-            # Randomly simulate values from the conditional distribution
-            # Note that this is repeated as necessary to ensure 's' does not contain any values already assigned (exclusively) via 'xmerge'
-            f <- approxfun(x = Qx, y = Q)
-            s <- f(runif(n = sum(i)))
-            while (any(s %in% xmerge[[y]])) {
-              j <- s %in% xmerge[[y]]
-              s[j] <- f(runif(n = sum(j)))
+              # Extract inputs needed for quantile function and proportion of zeros
+              Q <- m$Q[, as.character(n)]
+
+              # Randomly simulate values from the conditional distribution
+              # Note that this is repeated as necessary to ensure 's' does not contain any values already assigned (exclusively) via 'xmerge'
+              f <- approxfun(x = Qx, y = Q)
+              s <- f(runif(n = sum(i)))
+              while (any(s %in% xmerge[[y]])) {
+                j <- s %in% xmerge[[y]]
+                s[j] <- f(runif(n = sum(j)))
+              }
+
+            } else {
+
+              # Randomly sample the observed values within the node
+              # Note that this is repeated as necessary to ensure 's' does not contain any values already assigned (exclusively) via 'xmerge'
+              Q <- m$Q[[as.character(n)]]
+              s <- sample(x = Q[, 1], size = sum(i), replace = TRUE, prob = Q[, 2])
+              while (any(s %in% xmerge[[y]])) {
+                j <- s %in% xmerge[[y]]
+                s[j] <- sample(x = Q[, 1], size = sum(j), replace = TRUE, prob = Q[, 2])
+              }
+
             }
 
             # Assign simulated values to 'S'
@@ -257,6 +298,14 @@ fuse <- function(data,
           }
 
         }
+
+      } else {
+
+        # Make predictions using linear (biglm) model in 'm'
+        fobj <- formula(paste("~", as.character(m$terms)[3L]))
+        newmf <- model.frame(formula = fobj, data[ind, ])
+        newmm <- model.matrix(fobj, newmf)
+        S <- drop(newmm %*% replace_na(coef(m), 0))
 
         #---
 
@@ -270,14 +319,6 @@ fuse <- function(data,
         inner.range <- train.object$yinner[[y]]
         S[S > inner.range[1] & S < 0] <- inner.range[1]
         S[S > 0 & S < inner.range[2]] <- inner.range[2]
-
-      } else {
-
-        # Make predictions using linear (biglm) model in 'm'
-        fobj <- formula(paste("~", as.character(m$terms)[3L]))
-        newmf <- model.frame(formula = fobj, data[ind, ])
-        newmm <- model.matrix(fobj, newmf)
-        S <- drop(newmm %*% replace_na(coef(m), 0))
 
       }
 
@@ -432,12 +473,12 @@ fuse <- function(data,
     #-----
 
     # Update for() loop progress bar
-    pbapply::setTimerProgressBar(pb, match(y, yord))
+    if (verbose) pbapply::setTimerProgressBar(pb, match(y, yord))
 
   }
 
   # Close progress bar
-  pbapply::closepb(pb)
+  if (verbose) pbapply::closepb(pb)
 
   #-------------------------
   #-------------------------
@@ -457,8 +498,27 @@ fuse <- function(data,
   # Simulation complete
   # Return only the fusion variables, in the order in which they were added to 'data'
   return(data %>%
-           subset(select = intersect(names(data), names(train.object$yclass))) %>%
+           subset(select = c(yord, setdiff(names(train.object$yclass), yord))) %>%
            as.data.frame()
   )
 
+}
+
+#------------------------------
+
+# Fuse multiple implicates
+#' @rdname fuse
+#' @export
+fuseM <- function(..., M, cores = 1) {
+  stopifnot({
+    M >=1 & M %% 1 == 0
+    cores > 0 & cores %% 1 == 0
+  })
+  if (M == 1) {
+    fuse(...)
+  } else {
+    pbapply::pblapply(1:M, function(i) {
+      fuse(..., verbose = FALSE)
+    }, cl = cores)
+  }
 }

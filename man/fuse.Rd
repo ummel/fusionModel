@@ -2,9 +2,12 @@
 % Please edit documentation in R/fuse.R
 \name{fuse}
 \alias{fuse}
+\alias{fuseM}
 \title{Fuse variables to a recipient dataset}
 \usage{
-fuse(data, train.object, induce = FALSE, induce.ignore = NULL)
+fuse(data, train.object, induce = FALSE, induce.ignore = NULL, verbose = TRUE)
+
+fuseM(..., M, cores = 1)
 }
 \arguments{
 \item{data}{Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.}
@@ -14,17 +17,38 @@ fuse(data, train.object, induce = FALSE, induce.ignore = NULL)
 \item{induce}{Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Warning: \code{induce = TRUE} can be slow for large datasets.}
 
 \item{induce.ignore}{Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.}
+
+\item{verbose}{Logical. Should updates be printed to console?}
+
+\item{...}{Arguments passed to \code{fuse()}.}
+
+\item{M}{Integer. Number of implicates to simulate.}
+
+\item{cores}{Integer. Number of cores used for parallel operations.}
 }
 \value{
-A data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
+For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
+
+For \code{fuseM()}, a list of length \code{M} with each slot containing an implicate produced by a unique call to \code{fuse()}. If \code{M = 1}, a data frame is returned.
 }
 \description{
-Fuse variables to a recipient dataset.
+Fuse variables to a recipient dataset. \code{fuseM()} provides a convenience wrapper for generating multiple implicates.
 }
 \examples{
-donor <- recs
-recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
-fusion.vars <- setdiff(names(donor), names(recipient))
-fit <- train(data = donor, y = fusion.vars)
+# Build a fusion model using RECS microdata
+?recs
+fusion.vars <- c("electricity", "natural_gas", "aircon")
+predictor.vars <- names(recs)[2:12]
+fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
+
+# Generate single implicate of synthetic 'fusion.vars',
+#  using original RECS data as the recipient
+recipient <- recs[predictor.vars]
 sim <- fuse(data = recipient, train.object = fit)
+head(sim)
+
+# Generate multiple implicates
+sim <- fuseM(data = recipient, train.object = fit, M = 5)
+length(sim)
+head(sim[[1]])
 }
