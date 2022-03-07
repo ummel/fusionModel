@@ -73,7 +73,7 @@ fitDensity <- function(x,
 
     #-----
 
-    # Restrict the min and max of 'Q'
+    # Restrict the min and max of 'Q' (outer range)
     Q[Q < outer.range[1]] <- outer.range[1]
     Q[Q > outer.range[2]] <- outer.range[2]
 

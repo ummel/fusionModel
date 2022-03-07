@@ -8,7 +8,8 @@
 #' @param x Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param ignore Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
-#' @param cores Integer. Number of cores used for potential parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.
+#' @param smoothed Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.
+#' @param cores Integer. Number of cores used for parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.
 #' @param lasso Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.
 #' @param maxcats Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.
 #' @param complexity Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.
@@ -23,10 +24,11 @@
 #' @return A list containing trained model information to be passed to \link{fuse}.
 #'
 #' @examples
-#' donor <- recs
-#' recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
-#' fusion.vars <- setdiff(names(donor), names(recipient))
-#' fit <- train(data = donor, y = fusion.vars)
+#' # Build a fusion model using RECS microdata
+#' ?recs
+#' fusion.vars <- c("electricity", "natural_gas", "aircon")
+#' predictor.vars <- names(recs)[2:12]
+#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars))
 #' @export
 
 #---------------------
@@ -72,24 +74,26 @@ train <- function(data,
                   x = NULL,
                   ignore = NULL,
                   weight = NULL,
+                  smoothed = FALSE,
                   cores = 1,
                   lasso = NULL,
                   maxcats = 12,
                   complexity = 0,
                   cvfolds = 0,
                   cvfactor = 0,
-                  node.obs = c(20, 5),
+                  node.obs = c(20, 10),
                   initial = c(1, 0)) {
 
   stopifnot(exprs = {
     is.data.frame(data)
     !missing(y)
-    is.null(maxcats) | (maxcats > 1 & maxcats %% 1 == 0)
+    is.logical(smoothed)
     cores > 0 & cores %% 1 == 0
+    is.null(lasso) | (lasso > 0 & lasso <= 1)
+    is.null(maxcats) | (maxcats > 1 & maxcats %% 1 == 0)
+    complexity >= 0
     cvfolds >= 0 & cvfolds %% 1 == 0
     cvfactor >= 0 & length(cvfactor) == 1
-    is.null(lasso) | (lasso > 0 & lasso <= 1)
-    complexity >= 0
     length(node.obs) == 2 & all(node.obs > 0)
     is.numeric(initial) & length(initial) == 2
   })
@@ -103,9 +107,10 @@ train <- function(data,
   nms <- names(data)
   yvars <- validNames(y, nms, exclude = FALSE)
 
-  # Detect predictor variables
+  # Detect predictor variables, dependent on how 'x' and 'ignore' arguments are specified
   xvars <- setdiff(nms, c(yvars, weight))
-  if (!is.null(ignore)) xvars <- validNames(ignore, xvars, exclude = TRUE)
+  xvars <- validNames(ignore, xvars, exclude = TRUE)
+  if (!is.null(x)) xvars <- validNames(x, xvars, exclude = FALSE)
 
   # Check validity of variables
   stopifnot(exprs = {
@@ -295,37 +300,45 @@ train <- function(data,
 
   # DETERMINE FUSION ORDER
 
-  cat("Determining order of fusion variables...\n")
+  if (length(yvars) > 1) {
 
-  # Adjusts 'yvars' for removal of variables that can be deduced by 1-to-1 linear relationships
-  yvars <- intersect(yvars, names(data))
+    cat("Determining order of fusion variables...\n")
 
-  # Fit full models, including yvars as predictors
-  # Only 'variable.importance' slot is returned
-  full.varimp <- pbapply::pblapply(X = yvars, FUN = function(y) {
-    m <- fitRpart(y = y,
-                  x = c(xvars, setdiff(yvars, y)),
-                  w = w,
-                  data = data,
-                  n = initial[1] * nrow(data),
-                  maxcats = maxcats,
-                  linear = FALSE,
-                  lasso.threshold = lasso,
-                  cvfactor = cvfactor,
-                  args = list(cp = initial[2],
-                              minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
-                              xval = cvfolds,
-                              maxcompete = 0)
-    )
-  }, cl = cores) %>%
-    setNames(yvars)
+    # Adjusts 'yvars' for removal of variables that can be deduced by 1-to-1 linear relationships
+    yvars <- intersect(yvars, names(data))
 
-  # Find preferred order of yvars
-  yord <- fusionOrder(varimp = map(full.varimp, "variable.importance"))
+    # Fit full models, including yvars as predictors
+    # Only 'variable.importance' slot is returned
+    full.varimp <- pbapply::pblapply(X = yvars, FUN = function(y) {
+      m <- fitRpart(y = y,
+                    x = c(xvars, setdiff(yvars, y)),
+                    w = w,
+                    data = data,
+                    n = initial[1] * nrow(data),
+                    maxcats = maxcats,
+                    linear = FALSE,
+                    lasso.threshold = lasso,
+                    cvfactor = cvfactor,
+                    args = list(cp = initial[2],
+                                minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
+                                xval = cvfolds,
+                                maxcompete = 0)
+      )
+    }, cl = cores) %>%
+      setNames(yvars)
 
-  # Cleanup
-  rm(full.varimp)
-  gc()
+    # Find preferred order of yvars
+    yord <- fusionOrder(varimp = map(full.varimp, "variable.importance"))
+
+    # Cleanup
+    rm(full.varimp)
+    gc()
+
+  } else {
+
+    yord <- yvars
+
+  }
 
   #----------------------------------
   #----------------------------------
@@ -423,26 +436,42 @@ train <- function(data,
       # Add additional slots to rpart model output
       if (class(m) == "rpart") {
 
-        # Create list in 'm' to hold the quantile values associated with a set of 'N' known percentiles; see fitDensity()
-        # The 'Q' values describe the shape of the quantile function (i.e. inverse CDF)
+        # Unique node identifiers
         nodes <- sort(unique(m$where))
 
-        # Placeholder matrix for the smoothed quantile values
-        Qn <- 500  # Ideally, would be a train() control argument
-        m$Q <- matrix(0L, nrow = Qn, ncol = length(nodes))
-        colnames(m$Q) <- nodes
+        #---
 
-        # Fit density to observations in each node
-        for (n in nodes) {
+        if (smoothed) {
 
-          # Index identifying observations in node 'n'
-          nind <- m$where == n
+          # Placeholder matrix for the smoothed quantile values
+          # The 'Q' values describe the shape of the quantile function (i.e. inverse CDF)
+          Qn <- 500  # Ideally, would be a train() control argument
+          m$Q <- matrix(0L, nrow = Qn, ncol = length(nodes))
+          colnames(m$Q) <- nodes
 
-          # Node density result
-          fd <- fitDensity(x = d[nind, y], w = d[nind, w], inner.range = yinner[[y]], outer.range = youter[[y]], N = Qn)
+          # Fit density to observations in each node
+          for (n in nodes) {
 
-          # Add quantile function values to 'm'
-          m$Q[, as.character(n)] <- fd
+            # Index identifying observations in node 'n'
+            nind <- m$where == n
+
+            # Node density result
+            fd <- fitDensity(x = d[nind, y], w = d[nind, w], inner.range = yinner[[y]], outer.range = youter[[y]], N = Qn)
+
+            # Add quantile function values to 'm'
+            m$Q[, as.character(n)] <- fd
+
+          }
+
+        } else {
+
+          # Return 'Q' as named list, each slot containing a 2-column matrix with y-values and observation weights found in each leaf node
+          m$Q <- vector(mode = "list", length = length(nodes))
+          names(m$Q) <- as.character(nodes)
+          for (n in nodes) {
+            nind <- m$where == n
+            m$Q[[as.character(n)]] <- cbind(d[nind, y], d[nind, w])
+          }
 
         }
 

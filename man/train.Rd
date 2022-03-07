@@ -10,13 +10,14 @@ train(
   x = NULL,
   ignore = NULL,
   weight = NULL,
+  smoothed = FALSE,
   cores = 1,
   lasso = NULL,
   maxcats = 12,
   complexity = 0,
   cvfolds = 0,
   cvfactor = 0,
-  node.obs = c(20, 5),
+  node.obs = c(20, 10),
   initial = c(1, 0)
 )
 }
@@ -31,7 +32,9 @@ train(
 
 \item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
 
-\item{cores}{Integer. Number of cores used for potential parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.}
+\item{smoothed}{Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.}
+
+\item{cores}{Integer. Number of cores used for parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.}
 
 \item{lasso}{Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.}
 
@@ -59,8 +62,9 @@ When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASS
 Since determination of the fusion order only makes use of variable importance results from the initial (fully-specified) models, employing a random subset of observations and less complex models (controlled via \code{initial}) can yield a competitive fusion order at less expense.
 }
 \examples{
-donor <- recs
-recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
-fusion.vars <- setdiff(names(donor), names(recipient))
-fit <- train(data = donor, y = fusion.vars)
+# Build a fusion model using RECS microdata
+?recs
+fusion.vars <- c("electricity", "natural_gas", "aircon")
+predictor.vars <- names(recs)[2:12]
+fit <- train(data = recs, y = fusion.vars, x = predictor.vars))
 }

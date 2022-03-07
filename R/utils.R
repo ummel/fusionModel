@@ -130,12 +130,13 @@ predictNode <- function(object, newdata) {
       getFromNamespace("pred.rpart", ns="rpart")(object, newdata)
     }
 
-  nn <- as.numeric(rownames(object$frame)[where])
+  # nn <- as.numeric(rownames(object$frame)[where])
+  #
+  # # Index assigning each row in 'pred' to a node number
+  # node <- match(nn, as.integer(row.names(object$frame)))
 
-  # Index assigning each row in 'pred' to a node number
-  node <- match(nn, as.integer(row.names(object$frame)))
-
-  return(node)
+  #return(node)
+  return(where)
 
 }
 
@@ -181,4 +182,20 @@ sameClass <- function(x, y) {
   if (x[1] == "integer") x <- "numeric"
   if (y[1] == "integer") y <- "numeric"
   identical(x, y)
+}
+
+#------------------
+
+# Weighted mean; slightly faster than weighted.mean()
+wmu <- function(x, w) sum(w * x) / sum(w)
+
+#------------------
+
+# Weighted standard deviation
+# Equivalent to Hmisc::wtd.var() with normwt = TRUE and taking sqrt() of result
+wsd <- function(x, w) {
+  w <- w * length(x) / sum(w)
+  sw <- sum(w)
+  xbar <- sum(w * x) / sw
+  sqrt(sum(w * ((x - xbar) ^ 2)) / (sw - 1))
 }
