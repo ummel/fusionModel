@@ -22,5 +22,4 @@ Depends:
 Imports: 
     pbapply,
     glmnet,
-    rpart,
-    survey
+    rpart
