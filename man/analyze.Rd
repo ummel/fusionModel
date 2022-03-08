@@ -41,6 +41,7 @@ A tibble reporting results for the \code{response} variable across population su
 \item{lower_ci}{Lower bound of 95\% confidence interval.}
 \item{upper_ci}{Upper bound of 95\% confidence interval.}
 \item{degf}{Degrees of freedom of t-distribution if calculating custom confidence intervals.}
+\item{nobs}{Mean number of observations per strata across the implicates.}
 }
 }
 \description{
@@ -49,7 +50,7 @@ Calculation of point estimates and associated standard errors for analyses using
 \details{
 The requested analysis is performed separately for each implicate. The final point estimate is the mean estimate across implicates. The final standard error is pooled across implicates using Reiter's pooling rules for partially synthetic data (Reiter, 2003). The estimate and standard error of each implicate is calculated using the provided observation weights. Calculations utilize custom code leveraging \code{\link[data.table]{data.table}} operatons for speed and memory efficiency.
 
-The within-implicate variance is calculated around the mean of the replicates, rather than the point estimate. This is equivalent to \code{mse = FALSE} in \code{\link[survey]{svrepdesign}}. While this is not necessarily correct for all surveys, the effect on final errors is negligible.
+The within-implicate variance is calculated around the point estimate (rather than around the mean of the replicates). This is equivalent to \code{mse = TRUE} in \code{\link[survey]{svrepdesign}}. This seems to be the appropriate method for most surveys.
 }
 \examples{
 # Build a fusion model using RECS microdata
@@ -59,7 +60,8 @@ fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
 
 # Generate 5 implicates of synthetic 'fusion.vars',
 #  using original RECS data as the recipient
-sim <- fuseM(data = recs, train.object = fit, M = 5)
+recipient <- recs[predictor.vars]
+sim <- fuseM(data = recipient, train.object = fit, M = 5)
 
 # Analyze electricity consumption, by climate zone
 result <- analyze(formula = electricity ~ 1,
@@ -74,6 +76,56 @@ result <- analyze(formula = aircon ~ 1,
                   synthetic = sim,
                   static = recs,
                   donor.N = nrow(recs))
+
+# Analyze natural gas consumption across whole sample
+result <- analyze(formula = natural_gas ~ 1,
+                  synthetic = sim,
+                  static = recs,
+                  donor.N = nrow(recs))
+
+# If a single implicate is provided, calculation
+#  proceeds but with a useful warning
+result <- analyze(formula = natural_gas ~ 1,
+                  synthetic = sim[1],
+                  static = recs,
+                  donor.N = nrow(recs))
+
+#----------
+
+# Validation of internal calculations
+# If single implicate is provided, the results should
+#  match standard replicate weight calculations
+
+# Analyze with all implicates equal to first implicate
+result <- analyze(
+ formula = electricity ~ 1,
+ by = "climate",
+ synthetic = sim[1],
+ static = recs,
+ donor.N = nrow(recs)
+) \%>\%
+filter(metric == "mean")
+
+# Result of standard replicate weight calculation,
+#  as implemented within "survey" package
+recs.design <- survey::svrepdesign(
+ data = cbind(recipient, sim[[1]]),
+ weights = recs$weight,
+ repweights = select(recs, starts_with("rep_")),
+ type = "Fay",
+ rho = 0.5,
+ mse = FALSE
+)
+check <- survey::svyby(
+ formula = electricity ~ 1,
+ by = ~ climate,
+ FUN = survey::svymean,
+ design = recs.design
+)
+
+# Compare 'result' with 'check'
+all.equal(result$estimate, check$electricity)
+all.equal(result$std_error, check$se)
 }
 \references{
 Reiter, J.P. (2003). Inference for Partially Synthetic,

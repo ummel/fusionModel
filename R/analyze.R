@@ -13,9 +13,7 @@
 #' @param cores Integer. Number of cores used for parallel operations.
 #'
 #' @details The requested analysis is performed separately for each implicate. The final point estimate is the mean estimate across implicates. The final standard error is pooled across implicates using Reiter's pooling rules for partially synthetic data (Reiter, 2003). The estimate and standard error of each implicate is calculated using the provided observation weights. Calculations utilize custom code leveraging \code{\link[data.table]{data.table}} operatons for speed and memory efficiency.
-#' @details The within-implicate variance is calculated around the mean of the replicates, rather than the point estimate. This is equivalent to \code{mse = FALSE} in \code{\link[survey]{svrepdesign}}. While this is not necessarily correct for all surveys, the effect on final errors is negligible.
-#'
-#'
+#' @details The within-implicate variance is calculated around the point estimate (rather than around the mean of the replicates). This is equivalent to \code{mse = TRUE} in \code{\link[survey]{svrepdesign}}. This seems to be the appropriate method for most surveys.
 #'
 #' @return A tibble reporting results for the \code{response} variable across population subgroups of \code{by}. The returned quantities are:
 #' @return \describe{
@@ -24,6 +22,7 @@
 #'   \item{lower_ci}{Lower bound of 95% confidence interval.}
 #'   \item{upper_ci}{Upper bound of 95% confidence interval.}
 #'   \item{degf}{Degrees of freedom of t-distribution if calculating custom confidence intervals.}
+#'   \item{nobs}{Mean number of observations per strata across the implicates.}
 #'   }
 #'
 #' @references
@@ -38,7 +37,8 @@
 #'
 #' # Generate 5 implicates of synthetic 'fusion.vars',
 #' #  using original RECS data as the recipient
-#' sim <- fuseM(data = recs, train.object = fit, M = 5)
+#' recipient <- recs[predictor.vars]
+#' sim <- fuseM(data = recipient, train.object = fit, M = 5)
 #'
 #' # Analyze electricity consumption, by climate zone
 #' result <- analyze(formula = electricity ~ 1,
@@ -53,6 +53,56 @@
 #'                   synthetic = sim,
 #'                   static = recs,
 #'                   donor.N = nrow(recs))
+#'
+#' # Analyze natural gas consumption across whole sample
+#' result <- analyze(formula = natural_gas ~ 1,
+#'                   synthetic = sim,
+#'                   static = recs,
+#'                   donor.N = nrow(recs))
+#'
+#' # If a single implicate is provided, calculation
+#' #  proceeds but with a useful warning
+#' result <- analyze(formula = natural_gas ~ 1,
+#'                   synthetic = sim[1],
+#'                   static = recs,
+#'                   donor.N = nrow(recs))
+#'
+#'#----------
+#'
+#'# Validation of internal calculations
+#'# If single implicate is provided, the results should
+#'#  match standard replicate weight calculations
+#'
+#'# Analyze with all implicates equal to first implicate
+#'result <- analyze(
+#'  formula = electricity ~ 1,
+#'  by = "climate",
+#'  synthetic = sim[1],
+#'  static = recs,
+#'  donor.N = nrow(recs)
+#') %>%
+#'filter(metric == "mean")
+#'
+#'# Result of standard replicate weight calculation,
+#'#  as implemented within "survey" package
+#'recs.design <- survey::svrepdesign(
+#'  data = cbind(recipient, sim[[1]]),
+#'  weights = recs$weight,
+#'  repweights = select(recs, starts_with("rep_")),
+#'  type = "Fay",
+#'  rho = 0.5,
+#'  mse = FALSE
+#')
+#'check <- survey::svyby(
+#'  formula = electricity ~ 1,
+#'  by = ~ climate,
+#'  FUN = survey::svymean,
+#'  design = recs.design
+#')
+#'
+#'# Compare 'result' with 'check'
+#'all.equal(result$estimate, check$electricity)
+#'all.equal(result$std_error, check$se)
 #' @export
 #-----
 
@@ -71,11 +121,10 @@ analyze <- function(formula,
     class(formula) == "formula"
     is.null(by) | is.character(by)
     is.list(synthetic)
-    length(synthetic) > 1
     is.data.frame(static)
     donor.N > 0 & donor.N %% 1 == 0
     syn.N > 0 & syn.N %% 1 == 0
-    as.numeric(var.scale)
+    is.numeric(var.scale)
     cores > 0 & cores %% 1 == 0
     all(sapply(synthetic, nrow) == nrow(static))
     all(c("weight", "rep_1", "rep_2") %in% names(static))
@@ -106,6 +155,12 @@ analyze <- function(formula,
   # Note that the primary weight variable is assumed to be called "weight"
   wrep <- names(select(static, starts_with("rep_")))
 
+  # Set 'by' to NULL is not specified
+  if (is.null(by)) {
+    by <- "by..placeholder"
+    static$by..placeholder <- 1L
+  }
+
   # Calculation type
   rvar <- fvars[1]  # The "response" variable
   type <- ifelse("factor" %in% class(dtemp[[rvar]]) | is.logical(dtemp[[rvar]]), "proportion", "mean")
@@ -115,7 +170,7 @@ analyze <- function(formula,
   #---------
 
   # Apply the following function to each subset of 'dt' defined by key(dt)
-  #x <- dt[climate == "IECC climate zones 3B-4B"]
+  #x <- dt[climate == "IECC climate zones 1A-2A"]
   calcMean <- function(x) {
 
     # Point estimate of "total"
@@ -129,13 +184,17 @@ analyze <- function(formula,
     # This is equivalent to setting mse = FALSE in svrepdesign()
     reptot <- paste0(wrep, ".t")
     tot <- colSums(x[, ..reptot])  # Sum total for each replicate
-    se.tot <- sqrt(var.scale * sum((tot - mean(tot)) ^ 2) / length(tot))  # Scaling factor at front (4 for both RECS and ACS)
-    mu <- tot / colSums(x[, ..wrep])  # Mean values across replicates
-    se.mu <- sqrt(var.scale * sum((mu - mean(mu)) ^ 2) / length(tot))  # Scaling factor at front (4 for both RECS and ACS)
+    #se.tot <- sqrt(var.scale * sum((tot - mean(tot)) ^ 2) / length(tot))  # SE about the replicate mean
+    se.tot <- sqrt(var.scale * sum((tot - pe.tot) ^ 2) / length(tot))  # SE about the point estimate
 
-    out <- tibble(metric = c("mean", "total"),
-                  estimate = c(pe.mu, pe.tot),  # Mean and Total point estimates
-                  se = c(se.mu, se.tot))
+    mu <- tot / colSums(x[, ..wrep])  # Mean values across replicates
+    #se.mu <- sqrt(var.scale * sum((mu - mean(mu)) ^ 2) / length(tot)) # SE about the replicate mean
+    se.mu <- sqrt(var.scale * sum((mu - pe.mu) ^ 2) / length(tot)) # SE about the point estimate
+
+    out <- data.table(metric = c("mean", "total"),
+                      est = c(pe.mu, pe.tot),
+                      se = c(se.mu, se.tot),
+                      nobs = nrow(x))
 
     return(out)
 
@@ -144,36 +203,40 @@ analyze <- function(formula,
   #---------
 
   # Calculate estimates and standard errors for each implicate
-  imp.estimates <- pbapply::pblapply(synthetic, FUN = function(syn.data) {
+  imp.est <- pbapply::pblapply(synthetic, FUN = function(syn.data) {
 
     # Create implicate-specific data.table
     dt <- cbind(syn.data, static)
 
     if (type == "mean") {
 
-      # Calculate totals
+      # Calculate new variables ('.t' suffix) with product of response value and the replicate weights
       for (j in wrep) set(dt, i = NULL, j = paste0(j, ".t"), value = dt[[j]] * dt[[rvar]])
 
-      # Apply calcEst(), possibly by group
-      out <- if (is.null(by)) {
-        calcMean(dt)
-      } else {
-        setkeyv(dt, by)
-        dt[, calcMean(.SD), by = key(dt)]
-      }
+      # Apply calcMean(), by group
+      out <- dt[, calcMean(.SD), by = by]
 
     }
 
     if (type == "proportion") {
 
       rlev <- levels(dt[[rvar]])
-      dt <- dt[, lapply(.SD, sum), .SDcols = c("weight", wrep), by = c(by, rvar)]
+      set(dt, i = NULL, j = "Nobs", value = 1L) # Nobs: number of observations in each strata
+      dt <- dt[, lapply(.SD, sum), .SDcols = c("Nobs", "weight", wrep), by = c(by, rvar)]
+      #dt <- dt[, lapply(.SD, sum), .SDcols = c("weight", wrep), by = c(by, rvar)]
+
       f <- function(x) x / sum(x)
       dt <- dt[, c("weight", wrep) := lapply(.SD, f), .SDcols = c("weight", wrep), by = by]
 
+      # Replace 'wrep' columns with absolute difference between replicate proportion and point estimate
+      for (j in wrep) set(dt, i = NULL, j = j, value = dt[[j]] - dt[["weight"]])
+
       out <- dt %>%
-        mutate(se = sqrt(var.scale * rowSums((dt[, ..wrep] - rowMeans(dt[, ..wrep])) ^ 2) / length(wrep))) %>%
-        rename(estimate = weight,
+        mutate(se = sqrt(var.scale * rowSums(dt[, ..wrep] ^ 2) / length(wrep)),
+               #se = sqrt(var.scale * rowSums((dt[, ..wrep] - rowMeans(dt[, ..wrep])) ^ 2) / length(wrep)),
+               metric = "proportion") %>%
+        rename(nobs = Nobs,
+               est = weight,
                level = !!rvar)
 
     }
@@ -181,7 +244,7 @@ analyze <- function(formula,
     # Assemble output
     out <- out %>%
       mutate(response = rvar) %>%
-      select(all_of(by), response, any_of(c("metric", "level")), estimate, se)
+      select(all_of(by), response, any_of(c("metric", "level")), est, se, nobs)
 
     return(out)
 
@@ -190,50 +253,55 @@ analyze <- function(formula,
 
   #---------
 
-  # Identify which columns in 'imp.estimates' to group by below
-  grp <- intersect(names(imp.estimates), c("response", "metric", "level", "term"))
-  for (v in grp) imp.estimates[[v]] <- factor(imp.estimates[[v]], levels = unique(imp.estimates[[v]]))
+  # Identify which columns in 'imp.est' to group by below
+  grp <- intersect(names(imp.est), c("response", "metric", "level", "term"))
+  for (v in grp) imp.est[[v]] <- factor(imp.est[[v]], levels = unique(imp.est[[v]]))
 
   # Calculate pooled estimates and standard errors using Reiter (2003) pooling rules for synthetic data
   # The calculations are taken from the mice package: https://github.com/amices/mice/blob/master/R/pool.R
   # Analogous calculations are found in the synthpop package: https://github.com/cran/synthpop/blob/master/R/methods.syn.r
   # See ?summary.fit.synds
-  result <- imp.estimates %>%
+  # When M = 1, degrees of freedom is equal to the number of replicate weights; otherwise, calculated using Reiter's formula
+  result <- imp.est %>%
     group_by_at(c(by, grp)) %>%
     summarize(
+      nobs = mean(nobs),
       m = n(),  # Number of implicates for which there are data
-      qbar = mean(.data$estimate),  # Pooled complete data estimate
+      estimate = mean(.data$est),  # Pooled complete data estimate
       ubar = mean(.data$se ^ 2) * syn.N / donor.N,  # Within-imputation variance of estimate; ADJUSTED for sample size
-      b = var(.data$estimate),  # Between-imputation variance of estimate
+      b = ifelse(m == 1, 0, var(.data$est)),  # Between-imputation variance of estimate (zero when M = 1)
       t = ubar + (1 / m) * b,  # Total variance, of estimate; the square root of 't' is the standard error (see below)
-      df = (m - 1) * (1 + (ubar / (b / m))) ^ 2,  # Degrees of freedom of $t$-statistic
+      degf = ifelse(m == 1, length(wrep), (m - 1) * (1 + (ubar / (b / m))) ^ 2),  # Degrees of freedom of t-statistic
       .groups = "drop"
-    ) %>%
-    rename(
-      estimate = qbar,
-      degf = df
     ) %>%
     mutate(
       std_error = sqrt(t),  # Standard error
       lower_ci = estimate + qt(0.025, df = degf) * std_error, # 95% confidence interval lower bound
       upper_ci = estimate + qt(0.975, df = degf) * std_error  # 95% confidence interval upper bound
     ) %>%
-    select(all_of(c(by, grp)), estimate, std_error, lower_ci, upper_ci, degf)
+    select(all_of(c(by, grp)), estimate, std_error, lower_ci, upper_ci, degf, nobs) %>%
+    select(-any_of("by..placeholder"))  # Drop the by-group placeholder, if present
 
   #---------
 
   # Constrain CI's to (0, 1) when proportions are being reported
-  if ("level" %in% names(result)) {
+  if (type == "proportion") {
     result <- result %>%
       mutate(lower_ci = pmax(0, lower_ci),
              upper_ci = pmin(1, upper_ci))
   }
 
   # Constraint lower CI to zero if the response variable is strictly positive
-  if ("metric" %in% names(result)) {
-    # Is the response variable strictly positive?
-    pos <- all(!map_lgl(synthetic, ~ any(.x[[rvar]] < 0))) & !any(static[[rvar]] < 0)
+  if (type == "mean") {
+    pos <- all(!map_lgl(synthetic, ~ any(.x[[rvar]] < 0))) & !any(static[[rvar]] < 0)  # Is the response variable strictly positive?
     if (pos) result <- mutate(result, lower_ci = pmax(0, lower_ci))
+  }
+
+  # If a small number of implicates are provided, issue appropriate warnings
+  if (length(synthetic) == 1) {
+    warning("M = 1. Results reflect standard replicate weight calculations (no pooling across implicates).")
+  } else {
+    if (length(synthetic) < 5) warning("Only ", length(synthetic), " implicates provided. Reliability of results increases with the number of implicates.")
   }
 
   return(result)
