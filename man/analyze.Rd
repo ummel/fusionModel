@@ -114,7 +114,7 @@ recs.design <- survey::svrepdesign(
  repweights = select(recs, starts_with("rep_")),
  type = "Fay",
  rho = 0.5,
- mse = FALSE
+ mse = TRUE
 )
 check <- survey::svyby(
  formula = electricity ~ 1,
