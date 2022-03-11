@@ -42,6 +42,7 @@ A tibble reporting results for the \code{response} variable across population su
 \item{upper_ci}{Upper bound of 95\% confidence interval.}
 \item{degf}{Degrees of freedom of t-distribution if calculating custom confidence intervals.}
 \item{nobs}{Mean number of observations per strata across the implicates.}
+\item{rshr}{Share of total uncertainty that is attributable to variance across replicate weights (as opposed to variance across implicates).}
 }
 }
 \description{

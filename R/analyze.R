@@ -23,6 +23,7 @@
 #'   \item{upper_ci}{Upper bound of 95% confidence interval.}
 #'   \item{degf}{Degrees of freedom of t-distribution if calculating custom confidence intervals.}
 #'   \item{nobs}{Mean number of observations per strata across the implicates.}
+#'   \item{rshare}{Share of total uncertainty that is attributable to variance across replicate weights (as opposed to variance across implicates).}
 #'   }
 #'
 #' @references
@@ -255,7 +256,7 @@ analyze <- function(formula,
 
   # Identify which columns in 'imp.est' to group by below
   grp <- intersect(names(imp.est), c("response", "metric", "level", "term"))
-  for (v in grp) imp.est[[v]] <- factor(imp.est[[v]], levels = unique(imp.est[[v]]))
+  #for (v in grp) imp.est[[v]] <- factor(imp.est[[v]], levels = unique(imp.est[[v]]))  # This is done to retain ordering in group_by, below
 
   # Calculate pooled estimates and standard errors using Reiter (2003) pooling rules for synthetic data
   # The calculations are taken from the mice package: https://github.com/amices/mice/blob/master/R/pool.R
@@ -272,6 +273,7 @@ analyze <- function(formula,
       b = ifelse(m == 1, 0, var(.data$est)),  # Between-imputation variance of estimate (zero when M = 1)
       t = ubar + (1 / m) * b,  # Total variance, of estimate; the square root of 't' is the standard error (see below)
       degf = ifelse(m == 1, length(wrep), (m - 1) * (1 + (ubar / (b / m))) ^ 2),  # Degrees of freedom of t-statistic
+      rshare = ubar / t,  # The share of total variance that is attributable to 'ubar'; i.e. due to mean SE from replicate weights analysis
       .groups = "drop"
     ) %>%
     mutate(
@@ -279,7 +281,7 @@ analyze <- function(formula,
       lower_ci = estimate + qt(0.025, df = degf) * std_error, # 95% confidence interval lower bound
       upper_ci = estimate + qt(0.975, df = degf) * std_error  # 95% confidence interval upper bound
     ) %>%
-    select(all_of(c(by, grp)), estimate, std_error, lower_ci, upper_ci, degf, nobs) %>%
+    select(all_of(c(by, grp)), estimate, std_error, lower_ci, upper_ci, degf, nobs, rshare) %>%
     select(-any_of("by..placeholder"))  # Drop the by-group placeholder, if present
 
   #---------
