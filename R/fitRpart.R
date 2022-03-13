@@ -113,7 +113,7 @@ fitRpart <- function(y, x, w, data, n = NULL, maxcats = NULL, linear = TRUE, las
     if ("xerror" %in% colnames(m$cptable)) {
       imin <- which.min(m$cptable[, "xerror"])
       xse <- m$cptable[imin, "xstd"] / sqrt(args$xval - 1)  # Approximate SE derived from cross-validated SD and number of folds
-      ind <- sum(m$cptable[1:imin, "xerror"] >= m$cptable[imin, "xerror"] + cvfactor * xse)
+      ind <- max(which(m$cptable[1:imin, "xerror"] >= m$cptable[imin, "xerror"] + cvfactor * xse))
       m <- rpart::prune(m, cp = m$cptable[max(2, ind), "CP"])
     }
 
