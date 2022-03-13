@@ -6,8 +6,9 @@
 #' @param data Data frame. Donor dataset. All categorical variables must be factors and ordered whenever possible.
 #' @param y Character vector. The variables to fuse to a recipient dataset. Can include \link[base:regex]{regular expressions}.
 #' @param x Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
-#' @param ignore Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
 #' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
+#' @param order Character vector. Order in which to fuse \code{y}. If NULL (default), a pseudo-optimal order is determined internally.
+#' @param deriv Logical. Should algorithm check for derivative relationships prior to building fusion models?
 #' @param smoothed Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.
 #' @param cores Integer. Number of cores used for parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.
 #' @param lasso Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.
@@ -28,7 +29,7 @@
 #' ?recs
 #' fusion.vars <- c("electricity", "natural_gas", "aircon")
 #' predictor.vars <- names(recs)[2:12]
-#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars))
+#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
 #' @export
 
 #---------------------
@@ -71,9 +72,10 @@
 
 train <- function(data,
                   y,
-                  x = NULL,
-                  ignore = NULL,
+                  x,
                   weight = NULL,
+                  order = NULL,
+                  deriv = TRUE,
                   smoothed = FALSE,
                   cores = 1,
                   lasso = NULL,
@@ -86,7 +88,8 @@ train <- function(data,
 
   stopifnot(exprs = {
     is.data.frame(data)
-    !missing(y)
+    is.character(y)
+    is.character(x)
     is.logical(smoothed)
     cores > 0 & cores %% 1 == 0
     is.null(lasso) | (lasso > 0 & lasso <= 1)
@@ -99,7 +102,7 @@ train <- function(data,
   })
 
   # Check that no more than one of 'x' or 'ignore' is specified
-  if (!is.null(x) & !is.null(ignore)) stop("Only one of 'x' or 'ignore' may be non-NULL")
+  #if (!is.null(x) & !is.null(ignore)) stop("Only one of 'x' or 'ignore' may be non-NULL")
 
   #-----
 
@@ -109,8 +112,9 @@ train <- function(data,
 
   # Detect predictor variables, dependent on how 'x' and 'ignore' arguments are specified
   xvars <- setdiff(nms, c(yvars, weight))
-  xvars <- validNames(ignore, xvars, exclude = TRUE)
-  if (!is.null(x)) xvars <- validNames(x, xvars, exclude = FALSE)
+  #xvars <- validNames(ignore, xvars, exclude = TRUE)
+  #if (!is.null(x)) xvars <- validNames(x, xvars, exclude = FALSE)
+  xvars <- validNames(x, xvars, exclude = FALSE)
 
   # Check validity of variables
   stopifnot(exprs = {
@@ -224,66 +228,73 @@ train <- function(data,
 
   #-----
 
-  # Detect 1-to-1 linear dependencies among the variables
-  # This allows certain variables to be excluded from the modeling process
-  # The information needed to simulate these variables in subsequent fuse() call is retained in the 'sim.lm' and 'sim.merge' lists
-  cat("Searching for derivative relationships...\n")
+  if (length(yvars) > 1 & deriv) {
 
-  # Detect near-perfect bivariate relationships where the effective R-squared is above some (high) 'threshold'
-  # List of slimmed 'biglm' models that can be used for simple simulation of variables identified in 'names(sim.lm)'
-  sim.lm <- detectCorrelationDependence(data,
-                                        fvars = yvars,
-                                        exclude = grep("..", names(data), value = TRUE, fixed = TRUE),
-                                        threshold = 0.99)
+    # Detect 1-to-1 linear dependencies among the variables
+    # This allows certain variables to be excluded from the modeling process
+    # The information needed to simulate these variables in subsequent fuse() call is retained in the 'sim.lm' and 'sim.merge' lists
+    cat("Searching for derivative relationships...\n")
 
-  # Detect perfect bivariate categorical relationships
-  # List of data frames that can be used to add/merge derivative variables when variables in 'names(sim.merge)' are known
-  # NOTE: 'exclude' argument below excludes fusionACS spatial predictors ("..") by default! Not particularly safe.
-  #sim.merge <- detectCategoricalDependence(data, fvars = yvars, exclude = names(sim.lm))  # This is universally appropriate but slow with many fusionACS spatial predictors
-  sim.merge <- detectCategoricalDependence(data,
-                                           fvars = yvars,
-                                           exclude = c(names(sim.lm), grep("..", names(data), value = TRUE, fixed = TRUE)),
-                                           cores = cores)
+    # Detect near-perfect bivariate relationships where the effective R-squared is above some (high) 'threshold'
+    # List of slimmed 'biglm' models that can be used for simple simulation of variables identified in 'names(sim.lm)'
+    sim.lm <- detectCorrelationDependence(data,
+                                          fvars = yvars,
+                                          exclude = grep("..", names(data), value = TRUE, fixed = TRUE),
+                                          threshold = 0.99)
 
-  # Vector of variables identified as derivative of other variables
-  derivative <- unique(c(names(sim.lm), unlist(map(sim.merge, ~ names(.x)[-1]))))
+    # Detect perfect bivariate categorical relationships
+    # List of data frames that can be used to add/merge derivative variables when variables in 'names(sim.merge)' are known
+    # NOTE: 'exclude' argument below excludes fusionACS spatial predictors ("..") by default! Not particularly safe.
+    #sim.merge <- detectCategoricalDependence(data, fvars = yvars, exclude = names(sim.lm))  # This is universally appropriate but slow with many fusionACS spatial predictors
+    sim.merge <- detectCategoricalDependence(data,
+                                             fvars = yvars,
+                                             exclude = c(names(sim.lm), grep("..", names(data), value = TRUE, fixed = TRUE)),
+                                             cores = cores)
 
-  # Variables identified as derivative can be removed from 'data'
-  if (length(derivative) > 0) {
-    data <- select(data, -any_of(derivative))
-    cat("Detected", length(derivative), "derivative variable(s) that can be omitted from modeling\n")
+    # Vector of variables identified as derivative of other variables
+    derivative <- unique(c(names(sim.lm), unlist(map(sim.merge, ~ names(.x)[-1]))))
+
+    # Variables identified as derivative can be removed from 'data'
+    if (length(derivative) > 0) {
+      data <- select(data, -any_of(derivative))
+      cat("Detected", length(derivative), "derivative variable(s) that can be omitted from modeling\n")
+    }
+
+  } else {
+    sim.lm <- NULL
+    sim.merge <- NULL
   }
 
   #----------------------------------
   #----------------------------------
 
-  # RANKS MATRIX
-
-  #cat("Building ranks matrix...\n")
-
-  # Unordered factor variables among all retained variables
-  unordered <- sapply(c(xclass, yclass), function(x) x[1] == "factor")
-  unordered <- unordered[names(unordered) %in% names(data)]
-
-  # Build 'ranks' data.table for 'xvars' that are NOT unordered factors
-  ranks <- subset(data, select = names(which(!unordered)))
-  for (v in names(ranks)) data.table::set(ranks, j = v, value = data.table::frank(ranks[[v]], ties.method = "average"))
-
-  # Variable associated with each column of 'ranks' matrix
-  # Updated below when dummy variable columns are created
-  ranks.var <- names(ranks)
-
-  # Create dummy variable columns in 'ranks' for the 'xvars' that ARE unordered factors
-  for (v in names(which(unordered))) {
-    dt <- subset(data, select = v)
-    u <- xlevels[[v]]
-    newv <- paste0(v, u)
-    ranks.var <- c(ranks.var, rep(v, length(u)))
-    ranks[newv] <- lapply(u, function(x) as.integer(dt == x))  # Works if 'ranks' is data.frame or data.table
-  }
-
-  # Safety check
-  stopifnot(length(ranks.var) == ncol(ranks))
+  # # RANKS MATRIX
+  #
+  # #cat("Building ranks matrix...\n")
+  #
+  # # Unordered factor variables among all retained variables
+  # unordered <- sapply(c(xclass, yclass), function(x) x[1] == "factor")
+  # unordered <- unordered[names(unordered) %in% names(data)]
+  #
+  # # Build 'ranks' data.table for 'xvars' that are NOT unordered factors
+  # ranks <- subset(data, select = names(which(!unordered)))
+  # for (v in names(ranks)) data.table::set(ranks, j = v, value = data.table::frank(ranks[[v]], ties.method = "average"))
+  #
+  # # Variable associated with each column of 'ranks' matrix
+  # # Updated below when dummy variable columns are created
+  # ranks.var <- names(ranks)
+  #
+  # # Create dummy variable columns in 'ranks' for the 'xvars' that ARE unordered factors
+  # for (v in names(which(unordered))) {
+  #   dt <- subset(data, select = v)
+  #   u <- xlevels[[v]]
+  #   newv <- paste0(v, u)
+  #   ranks.var <- c(ranks.var, rep(v, length(u)))
+  #   ranks[newv] <- lapply(u, function(x) as.integer(dt == x))  # Works if 'ranks' is data.frame or data.table
+  # }
+  #
+  # # Safety check
+  # stopifnot(length(ranks.var) == ncol(ranks))
 
   #----------------------------------
   #----------------------------------
@@ -300,7 +311,7 @@ train <- function(data,
 
   # DETERMINE FUSION ORDER
 
-  if (length(yvars) > 1) {
+  if (length(yvars) > 1 & is.null(order)) {
 
     cat("Determining order of fusion variables...\n")
 
@@ -336,7 +347,12 @@ train <- function(data,
 
   } else {
 
-    yord <- yvars
+    if (length(yvars) == 1) {
+      yord <- yvars
+    } else {
+      stopifnot(all(yvars %in% order))
+      yord <- order
+    }
 
   }
 
@@ -456,7 +472,11 @@ train <- function(data,
             nind <- m$where == n
 
             # Node density result
-            fd <- fitDensity(x = d[nind, y], w = d[nind, w], inner.range = yinner[[y]], outer.range = youter[[y]], N = Qn)
+            fd <- fitDensity(x = d[nind, y][[1]],
+                             w = d[nind, w][[1]],
+                             inner.range = yinner[[y]],
+                             outer.range = youter[[y]],
+                             N = Qn)
 
             # Add quantile function values to 'm'
             m$Q[, as.character(n)] <- fd
@@ -481,22 +501,23 @@ train <- function(data,
 
     #--------
 
-    # Calculate (rank) correlation between 'y' and existing variables in 'ranks' (if necessary; only continuous and ordered factors)
-    if (y %in% ycor.vars) {
-      #ind <- which(as.numeric(data[[y]]) != 0)  # Restrict correlation calculation to non-zero observations
-      ind <- 1:nrow(data)  # No restriction on correlation calculation
-      j <- ranks.var == y  # Column in 'ranks' associated with 'y'
-      k <- ranks.var %in% c(xvars, yprior)  # Columns in 'ranks' associated with predictors of 'y'
-      p <- suppressWarnings(cor(ranks[ind, k], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
-      p <- cleanNumeric(p[!is.na(p)], tol = 0.001)
-    } else {
-      p <- NULL
-    }
+    # # Calculate (rank) correlation between 'y' and existing variables in 'ranks' (if necessary; only continuous and ordered factors)
+    # if (y %in% ycor.vars) {
+    #   #ind <- which(as.numeric(data[[y]]) != 0)  # Restrict correlation calculation to non-zero observations
+    #   ind <- 1:nrow(data)  # No restriction on correlation calculation
+    #   j <- ranks.var == y  # Column in 'ranks' associated with 'y'
+    #   k <- ranks.var %in% c(xvars, yprior)  # Columns in 'ranks' associated with predictors of 'y'
+    #   p <- suppressWarnings(cor(ranks[ind, k], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
+    #   p <- cleanNumeric(p[!is.na(p)], tol = 0.001)
+    # } else {
+    #   p <- NULL
+    # }
 
     # Cleanup
     gc()  # Perhaps useful when run in parallel
 
-    return(list(m = slimRpart(m), p = p))
+    #return(list(m = slimRpart(m), p = p))
+    return(list(m = slimRpart(m)))
 
   }
 
@@ -531,7 +552,7 @@ train <- function(data,
     ylevels = ylevels,
     yinner = yinner,
     youter = youter,
-    ycor = compact(map(mout, "p")),
+    #ycor = compact(map(mout, "p")),
     derivative = list(constant = sim.constant,
                       model = sim.lm,
                       merge = sim.merge)

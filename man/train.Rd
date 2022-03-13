@@ -7,9 +7,10 @@
 train(
   data,
   y,
-  x = NULL,
-  ignore = NULL,
+  x,
   weight = NULL,
+  order = NULL,
+  deriv = TRUE,
   smoothed = FALSE,
   cores = 1,
   lasso = NULL,
@@ -28,9 +29,11 @@ train(
 
 \item{x}{Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
 
-\item{ignore}{Character vector. Alternative way to specify predictor variables. Can include regular expressions. If non-NULL, all variables other than those in \code{y}, \code{weight}, and \code{ignore} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
-
 \item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
+
+\item{order}{Character vector. Order in which to fuse \code{y}. If NULL (default), a pseudo-optimal order is determined internally.}
+
+\item{deriv}{Logical. Should algorithm check for derivative relationships prior to building fusion models?}
 
 \item{smoothed}{Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.}
 
@@ -66,5 +69,5 @@ Since determination of the fusion order only makes use of variable importance re
 ?recs
 fusion.vars <- c("electricity", "natural_gas", "aircon")
 predictor.vars <- names(recs)[2:12]
-fit <- train(data = recs, y = fusion.vars, x = predictor.vars))
+fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
 }
