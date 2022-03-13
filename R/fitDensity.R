@@ -19,18 +19,16 @@ fitDensity <- function(x,
                        outer.range = c(-Inf, Inf)) {
 
   # Check the arguments
-  # TURNED OFF for use in train(), since arguments are guaranteed to be valid (slightly faster)
-  # stopifnot(exprs = {
-  #   is.numeric(x)
-  #   !anyNA(x)
-  #   is.null(w) | length(w) == length(x)
-  #   N > 0
-  #   N %% 1 == 0
-  #   is.numeric(inner.range)
-  #   length(inner.range) == 2
-  #   is.numeric(outer.range)
-  #   length(outer.range) == 2
-  # })
+  stopifnot(exprs = {
+    is.numeric(x)
+    !anyNA(x)
+    is.null(w) | length(w) == length(x)
+    N > 0 & N %% 1 == 0
+    is.numeric(inner.range)
+    length(inner.range) == 2
+    is.numeric(outer.range)
+    length(outer.range) == 2
+  })
 
   # Set default for 'w', if necessary
   if (is.null(w)) {
