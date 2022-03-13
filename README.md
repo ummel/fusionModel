@@ -114,7 +114,7 @@ donor <- recs
 dim(donor)
 ```
 
-    [1] 5686   28
+    [1] 5686  124
 
 ``` r
 # Recipient dataset
@@ -143,22 +143,18 @@ The `recipient` dataset contains 6 variables that are shared with
 between the two datasets. fusionModel exploits the information in these
 shared variables.
 
-There are 22 non-shared variables that are unique to `donor`. These are
-the variables that will be fused to `recipient`. This includes a mix of
-continuous, logical, ordered factor, and unordered factor variables.
-
 ``` r
 # The variables to be fused
-fusion.vars <- setdiff(names(donor), names(recipient))
+fusion.vars <- names(select(donor, -any_of(c(names(recipient), "weight")), -starts_with("rep_")))
 fusion.vars
 ```
 
      [1] "education"      "employment"     "hh_size"        "renter"        
      [5] "home_type"      "year_built"     "square_feet"    "insulation"    
-     [9] "heating"        "equipm"         "aircon"         "centralac_age" 
-    [13] "televisions"    "disconnect"     "electricity"    "natural_gas"   
-    [17] "fuel_oil"       "propane"        "propane_btu"    "propane_expend"
-    [21] "use_ng"         "have_ac"       
+     [9] "heating"        "aircon"         "centralac_age"  "televisions"   
+    [13] "disconnect"     "electricity"    "natural_gas"    "fuel_oil"      
+    [17] "propane"        "propane_btu"    "propane_expend" "use_ng"        
+    [21] "have_ac"       
 
 ``` r
 # The types of variables to be fused
@@ -167,7 +163,11 @@ table(sapply(donor[fusion.vars], vctrs::vec_ptype_abbr))
 
 
     dbl fct int lgl ord 
-      5   5   4   3   5 
+      5   4   4   3   5 
+
+There are 21 “fusion variables” unique to `donor`. These are the
+variables that will be fused to `recipient`. This includes a mix of
+continuous, logical, ordered factor, and unordered factor variables.
 
 We build our fusion model using the `train()` function. The minimal
 usage is shown below. See `?train` for additional function arguments and
@@ -175,10 +175,10 @@ options. Note that observation weights are ignored here for simplicity
 but can be incorporated via the optional `weights` argument.
 
 ``` r
-fit <- train(data = donor, y = fusion.vars)
+fit <- train(data = donor, y = fusion.vars, x = names(recipient))
 ```
 
-    22 fusion variables
+    21 fusion variables
     6 initial predictor variables
     5686 observations
     Searching for derivative relationships...
@@ -205,41 +205,34 @@ look at just a few of the simulated variables.
 head(sim[, 1:7])
 ```
 
-                                          aircon           employment
-    1            Central air conditioning system Not employed/retired
-    2            Central air conditioning system Not employed/retired
-    3 Both a central system and individual units Not employed/retired
-    4            Central air conditioning system Not employed/retired
-    5            Central air conditioning system   Employed full-time
-    6   Individual window/wall or portable units Not employed/retired
-                                 heating
-    1 Natural gas from underground pipes
-    2           Do not use space heating
-    3 Natural gas from underground pipes
-    4                        Electricity
-    5 Natural gas from underground pipes
-    6                  Fuel oil/kerosene
-                                                                                education
-    1                                             Bachelor's degree (for example: BA, BS)
-    2                                                          High school diploma or GED
-    3                                                          High school diploma or GED
-    4                                                  Some college or Associate's degree
-    5 Master's, Professional, or Doctorate degree (for example: MA, MS, MBA, MD, JD, PhD)
-    6                                                Less than high school diploma or GED
-      hh_size   year_built                                    home_type
-    1       3 2000 to 2009                 Single-family detached house
-    2       1 2000 to 2009                 Single-family detached house
-    3       1 2000 to 2009                 Single-family detached house
-    4       1 1970 to 1979                 Single-family attached house
-    5       3 1980 to 1989                 Single-family detached house
-    6       2  Before 1950 Apartment in a building with 5 or more units
+                employment                               education
+    1   Employed full-time Bachelor's degree (for example: BA, BS)
+    2   Employed full-time              High school diploma or GED
+    3   Employed part-time      Some college or Associate's degree
+    4   Employed part-time      Some college or Associate's degree
+    5   Employed full-time Bachelor's degree (for example: BA, BS)
+    6 Not employed/retired    Less than high school diploma or GED
+                                 heating hh_size         disconnect natural_gas
+    1           Do not use space heating       2              Never         156
+    2                        Electricity       2              Never           0
+    3                        Electricity       3              Never           0
+    4 Natural gas from underground pipes       2              Never         495
+    5 Natural gas from underground pipes       2        Some months         896
+    6                  Fuel oil/kerosene       1 Almost every month           0
+            insulation
+    1   Well insulated
+    2   Well insulated
+    3   Well insulated
+    4 Poorly insulated
+    5 Poorly insulated
+    6 Poorly insulated
 
 **If you run the same code yourself, your results for `sim` *will look
 different*.** This is because each call to `fuse()` produces a different
 random sampling from the underlying, conditional probability
 distributions (see section below on “Generating implicates”).
 
-## Validation
+## Sanity testing
 
 Successful fusion should result in simulated/synthetic variables that
 “look like” the donor in key respects. We can perform a series of
@@ -249,12 +242,12 @@ The continuous variables in `recs` – like many social survey variables –
 can be quite sparse (lots of zeros). Let’s first check that the
 proportion of zero values is similar in the donor and simulated data.
 
-              hh_size natural_gas square_feet electricity televisions
-    donor           0      0.4193           0           0      0.0239
-    simulated       0      0.4193           0           0      0.0241
-              propane_expend fuel_oil propane propane_btu
-    donor             0.8992   0.9483  0.8992      0.8992
-    simulated         0.8996   0.9543  0.8996      0.8996
+              hh_size natural_gas square_feet televisions electricity propane
+    donor           0      0.4193           0      0.0239           0  0.8992
+    simulated       0      0.4193           0      0.0206           0  0.9010
+              fuel_oil propane_expend propane_btu
+    donor       0.9483         0.8992      0.8992
+    simulated   0.9490         0.9010      0.9010
 
 Comparatively few households use propane or fuel oil, and almost
 everyone has a television.
@@ -270,12 +263,12 @@ represented in the fusion output.
 
 Now, let’s look at the means of the non-zero values.
 
-              hh_size natural_gas square_feet electricity televisions
-    donor      2.5774    576.6752    2081.443    11028.97      2.4195
-    simulated  2.6017    589.5476    2112.704    11073.57      2.3975
-              propane_expend fuel_oil  propane propane_btu
-    donor           672.0280 502.8666 346.7819    31672.67
-    simulated       657.8552 489.4481 337.5437    30829.06
+              hh_size natural_gas square_feet televisions electricity  propane
+    donor      2.5774    576.6752    2081.443      2.4195    11028.97 346.7819
+    simulated  2.5939    574.0109    2106.313      2.4347    11098.22 338.7003
+              fuel_oil propane_expend propane_btu
+    donor     502.8666       672.0280    31672.67
+    simulated 517.2817       654.2291    30934.71
 
 Notice that the ratio of mean “propane\_btu” to “propane” is the same
 for the donor and simulated datasets (ratio = 91.333). This is as
@@ -301,12 +294,12 @@ sim %>% select(natural_gas, use_ng) %>% distinct() %>% arrange(natural_gas) %>% 
 ```
 
       natural_gas use_ng
-    1    0.000000  FALSE
-    2    2.640000   TRUE
-    3    3.162125   TRUE
-    4    4.326402   TRUE
-    5    6.998909   TRUE
-    6    9.747504   TRUE
+    1       0.000  FALSE
+    2       2.640   TRUE
+    3       3.824   TRUE
+    4       5.450   TRUE
+    5       7.630   TRUE
+    6       7.830   TRUE
 
 Next, let’s look at kernel density plots of the non-zero values for the
 continuous variables where this kind of visualization makes sense.
@@ -320,7 +313,7 @@ For the remaining fused variables, we can compare the relative frequency
 is one such comparison for the “insulation” variable.
 
               Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0135           0.1583               0.4829         0.3452
+    donor            0.0125           0.1588               0.4880         0.3407
     simulated        0.0137           0.1597               0.4893         0.3373
 
 This kind of comparison can be extended to all of the fusion variables
@@ -393,42 +386,10 @@ across models, all variables are scaled to zero-mean and unit-variance
 
 ![](man/figures/README-unnamed-chunk-19-1.png)<!-- -->
 
-This exercise yields a total of 170 model terms (including intercepts)
+This exercise yields a total of 166 model terms (including intercepts)
 for which coefficients can be compared. The plot above shows that models
 fit to the simulated data do a good job replicating coefficients derived
-from the original data (correlation = 0.97).
-
-## Generating implicates
-
-Because values are randomly sampled from the conditional probability
-distributions, each call to `fuse()` produces a unique, synthetic
-dataset referred to as an “implicate” (in the sense of “simple
-synthesis”). It is common in data synthesis and imputation to produce
-multiple implicates that, collectively, quantify (some of) the
-uncertainty inherent in the underlying data.
-
-Since variables are synthesized serially, the creation of multiple
-implicates requires running `fuse()` multiple times. For example:
-
-``` r
-# Desired number of implicates
-n.imp <- 10
-
-# Generate 'n.imp' implicates
-sim <- lapply(1:n.imp, function(i) fuse(data = recipient, train.object = fit))
-```
-
-We can then look at the variation of a given outcome – e.g. the
-correlation between two variables – across the implicates. This provides
-an estimate of the variance associated with the outcome.
-
-``` r
-# Correlation between electricity consumption and number of televisions, across the implicates
-sapply(sim, function(x) cor(x[c("electricity", "televisions")])[1, 2])
-```
-
-     [1] 0.3093227 0.3212223 0.3176410 0.3089330 0.3022301 0.3267609 0.3126228
-     [8] 0.3064828 0.3473511 0.2977401
+from the original data (R-squared = 0.966).
 
 ## Data synthesis
 
@@ -438,9 +399,9 @@ manually sampled to “seed” the recipient dataset for fusion.
 
 ``` r
 # Create fusion model with a single predictor ("division" in this case)
-recipient <- subset(recs, select = division)
-fusion.vars <- setdiff(names(recs), names(recipient))
-fit <- train(data = recs, y = fusion.vars)
+recipient <- subset(donor, select = division)
+fusion.vars <- names(select(donor, -any_of(c(names(recipient), "weight")), -starts_with("rep_")))
+fit <- train(data = recs, y = fusion.vars, x = names(recipient))
 
 # Randomly sample "division" in the recipient and then run fuse()
 recipient$division <- sample(recipient$division, size = nrow(recipient))
@@ -460,19 +421,19 @@ using the `cores` argument. This is only enabled for UNIX-like systems
 timeMe <- function(...) system.time(capture.output(...))["elapsed"]
 
 # cores = 1
-train(data = donor, y = fusion.vars, cores = 1) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 1) %>% timeMe()
 ```
 
     elapsed 
-      6.452 
+      6.018 
 
 ``` r
 # cores = 3
-train(data = donor, y = fusion.vars, cores = 3) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 3) %>% timeMe()
 ```
 
     elapsed 
-      3.693 
+      3.654 
 
 Binary split decision trees are usually fast, but they can be
 *painfully* slow when there are unordered factor response (fusion)
@@ -491,23 +452,23 @@ donor$climate <- factor(sample(LETTERS[1:20], nrow(donor), replace = TRUE))
 
 # maxcats = NULL
 # Note that train() issues a warning about long compute time
-train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, maxcats = NULL) %>% timeMe()
 ```
 
-    Warning in train(data = donor, y = fusion.vars, cores = 3, maxcats = NULL): 
+    Warning in train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, : 
     Be careful: Unordered factors are present that could cause long compute times.
     See 'maxcats' argument in ?train.
 
     elapsed 
-     10.504 
+     11.496 
 
 ``` r
 # maxcats = 10
-train(data = donor, y = fusion.vars, cores = 3, maxcats = 10) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, maxcats = 10) %>% timeMe()
 ```
 
     elapsed 
-      5.786 
+      7.999 
 
 The `lasso` argument directs `train()` to use LASSO regression via
 [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
@@ -527,22 +488,22 @@ donor[LETTERS] <- runif(26 * nrow(donor))
 dim(donor)
 ```
 
-    [1] 50000    54
+    [1] 50000   150
 
 ``` r
 # lasso = NULL
-train(data = donor, y = fusion.vars, cores = 3, lasso = NULL) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, lasso = NULL) %>% timeMe()
 ```
 
     elapsed 
-     36.935 
+      28.01 
 
 ``` r
 # lasso = 0.9
-train(data = donor, y = fusion.vars, cores = 3, lasso = 0.9) %>% timeMe()
+train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, lasso = 0.9) %>% timeMe()
 ```
 
     elapsed 
-     29.091 
+     26.645 
 
 ### Happy fusing!
