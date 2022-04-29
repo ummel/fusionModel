@@ -2,7 +2,7 @@
 % Please edit documentation in R/train.R
 \name{train}
 \alias{train}
-\title{Train a fusion model on donor data}
+\title{Train a fusion model using Classification and Regression Trees (CART)}
 \usage{
 train(
   data,
@@ -23,11 +23,11 @@ train(
 )
 }
 \arguments{
-\item{data}{Data frame. Donor dataset. All categorical variables must be factors and ordered whenever possible.}
+\item{data}{Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.}
 
-\item{y}{Character vector. The variables to fuse to a recipient dataset. Can include \link[base:regex]{regular expressions}.}
+\item{y}{Character vector. The variables to fuse to a recipient dataset.}
 
-\item{x}{Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.}
+\item{x}{Character vector. Predictor variables common to donor and eventual recipient.}
 
 \item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
 
@@ -57,7 +57,7 @@ train(
 A list containing trained model information to be passed to \link{fuse}.
 }
 \description{
-Train a fusion model on donor data.
+Train a fusion model on donor data using CART implemented via \code{\link[rpart]{rpart}}.
 }
 \details{
 When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric, logical, and ordered factor response variables (the latter integerized).

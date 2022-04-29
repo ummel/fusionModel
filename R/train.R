@@ -1,11 +1,11 @@
-#' Train a fusion model on donor data
+#' Train a fusion model using Classification and Regression Trees (CART)
 #'
 #' @description
-#' Train a fusion model on donor data.
+#' Train a fusion model on donor data using CART implemented via \code{\link[rpart]{rpart}}.
 #'
-#' @param data Data frame. Donor dataset. All categorical variables must be factors and ordered whenever possible.
-#' @param y Character vector. The variables to fuse to a recipient dataset. Can include \link[base:regex]{regular expressions}.
-#' @param x Character vector. Predictor variables common to donor and eventual recipient. Can include regular expressions. If NULL, all variables other than those in \code{y} and \code{weight} are used. Only one of \code{x} and \code{ignore} can be non-NULL.
+#' @param data Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.
+#' @param y Character vector. The variables to fuse to a recipient dataset.
+#' @param x Character vector. Predictor variables common to donor and eventual recipient.
 #' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
 #' @param order Character vector. Order in which to fuse \code{y}. If NULL (default), a pseudo-optimal order is determined internally.
 #' @param deriv Logical. Should algorithm check for derivative relationships prior to building fusion models?
@@ -44,29 +44,21 @@
 # source("R/detectDependence.R")
 #
 # Inputs for ?train example - with some modification for harder test cases
-# data <- recs
+# data <- recs[1:28]
 #
-# i <- sample(which(data$propane > 0), size = 100, replace = FALSE)
-# data$propane[i] <- -data$propane[i]
-# data$propane_btu[i] <- -data$propane_btu[i]
-# data$propane_expend[i] <- -data$propane_expend[i]
-#
-# data <- data %>%
-#   mutate(cenac_age = ifelse(centralac_age == "Less than 2 years old", 1, 0),
-#          cenac_age = ifelse(centralac_age %in% c("2 to 4 years old", "5 to 9 years old"), 4.5, cenac_age),
-#          cenac_age = ifelse(centralac_age %in% c("10 to 14 years old", "15 to 19 years old", "20 years or older"), 17, cenac_age))
-#
-# recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
+# recipient <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
 # y = setdiff(names(data), names(recipient))
-# weight = NULL
-# x <- NULL
-# ignore = NULL
+# weight <- "weight"
+# x <- setdiff(names(recipient), weight)
 # maxcats = 10
 # cores = 1
 # lasso = 1
 # complexity = 0.0001
 # node.obs = c(50, 10)
 # initial <- c(0.5, 0.001)
+
+# fusion.cart <- train(data = data, y = y, x = x, weight = weight)
+# saveRDS(fusion.cart, "fusion_cart.rds")
 
 #---------------------
 

@@ -1,7 +1,7 @@
-#' Fuse variables to a recipient dataset
+#' Fuse variables to a recipient dataset using CART fusion model
 #'
 #' @description
-#' Fuse variables to a recipient dataset. \code{fuseM()} provides a convenience wrapper for generating multiple implicates.
+#' Fuse variables to a recipient dataset using a fusion model object produced by \code{train()}. \code{fuseM()} provides a convenience wrapper for generating multiple implicates.
 #'
 #' @param data Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{train.object}.
 #' @param train.object Output from a successful call to \link{train}.
@@ -13,9 +13,9 @@
 #' @param M Integer. Number of implicates to simulate.
 #' @param cores Integer. Number of cores used for parallel operations.
 #'
-#' @return For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable defined in \code{train.object}. The order of the columns reflects the order in which they where fused.
-#' @return For \code{fuseM()}, a list of length \code{M} with each slot containing an implicate produced by a unique call to \code{fuse()}. If \code{M = 1}, a data frame is returned.
-
+#' @return For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable. The order of the columns reflects the order in which they where fused.
+#' @return For \code{fuseM()}, a data frame with number of rows equal to \code{M * nrow(data)}. Integer column ".M" indicates implicate assignment of each observation. Note that the ordering of recipient observations is consistent within implicates, so do not change the row order if using with \code{analyze()}.
+#'
 #' @examples
 #' # Build a fusion model using RECS microdata
 #' ?recs
@@ -31,8 +31,8 @@
 #'
 #' # Generate multiple implicates
 #' sim <- fuseM(data = recipient, train.object = fit, M = 5)
-#' length(sim)
-#' head(sim[[1]])
+#' head(sim)
+#' table(sim$.M)
 #' @export
 
 #---------------------
@@ -56,16 +56,17 @@
 #---------------------
 
 fuse <- function(data,
-                 train.object,
-                 induce = FALSE,
-                 induce.ignore = NULL,
-                 verbose = TRUE) {
+                     train.object,
+                     induce = FALSE,
+                     induce.ignore = NULL) {
 
   stopifnot(exprs = {
     is.data.frame(data)
     is.logical(induce)
     !(!induce & !is.null(induce.ignore))  # Nonsensical input
   })
+
+  verbose <- TRUE
 
   #-----
 
@@ -509,16 +510,14 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(..., M, cores = 1) {
+fuseM <- function(..., M, fun = fuse, cores = 1) {
   stopifnot({
-    M >=1 & M %% 1 == 0
+    M >= 1 & M %% 1 == 0
     cores > 0 & cores %% 1 == 0
   })
-  if (M == 1) {
-    fuse(...)
-  } else {
-    pbapply::pblapply(1:M, function(i) {
-      fuse(..., verbose = FALSE)
-    }, cl = cores)
-  }
+  pbapply::pblapply(1:M, function(i) {
+    fun(...)
+  }, cl = cores) %>%
+    bind_rows(.id = "M") %>%
+    mutate(M = as.integer(M))
 }

@@ -187,15 +187,86 @@ sameClass <- function(x, y) {
 #------------------
 
 # Weighted mean; slightly faster than weighted.mean()
-wmu <- function(x, w) sum(w * x) / sum(w)
+wmean <- function(x, w) sum(w * x) / sum(w)
 
 #------------------
 
 # Weighted standard deviation
 # Equivalent to Hmisc::wtd.var() with normwt = TRUE and taking sqrt() of result
-wsd <- function(x, w) {
-  w <- w * length(x) / sum(w)
-  sw <- sum(w)
-  xbar <- sum(w * x) / sw
-  sqrt(sum(w * ((x - xbar) ^ 2)) / (sw - 1))
+# wsd <- function(x, w) {
+#   w <- w * length(x) / sum(w)
+#   sw <- sum(w)
+#   xbar <- sum(w * x) / sw
+#   sqrt(sum(w * ((x - xbar) ^ 2)) / (sw - 1))
+# }
+
+#------------------
+
+# Detect if a numeric variable is likely to be zero-inflated
+# Returns TRUE or FALSE
+inflated <- function(x, threshold = 0.9) {
+  if (sum(x == 0) >= 0.01 * length(x)) {
+    d1 <- density(x)
+    d2 <- density(x[x != 0], bw = d1$bw, from = min(d1$x), to = max(d1$x))
+    z <- which.min(abs(d1$x))
+    d2$y[z] / d1$y[z] < threshold  # Arbitrary threshold for detecting zero-inflated distribution
+  } else {
+    FALSE
+  }
+}
+
+#------------------
+
+# Function to integerize real (non-integer) positive weights
+# 'mincor' refers to the minimum allowable Pearson correlation between 'x' and the integerized version of 'x'
+# Function will also handle 'x' that is constant or already integer
+integerize <- function(x, mincor = 0.999) {
+  stopifnot(all(x > 0))
+  if (sd(x) == 0) {
+    return(rep(1L, length(x)))
+  } else {
+    p <- 0
+    i <- 0
+    r <- max(x) / min(x)
+    while (p < mincor) {
+      i <- i + 1
+      mx <- ifelse(is.integer(x), r, max(r, 10 ^ i))
+      z <- 1 + mx * ((x - min(x)) / r)
+      z <- as.integer(round(z))
+      p <- cor(x, z)
+    }
+    return(z)
+  }
+}
+
+#------------------
+
+# Examples
+# x <- rlnorm(1e3)
+# xint <- integerize(x)
+# cor(x, xint)
+#
+# x <- 1:10
+# xint <- integerize(x)
+# all.equal(x, xint)
+#
+# x <- rep(0.1, 10)
+# xint <- integerize(x)
+# unique(xint)
+
+#------------------
+
+# Convert data frame to 'dgCMatrix' sparse matrix for use by lightgbm
+# Convert factors to numeric, by reference (efficient)
+# Sets minimal categorical integer value to zero
+# Converts to Matrix class 'dgCMatrix'
+# See here: https://www.gormanalysis.com/blog/sparse-matrix-construction-and-use-in-r/
+tomat <- function(data) {
+  dmat <- as.data.table(data)
+  for (v in names(dmat)) {
+    if (is.factor(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]) - 1L)
+    if (is.logical(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]))
+  }
+  dmat <- as(as.matrix(dmat), "dgCMatrix")
+  return(dmat)
 }

@@ -165,7 +165,7 @@ catDependence <- function(data, targets = NULL, candidates = NULL, cores = 1L) {
 # Detect dependencies among categorical variables
 # Returns a list of data frames that can be used to add/merge the derivative variables when the parent is known
 
-detectCategoricalDependence <- function(data, fvars, exclude, cores = 1L) {
+detectCategoricalDependence <- function(data, fvars, exclude, suffix = "_BINARY_", cores = 1L) {
 
   out <- NULL
 
@@ -203,10 +203,10 @@ detectCategoricalDependence <- function(data, fvars, exclude, cores = 1L) {
             distinct()) %>%
       setNames(names(dd))
 
-    # Rename output data frame using "_BINARY_" suffix for numeric variables
+    # Rename output data frame using (for example) "_BINARY_" suffix for numeric variables
     for (v in names(out)) {
       if (v %in% vnum) {
-        names(out[[v]])[1] <- paste0(names(out[[v]])[1], "_BINARY_")
+        names(out[[v]])[1] <- paste0(names(out[[v]])[1], suffix)
       }
     }
 
