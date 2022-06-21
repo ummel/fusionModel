@@ -1,555 +1,475 @@
-#' Train a fusion model using Classification and Regression Trees (CART)
+#' Train a fusion model using conditional distribution matching
 #'
 #' @description
-#' Train a fusion model on donor data using CART implemented via \code{\link[rpart]{rpart}}.
+#' Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can used with \link{fuse} to simulate outcomes for a "recipient" dataset.
 #'
 #' @param data Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.
-#' @param y Character vector. The variables to fuse to a recipient dataset.
-#' @param x Character vector. Predictor variables common to donor and eventual recipient.
-#' @param weight Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.
-#' @param order Character vector. Order in which to fuse \code{y}. If NULL (default), a pseudo-optimal order is determined internally.
-#' @param deriv Logical. Should algorithm check for derivative relationships prior to building fusion models?
-#' @param smoothed Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.
-#' @param cores Integer. Number of cores used for parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.
-#' @param lasso Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.
-#' @param maxcats Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.
-#' @param complexity Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.
-#' @param cvfolds Integer. Number of cross-validation folds used by \code{\link[rpart]{rpart}} to determine optimal tree complexity. Default is no cross-validation (\code{cvfolds = 0}).
-#' @param cvfactor Numeric. Controls how decision trees are pruned when \code{cvfolds > 0}. \code{cvfactor = 0} (the default) selects the tree complexity that minimizes the cross-validation error. \code{cvfactor = 1} is equivalent to Breiman's "1-SE" rule.
-#' @param node.obs Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.
-#' @param initial Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.
+#' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.
+#' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
+#' @param file Character. File where fusion model will be saved. Must use \code{.fsn} suffix.
+#' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
+#' @param nfolds Integer. Number of cross-validation folds used for LightGBM model training.
+#' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
+#' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
+#' @param threads Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.
 #'
-#' @details When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric, logical, and ordered factor response variables (the latter integerized).
-#' @details Since determination of the fusion order only makes use of variable importance results from the initial (fully-specified) models, employing a random subset of observations and less complex models (controlled via \code{initial}) can yield a competitive fusion order at less expense.
+#' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #'
-#' @return A list containing trained model information to be passed to \link{fuse}.
+#' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
+#'
+#' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
+#' @details \itemize{
+#'   \item boosting
+#'   \item num_leaves
+#'   \item bagging_fraction
+#'   \item feature_fraction
+#'   \item min_data_in_leaf
+#'   \item num_iterations
+#'   \item learning_rate
+#'   }
+#'
+#' @return A fusion model object (.fsn) is saved to \code{file}.
 #'
 #' @examples
 #' # Build a fusion model using RECS microdata
+#' # Note that "test_model.fsn" will be written to working directory
 #' ?recs
 #' fusion.vars <- c("electricity", "natural_gas", "aircon")
 #' predictor.vars <- names(recs)[2:12]
-#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
+#' train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+#'
+#' # When 'y' is a list, it can specify variables to fuse as a block
+#' fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
+#' fusion.vars
+#' train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+#'
+#' # Specify a single set of LightGBM hyperparameters
+#' train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+#'       hyper = list(boosting = "goss",
+#'                    feature_fraction = 0.8,
+#'                    num_iterations = 300
+#'       ))
+#'
+#' # Specify a range of LightGBM hyperparameters to search over
+#' # This takes longer, because there are more models to test
+#' train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+#'       hyper = list(num_leaves = c(10, 30),
+#'                    feature_fraction = c(0.8, 0.9, 1),
+#'                    num_iterations = 50
+#'       ))
 #' @export
 
 #---------------------
 
 # Manual testing
-#
 # library(fusionModel)
+# library(lightgbm)
+#
 # source("R/utils.R")
-# source("R/fitRpart.R")
-# source("R/fitDensity.R")
-# source("R/fusionOrder.R")
-# source("R/detectDependence.R")
+# source("R/stratify.R")
+# source("R/chain.R")
+# source("R/fitLGB.R")
 #
-# Inputs for ?train example - with some modification for harder test cases
+# # Inputs for testing - with some modification for harder test cases
 # data <- recs[1:28]
-#
 # recipient <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
 # y = setdiff(names(data), names(recipient))
 # weight <- "weight"
 # x <- setdiff(names(recipient), weight)
-# maxcats = 10
-# cores = 1
-# lasso = 1
-# complexity = 0.0001
-# node.obs = c(50, 10)
-# initial <- c(0.5, 0.001)
-
-# fusion.cart <- train(data = data, y = y, x = x, weight = weight)
-# saveRDS(fusion.cart, "fusion_cart.rds")
+# nfolds <- 5L
+# ptiles <- c(0.25, 0.75)
+# file = "fusion_model_test.fsn"
+# threads = 1
+# hyper <- list()
+#
+# # Create clustering of 'y' variables
+# y0 <- y
+# y <- list("education", "square_feet", "natural_gas", "renter")
+# y <- c(y, list(setdiff(y0, unlist(y))))
+#
+# # Full call
+# train(data, y, x, file)
+#
+# # From 'fuse5.r'
+# test <- fuse(data = data, fsn_file = file)
 
 #---------------------
 
 train <- function(data,
                   y,
                   x,
+                  file = "fusion_model.fsn",
                   weight = NULL,
-                  order = NULL,
-                  deriv = TRUE,
-                  smoothed = FALSE,
-                  cores = 1,
-                  lasso = NULL,
-                  maxcats = 12,
-                  complexity = 0,
-                  cvfolds = 0,
-                  cvfactor = 0,
-                  node.obs = c(20, 10),
-                  initial = c(1, 0)) {
+                  nfolds = 5,
+                  ptiles = c(0.25, 0.75),
+                  hyper = NULL,
+                  threads = 1) {
 
   stopifnot(exprs = {
     is.data.frame(data)
-    is.character(y)
-    is.character(x)
-    is.logical(smoothed)
-    cores > 0 & cores %% 1 == 0
-    is.null(lasso) | (lasso > 0 & lasso <= 1)
-    is.null(maxcats) | (maxcats > 1 & maxcats %% 1 == 0)
-    complexity >= 0
-    cvfolds >= 0 & cvfolds %% 1 == 0
-    cvfactor >= 0 & length(cvfactor) == 1
-    length(node.obs) == 2 & all(node.obs > 0)
-    is.numeric(initial) & length(initial) == 2
+    all(unlist(y) %in% names(data))
+    all(x %in% names(data))
+    is.character(file) & endsWith(file, ".fsn")
+    is.null(weight) | weight %in% names(data)
+    length(unique(c(x, y, weight))) == length(c(x, y, weight))
+    nfolds > 0 & nfolds %% 1 == 0
+    is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
+    is.null(hyper) | is.list(hyper)
+    threads >= 0 & threads %% 1 == 0
   })
 
-  # Check that no more than one of 'x' or 'ignore' is specified
-  #if (!is.null(x) & !is.null(ignore)) stop("Only one of 'x' or 'ignore' may be non-NULL")
+  if (is.null(hyper)) hyper <- list()
+  if (is.data.table(data)) data <- as.data.frame(data)
 
-  #-----
+  # Check 'file' path and create parent directories, if necessary
+  dir <- normalizePath(dirname(file), mustWork = FALSE)
+  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
+  file <- file.path(dir, basename(file))
 
-  # Detect fusion variables
-  nms <- names(data)
-  yvars <- validNames(y, nms, exclude = FALSE)
+  # Create correct 'y' and 'yord', depending on input type
+  if (is.list(y)) {
+    yord <- y
+    y <- unlist(yord)
+  } else {
+    yord <- as.list(y)
+  }
 
-  # Detect predictor variables, dependent on how 'x' and 'ignore' arguments are specified
-  xvars <- setdiff(nms, c(yvars, weight))
-  #xvars <- validNames(ignore, xvars, exclude = TRUE)
-  #if (!is.null(x)) xvars <- validNames(x, xvars, exclude = FALSE)
-  xvars <- validNames(x, xvars, exclude = FALSE)
-
-  # Check validity of variables
-  stopifnot(exprs = {
-    length(yvars) > 0
-    length(xvars) > 0
-    #!anyNA(data[yvars])  # Require non-NA values in response values
-  })
+  # Cluster number assignment for each 'y' variable
+  cn <- unlist(mapply(rep, seq_along(yord), each = lengths(yord)))
 
   #-----
 
   # Create and/or check observation weights
-  # Weights are normalized (mean = 1) to avoid integer overflow issues
-  w <- "._wgt_."
-  if (is.null(weight)) {
-    data[[w]] <- rep(1L, nrow(data))
+  # LightGBM can handel numeric weights; ctree() requires integer weights
+  # A different version is created for each
+  W.lgb <- if (is.null(weight)) {
+    rep(1L, nrow(data))
   } else {
-    stopifnot(exprs = {
-      weight %in% names(data)
-      !weight %in% names(c(xvars, yvars))
-      !anyNA(data[[weight]])
-      all(data[[weight]] >= 0)
-    })
-    data[[w]] <- data[[weight]] / mean(data[[weight]])  # Scaled weight to avoid numerical issues with larger integer weights
-    data[[weight]] <- NULL
+    if (anyNA(data[[weight]])) stop("Missing (NA) values are not allowed in 'weight'")
+    data[[weight]] / mean(data[[weight]]) # Scaled weights to avoid numerical issues
   }
 
   #-----
 
+  # Check data and variable name validity
+  if (anyNA(data[y])) stop("Missing (NA) values are not allowed in 'y'")
+
   # Check for character-type variables; stop with error if any detected
-  x <- sapply(data[c(xvars, yvars)], is.character)
-  if (any(x)) stop("Please coerce character variables to factor:\n", paste(names(which(x)), collapse = ", "))
+  xc <- sapply(data[c(x, y)], is.character)
+  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
+
+  # Check that the 'xvars' and 'yvars' contain only syntactically valid names
+  bad <- setdiff(c(x, y), make.names(c(x, y)))
+  if (length(bad)) cat("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
+
+  # Check for no-variance (constant) variables
+  # Stop with error if any 'y' are constant; remove constant 'x' with message
+  constant <- names(which(sapply(data[y], novary)))
+  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "), "\n")
+  constant <- names(which(sapply(data[x], novary)))
+  if (length(constant)) {
+    x <- setdiff(x, constant)
+    data <- select(data, -all_of(constant))
+    cat("Removed zero-variance 'x' variable(s):\n", paste(constant, collapse = ", "), "\n")
+  }
+
+  # Detect and impute any missing values in 'x' variables
+  na.cols <- names(which(sapply(data[x], anyNA)))
+  if (length(na.cols) > 0) {
+    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
+    for (j in na.cols) {
+      x <- data[[j]]
+      ind <- is.na(x)
+      data[ind, j] <-  imputationValue(x, ind)
+    }
+  }
 
   #-----
 
-  # Check that the 'xvars' and 'yvars' contain only syntactically valid names
-  stopifnot(all(make.names(yvars, unique = TRUE) == yvars))
-  stopifnot(all(make.names(xvars, unique = TRUE) == xvars))
+  # Extract data classes and levels for the 'yvars'
+  d <- data[y]
+  yclass <- lapply(d, class)
+  ylevels <- lapply(d[grepl("factor", yclass)], levels)
+
+  # Extract data classes and levels for the 'xvars'
+  d <- data[x]
+  xclass <- lapply(d, class)
+  xlevels <- lapply(d[grepl("factor", xclass)], levels)
+
+  # Determine LightGBM response variable types
+  ytype <- ifelse(sapply(data[y], is.factor), "multiclass", "continuous")
+  ytype <- ifelse(sapply(data[y], function(x) is.logical(x) | length(levels(x)) == 2), "binary", ytype)
+
+  # Nominal/unordered categorical variables (both x and y variables)
+  # Passed to LightGBM so it knows which variables to treat as unordered factors
+  nominal <- names(select(data, where(is.factor) & !where(is.ordered)))
+
+  rm(d)
+
+  #-----
 
   # Print variable information to console
+  xvars <- x
+  yvars <- y
   cat(length(yvars), "fusion variables\n")
   cat(length(xvars), "initial predictor variables\n")
   cat(nrow(data), "observations\n")
 
   # Limit 'data' to the necessary variables
-  data <- data[c(w, xvars, yvars)]
+  data <- data[c(yvars, xvars)]
+
+  # Coerce 'data' to sparse numeric matrix for use with LightGBM
+  dmat <- tomat(data)
+
+  # Determine response variable prefixes for saving to disk
+  pfixes <- formatC(seq_along(yord), width = nchar(length(yord)), format = "d", flag = "0")
 
   #-----
 
-  # Identify which of the 'yvars' are continuous
-  ycont <- names(which(sapply(data[yvars], is.numeric)))
+  # Default hyperparameter values, per LightGBM documentation
+  # Parameters: https://lightgbm.readthedocs.io/en/latest/Parameters.html
+  # Parameter tuning: https://lightgbm.readthedocs.io/en/latest/Parameters-Tuning.html
+  # More details: https://sites.google.com/view/lauraepp/parameters
+  hyper.default <- list(
+    boosting = "gbdt",
+    num_leaves = 31,
+    bagging_fraction = 1,
+    feature_fraction = 1,
+    min_data_in_leaf = 20,
+    num_iterations = 100,
+    learning_rate = 0.1,
+    max_depth = -1,
+    num_threads = threads  # 0 means default number of threads in OpenMP
+  )
 
-  # Observed "outer" range" (min/max) for continuous 'yvars'
-  youter <- lapply(data[ycont], range, na.rm = TRUE)
-
-  # The "inner range" for continuous 'yvars'; i.e. largest negative and smallest positive value
-  # If there are no negative or positive values, 0 is returned
-  yinner <- lapply(data[ycont], function(x) c(ifelse(any(x < 0), max(x[x < 0], na.rm = TRUE), 0), ifelse(any(x > 0), min(x[x > 0], na.rm = TRUE), 0)))
-
-  # Extract data classes and levels for the 'yvars'
-  x <- data[yvars]
-  yclass <- lapply(x, class)
-  ylevels <- lapply(x[grepl("factor", yclass)], levels)
-
-  # Placeholder list for 'ycor' with slots for continuous and ordered factor fusion variables (but not unordered factors)
-  ycor.vars <- names(which(sapply(yclass, function(x) x[1] != "factor")))
-
-  #-----
-
-  # Extract data classes and levels for the 'xvars'
-  x <- data[xvars]
-  xclass <- lapply(x, class)
-  xlevels <- lapply(x[grepl("factor", xclass)], levels)
-
-  #-----
-
-  # Check for no-variance (constant) variables; record them in 'sim.constant' and remove from 'data'
-  constant <- names(which(sapply(data[c(xvars, yvars)], novary)))
-  if (length(constant)) {
-    sim.constant <- map(data[intersect(constant, yvars)], ~ na.omit(unique(.x)))
-    yvars <- setdiff(yvars, constant)
-    xvars <- setdiff(xvars, constant)
-    cat("Detected", length(constant), "constant variable(s):\n", paste(constant, collapse = ", "), "\n")
-  } else {
-    sim.constant <- NULL
-  }
-
-  #-----
-
-  # Detect if unordered factors with many levels could cause problems and issue immediate warning to console
-  if (is.null(maxcats) & any(map_chr(yclass, 1L) == "factor") & any(lengths(xlevels) > 15)) {
-    warning("\nBe careful: Unordered factors are present that could cause long compute times.\nSee 'maxcats' argument in ?train.\n", immediate. = TRUE)
-    # NOT USED: Prompt user to confirm at console that they want to continue
-    #   cat("Hold up! Unordered factors are present that could cause long compute times. See 'maxcats' argument in ?train.\n")
-    #   continue <- readline(prompt = "Do you want to continue with 'maxcats = NULL'? (Y/N):\n")
-    #   if (tolower(continue) != "y") stop(call. = FALSE)
-  }
-
-  #-----
-
-  # Detect and impute any missing values in 'data'
-  na.cols <- names(which(sapply(data, anyNA)))
-  if (length(na.cols) > 0) {
-    #cat("Imputing missing values in predictor variables...\n")
-    cat("Missing values imputed for the following variable(s):\n", paste(na.cols, collapse = ", "), "\n")
-    for (j in na.cols) {
-      x <- data[[j]]
-      ind <- is.na(x)
-      set(data, i = which(ind), j = j, value = imputationValue(x, ind))
+  # Use default hyperparameters, if not specified by user
+  for (v in names(hyper.default)) {
+    if (!v %in% names(hyper)) {
+      hyper[[v]] <- hyper.default[[v]]
     }
   }
 
+  # Create hyperparameter grid to search
+  hyper.grid <- hyper %>%
+    expand.grid() %>%
+    mutate(
+      bagging_fraction = ifelse(boosting == "goss", 1, bagging_fraction),  # Bagging not possible with 'goss'
+      bagging_freq = ifelse(bagging_fraction == 1, 0, 1)  # Turn on bagging if indicated by 'bagging_fraction'
+    ) %>%
+    distinct() %>%
+    split(seq(nrow(.)))
+
   #-----
 
-  if (length(yvars) > 1 & deriv) {
+  # Placeholder lists for metadata outputs
+  xlist.lgb <- ycenter <- yscale <- vector(mode = "list", length = length(yord))
 
-    # Detect 1-to-1 linear dependencies among the variables
-    # This allows certain variables to be excluded from the modeling process
-    # The information needed to simulate these variables in subsequent fuse() call is retained in the 'sim.lm' and 'sim.merge' lists
-    cat("Searching for derivative relationships...\n")
+  # Temporary directory to save lightGBM models to
+  td <- tempfile()
+  dir.create(td, showWarnings = FALSE)
 
-    # Detect near-perfect bivariate relationships where the effective R-squared is above some (high) 'threshold'
-    # List of slimmed 'biglm' models that can be used for simple simulation of variables identified in 'names(sim.lm)'
-    sim.lm <- detectCorrelationDependence(data,
-                                          fvars = yvars,
-                                          exclude = grep("..", names(data), value = TRUE, fixed = TRUE),
-                                          threshold = 0.99)
+  #-----
 
-    # Detect perfect bivariate categorical relationships
-    # List of data frames that can be used to add/merge derivative variables when variables in 'names(sim.merge)' are known
-    # NOTE: 'exclude' argument below excludes fusionACS spatial predictors ("..") by default! Not particularly safe.
-    #sim.merge <- detectCategoricalDependence(data, fvars = yvars, exclude = names(sim.lm))  # This is universally appropriate but slow with many fusionACS spatial predictors
-    sim.merge <- detectCategoricalDependence(data,
-                                             fvars = yvars,
-                                             exclude = c(names(sim.lm), grep("..", names(data), value = TRUE, fixed = TRUE)),
-                                             cores = cores)
+  # Sequentially build LightGBM prediction models
+  cat("Building LightGBM models...\n")
 
-    # Vector of variables identified as derivative of other variables
-    derivative <- unique(c(names(sim.lm), unlist(map(sim.merge, ~ names(.x)[-1]))))
+  for (i in 1:length(yord)) {
 
-    # Variables identified as derivative can be removed from 'data'
-    if (length(derivative) > 0) {
-      data <- select(data, -any_of(derivative))
-      cat("Detected", length(derivative), "derivative variable(s) that can be omitted from modeling\n")
-    }
+    v <- yord[[i]]
 
-  } else {
-    sim.lm <- NULL
-    sim.merge <- NULL
-  }
+    block <- length(v) > 1
 
-  #----------------------------------
-  #----------------------------------
+    # 'y' variables from prior clusters to be included as predictors
+    yv <- if (i == 1) NULL else unlist(yord[1:(i - 1)])
 
-  # # RANKS MATRIX
-  #
-  # #cat("Building ranks matrix...\n")
-  #
-  # # Unordered factor variables among all retained variables
-  # unordered <- sapply(c(xclass, yclass), function(x) x[1] == "factor")
-  # unordered <- unordered[names(unordered) %in% names(data)]
-  #
-  # # Build 'ranks' data.table for 'xvars' that are NOT unordered factors
-  # ranks <- subset(data, select = names(which(!unordered)))
-  # for (v in names(ranks)) data.table::set(ranks, j = v, value = data.table::frank(ranks[[v]], ties.method = "average"))
-  #
-  # # Variable associated with each column of 'ranks' matrix
-  # # Updated below when dummy variable columns are created
-  # ranks.var <- names(ranks)
-  #
-  # # Create dummy variable columns in 'ranks' for the 'xvars' that ARE unordered factors
-  # for (v in names(which(unordered))) {
-  #   dt <- subset(data, select = v)
-  #   u <- xlevels[[v]]
-  #   newv <- paste0(v, u)
-  #   ranks.var <- c(ranks.var, rep(v, length(u)))
-  #   ranks[newv] <- lapply(u, function(x) as.integer(dt == x))  # Works if 'ranks' is data.frame or data.table
-  # }
-  #
-  # # Safety check
-  # stopifnot(length(ranks.var) == ncol(ranks))
+    # Full set of predictor variables, including 'y' from clusters earlier in sequence
+    # Assign the x predictors to 'xlist'
+    xv <- as.vector(c(xvars, yv))
+    xlist.lgb[[i]] <- xv
 
-  #----------------------------------
-  #----------------------------------
+    path <- file.path(td, pfixes[i])
+    dir.create(path)
 
-  # data.table with zero/nonzero binary version of numeric variables
-  dzero <- as.data.table(data)
-  vnum <- setdiff(names(which(sapply(data, is.numeric))), w)
-  for (v in vnum) set(dzero, j = v, value = dzero[[v]] == 0)
+    cdata <- NULL
 
-  # Make dzero unique? Would this be faster?
+    for (y in v) {
 
-  #----------------------------------
-  #----------------------------------
+      # Response variable type and values
+      Y <- dmat[, y]
+      type <- ytype[[y]]
 
-  # DETERMINE FUSION ORDER
+      zc <- NULL
+      mc <- NULL
+      qc <- NULL
+      ti <- rep(TRUE, length(Y))
+      pi <- ti
 
-  if (length(yvars) > 1 & is.null(order)) {
+      #-----
 
-    cat("Determining order of fusion variables...\n")
+      if (type == "continuous" & inflated(Y)) {
 
-    # Adjusts 'yvars' for removal of variables that can be deduced by 1-to-1 linear relationships
-    yvars <- intersect(yvars, names(data))
+        ti <- Y != 0
+        if (!block) pi <- ti
 
-    # Fit full models, including yvars as predictors
-    # Only 'variable.importance' slot is returned
-    full.varimp <- pbapply::pblapply(X = yvars, FUN = function(y) {
-      m <- fitRpart(y = y,
-                    x = c(xvars, setdiff(yvars, y)),
-                    w = w,
-                    data = data,
-                    n = initial[1] * nrow(data),
-                    maxcats = maxcats,
-                    linear = FALSE,
-                    lasso.threshold = lasso,
-                    cvfactor = cvfactor,
-                    args = list(cp = initial[2],
-                                minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
-                                xval = cvfolds,
-                                maxcompete = 0)
-      )
-    }, cl = cores) %>%
-      setNames(yvars)
+        # Create the LGB training dataset
+        dfull <- lightgbm::lgb.Dataset(data = dmat[, xv],
+                                       label = as.integer(Y == 0),
+                                       weight = W.lgb,
+                                       categorical_feature = intersect(xv, nominal))
+        lightgbm::lgb.Dataset.construct(dfull)
 
-    # Find preferred order of yvars
-    yord <- fusionOrder(varimp = map(full.varimp, "variable.importance"))
+        # List indicating random assignment of folds
+        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds)
 
-    # Cleanup
-    rm(full.varimp)
-    gc()
+        # Set the loss function and performance metric used with lightGBM
+        params.obj <- list(objective = "binary", metric = "binary_logloss")
 
-  } else {
+        # Fit model
+        zmod <- fitLGB(data.lgb = dfull, hyper.grid = hyper.grid, params.obj = params.obj, cv.folds = cv.folds)
 
-    if (length(yvars) == 1) {
-      yord <- yvars
-    } else {
-      stopifnot(all(yvars %in% order))
-      yord <- order
-    }
+        # Save LightGBM mean model (m.txt) to disk
+        lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
 
-  }
-
-  #----------------------------------
-  #----------------------------------
-
-  # FIT MODELS
-
-  cat("Building fusion models...\n")
-
-  # Function to fit rpart() model and calculate rank correlations for i-th response variable in 'yord'
-  fitModel <- function(i) {
-
-    y <- yord[i]
-
-    # Is 'y' continuous?
-    cont <- y %in% ycont
-
-    # Prior response variables in the fusion sequence
-    yprior <- if (i == 1) NULL else yord[1:(i - 1)]
-
-    #--------
-
-    # Restrict data to rows with non-NA response values
-    ind <- which(!is.na(data[[y]]))
-    d <- data[ind, c(w, y, yprior, xvars)]
-
-    #--------
-
-    # Detect if there is a numeric predictor with zero/nonzero structure that is derivative of 'y'
-    # If a zero/nonzero binary version of a predictor can explain 'y', then we want to include that binary version and force its inclusion
-    # Example: one of the predictors is natural gas consumption (numeric) and 'y' is categorical indicating if household uses natural gas
-    xbin <- catDependence(data = dzero,
-                          targets = y,
-                          candidates = intersect(vnum, c(xvars, yprior)),
-                          cores = 1L)
-
-    # Update 'd' with binary version of 'xbin' derivative variables
-    # In such cases, the binary variable generally
-    if (is.null(xbin)) {
-      xbinary <- NULL
-    } else {
-      xbin <- xbin[[1]][1]  # Retains only a single explanator variable, even if multiple exist
-      xbinary <- paste0(xbin, "_BINARY_")
-      d <- cbind(d, setnames(x = dzero[, ..xbin], new = xbinary))
-
-      # Extract any unique 'y' values associated with binary predictor
-      xmerge <- d %>%
-        select(all_of(c(xbinary, y))) %>%
-        distinct() %>%
-        group_by_at(xbinary) %>%
-        filter(n() == 1) %>%
-        ungroup()
-
-      # Subset 'd' so that decision tree only fit to subset of values not explained by 'xmerge'
-      d <- subset(d, !d[[y]] %in% xmerge[[y]])
-
-    }
-
-    #--------
-
-    # Fit prediction model
-    m <- fitRpart(y = y,
-                  x = c(xvars, yprior, xbinary),
-                  w = w,
-                  data = d,
-                  maxcats = maxcats,
-                  n = nrow(d),
-                  linear = TRUE,
-                  lasso.threshold = lasso,
-                  cvfactor = cvfactor,
-                  args = list(cp = complexity,
-                              minbucket = ifelse(y %in% ycont, node.obs[1], node.obs[2]),
-                              xval = cvfolds,
-                              maxcompete = 0)
-    )
-
-    #--------
-
-    # Add 'xbin' slot indicating which numeric variables where binarized prior to model-fitting
-    # Add 'xmerge' slot indicating which binary numeric predictors perfectly explain an outcome value
-    # If the response variable is categorical, remove the "known" level from the 'ylevels' attribute of the rpart object (causes prediction errors otherwise)
-    if (!is.null(xbinary)) {
-      m$xbin <- xbin
-      m$xmerge <- xmerge
-      #if (class(m) == "rpart" & ((is.factor(xmerge[[2]] & !is.ordered(xmerge[[2]])) | is.logical(xmerge[[2]]))) {  # Not clear if is.logical condition is correct here! Not thoroughly tested
-      if (class(m) == "rpart" & (is.factor(xmerge[[2]]) & !is.ordered(xmerge[[2]]))) {  # Omitting is.logical condition until clear it is necessary
-        attr(m, "ylevels") <- setdiff(attr(m, "ylevels"), xmerge[[2]])
-      }
-    }
-
-    #--------
-
-    # If 'y' is continuous...
-    if (cont) {
-
-      # Add additional slots to rpart model output
-      if (class(m) == "rpart") {
-
-        # Unique node identifiers
-        nodes <- sort(unique(m$where))
-
-        #---
-
-        if (smoothed) {
-
-          # Placeholder matrix for the smoothed quantile values
-          # The 'Q' values describe the shape of the quantile function (i.e. inverse CDF)
-          Qn <- 500  # Ideally, would be a train() control argument
-          m$Q <- matrix(0L, nrow = Qn, ncol = length(nodes))
-          colnames(m$Q) <- nodes
-
-          # Fit density to observations in each node
-          for (n in nodes) {
-
-            # Index identifying observations in node 'n'
-            nind <- m$where == n
-
-            # Node density result
-            fd <- fitDensity(x = d[nind, y][[1]],
-                             w = d[nind, w][[1]],
-                             inner.range = yinner[[y]],
-                             outer.range = youter[[y]],
-                             N = Qn)
-
-            # Add quantile function values to 'm'
-            m$Q[, as.character(n)] <- fd
-
-          }
-
-        } else {
-
-          # Return 'Q' as named list, each slot containing a 2-column matrix with y-values and observation weights found in each leaf node
-          m$Q <- vector(mode = "list", length = length(nodes))
-          names(m$Q) <- as.character(nodes)
-          for (n in nodes) {
-            nind <- m$where == n
-            m$Q[[as.character(n)]] <- cbind(d[nind, y], d[nind, w])
-          }
-
+        # Conditional probability of zero for the non-zero training observations
+        if (block) {
+          zc <- matrix(predict(object = zmod, data = dmat[pi, xv], reshape = TRUE))
+          colnames(zc) <- paste0(y, "_z")
         }
 
+        rm(zmod)
+
+      }
+
+      #-----
+
+      # Create the LGB training dataset
+      dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv],
+                                     label = Y[ti],
+                                     weight = W.lgb[ti],
+                                     categorical_feature = intersect(xv, nominal))
+      lightgbm::lgb.Dataset.construct(dfull)
+
+      # List indicating random assignment of folds
+      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10)
+
+      # Set the loss function and performance metric used with lightGBM
+      # This is here so that the Huber loss 'alpha' is set based on observed MAD
+      # See full list of built-in metrics: https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric-parameters
+      # And here about Huber: https://stats.stackexchange.com/questions/465937/how-to-choose-delta-parameter-in-huber-loss-function
+      params.obj <- switch(type,
+                           #continuous = list(objective = "regression", metric = "huber", alpha = 1.35 * mad(Y)),  # Will throw error if mad(Y) is zero...
+                           continuous = list(objective = "regression", metric = "l2"),
+                           multiclass = list(objective = "multiclass", metric = "multi_logloss", num_class = 1L + max(Y)),
+                           binary = list(objective = "binary", metric = "binary_logloss"))
+
+      # Fit model
+      mmod <- fitLGB(data.lgb = dfull, hyper.grid = hyper.grid, params.obj = params.obj, cv.folds = cv.folds)
+
+      # Save LightGBM mean model (m.txt) to disk
+      lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
+
+      # Conditional mean/probabilities for the training observations
+      if (block | type == "continuous") {
+        mc <- predict(object = mmod, data = dmat[pi, xv], reshape = TRUE)
+        if (!is.matrix(mc)) mc <- matrix(mc)
+        colnames(mc) <- paste0(y, "_m", 1:ncol(mc))
+      }
+
+      rm(mmod)
+
+      #----
+
+      # Fit quantile models
+      if (type == "continuous") {
+
+        # Fit quantile models for each value in 'ptiles'
+        qmods <- vector(mode = "list", length = length(ptiles))
+        names(qmods) <- paste0("q", 1:length(ptiles))
+
+        for (k in seq_along(ptiles)) {
+          qmods[[k]] <- fitLGB(data.lgb = dfull,
+                               hyper.grid = hyper.grid,
+                               params.obj = list(objective = "quantile", metric = "quantile", alpha = ptiles[k]),
+                               cv.folds = cv.folds)
+        }
+
+        # Predict conditional quantiles for full dataset
+        qc <- matrix(data = NA, nrow = sum(pi), ncol = length(ptiles))
+        for (k in 1:length(ptiles)) qc[, k] <- predict(object = qmods[[k]], data = dmat[pi, xv])
+        colnames(qc) <- paste0(y, "_", names(qmods))
+
+        # Save LightGBM quantile models (q**.txt) to disk
+        for (k in seq_along(ptiles)) lightgbm::lgb.save(booster = qmods[[k]], filename = file.path(path, paste0(colnames(qc)[k], ".txt")))
+        rm(qmods)
+
+      }
+
+      #----
+
+      # Assemble the conditional predictions data.table
+      # and normalize columns if 'y' is continuous
+      if (block | type == "continuous") {
+        d <- data.table(zc, mc, qc)
+        if (type == "continuous") {
+          cnorm <- c(colnames(mc), colnames(qc))
+          ncenter <- sapply(d[, ..cnorm], median)
+          nscale <- sapply(d[, ..cnorm], mad)
+          nscale[nscale == 0] <- sapply(d[, ..cnorm[nscale == 0]], IQR) # Attempt to prevent zero value
+          nscale[nscale == 0] <- sapply(d[, ..cnorm[nscale == 0]], sd) # Attempt to prevent zero value
+          for (j in cnorm) {
+            if (nscale[[j]] == 0) {
+              set(d, i = NULL, j = j, value = NULL)  # If the scale parameter is still zero, remove the column
+            } else {
+              val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
+              set(d, i = NULL, j = j, value = val)
+            }
+          }
+          ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
+          yscale[[i]] <- c(yscale[[i]], unlist(nscale))
+        }
+        cdata <- cbind(cdata, d)
       }
 
     }
 
-    #--------
-
-    # # Calculate (rank) correlation between 'y' and existing variables in 'ranks' (if necessary; only continuous and ordered factors)
-    # if (y %in% ycor.vars) {
-    #   #ind <- which(as.numeric(data[[y]]) != 0)  # Restrict correlation calculation to non-zero observations
-    #   ind <- 1:nrow(data)  # No restriction on correlation calculation
-    #   j <- ranks.var == y  # Column in 'ranks' associated with 'y'
-    #   k <- ranks.var %in% c(xvars, yprior)  # Columns in 'ranks' associated with predictors of 'y'
-    #   p <- suppressWarnings(cor(ranks[ind, k], ranks[ind, j]))[, 1]  # Will silently return NA if no variance in a particular column
-    #   p <- cleanNumeric(p[!is.na(p)], tol = 0.001)
-    # } else {
-    #   p <- NULL
-    # }
-
-    # Cleanup
-    gc()  # Perhaps useful when run in parallel
-
-    #return(list(m = slimRpart(m), p = p))
-    return(list(m = slimRpart(m)))
+    # Once 'y' is processed, write the 'donor' data frame to disk, if necessary
+    # TO DO: Make data.table operation for efficiency?
+    if (!is.null(cdata)) {
+      dout <- cdata %>%
+        mutate_all(cleanNumeric, tol = 0.001) %>%
+        cbind(data[pi, v, drop = FALSE])
+      fst::write_fst(x = dout, path = file.path(path, "donor.fst"), compress = 100)
+    }
 
   }
 
   #-----
 
-  # Call fitModel() for each 'yord', possibly in parallel
-  mout <- pbapply::pblapply(
-    X = 1:length(yord),
-    FUN = fitModel,
-    cl = cores) %>%
-    setNames(yord)
-
-  # test <- sapply(mout, class)
-  # which(test == "try-error")
-  # check <- lapply(which(test == "try-error"), fitModel)
-
-  # Troubleshoot
-  #for (i in 1:length(yord)) fitModel(i)
-
-  # Check certain outputs
-  # map(mout, ~ .x$m$xbin)
-  # table(map_chr(mout, ~class(.x$m)))
-
-  #-----
-
-  # Assemble final result
-  result <- list(
-    models = map(mout, "m"),
+  # Assemble metadata and save to disk
+  metadata <- list(
     xclass = xclass,
     xlevels = xlevels,
     yclass = yclass,
     ylevels = ylevels,
-    yinner = yinner,
-    youter = youter,
-    #ycor = compact(map(mout, "p")),
-    derivative = list(constant = sim.constant,
-                      model = sim.lm,
-                      merge = sim.merge)
+    yorder = yord,
+    ytype = ytype,
+    xlist.lgb = xlist.lgb,
+    ycenter = ycenter,
+    yscale = yscale,
+    ptiles = ptiles,
+    call = match.call()
   )
+  saveRDS(metadata, file = file.path(td, "metadata.rds"))
 
-  return(result)
+  #-----
+
+  # Save final model object to disk
+  # !!!NOTE Requires 'zip' package: https://cran.r-project.org/web/packages/zip/index.html
+  # Zip up all of the models directories
+  zip::zip(zipfile = file, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)  # Zips to the temporary directory
+  file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = file, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
+  cat("Fusion model saved to:", file)
+  unlink(td)
+  invisible(file)
 
 }

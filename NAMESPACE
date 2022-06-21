@@ -3,5 +3,7 @@
 export(analyze)
 export(compare)
 export(fuse)
+export(fuseCART)
 export(fuseM)
 export(train)
+export(trainCART)

@@ -27,6 +27,10 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     btulp,
     dollarlp,
     sdescent,
+    totalbtu,
+    totalbtusph,
+    btuelahucol,
+    btuelcol,
     rep_1:rep_96
   ) |>
   dplyr::rename(
@@ -43,7 +47,7 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     year_built = yearmaderange,
     square_feet = totsqft_en,
     insulation = adqinsul,
-    heating = fuelheat,
+    heat_type = fuelheat,
     aircon = cooltype,
     centralac_age = agecenac,
     televisions = tvcolor,
@@ -56,15 +60,17 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     propane_expend = dollarlp
   ) |>
   dplyr::mutate(
+    heating_share = totalbtusph / totalbtu,
+    cooling_share = (btuelahucol + btuelcol) / totalbtu,
+    other_share = 1 - heating_share - cooling_share,
     urban_rural = factor(ifelse(urban_rural == "U", "Urban", "Rural")),
     renter = renter != "Owned or being bought by someone in your household",
     use_ng = natural_gas > 0,
     have_ac = aircon != "No air conditioning",
     race = ifelse(sdescent == "Yes", "Latino Alone", as.character(race)),
-    race = factor(trimws(gsub("Alone", "", race))),
-    sdescent = NULL
+    race = factor(trimws(gsub("Alone", "", race)))
   ) |>
+  select(-sdescent, -totalbtu, -totalbtusph, -btuelahucol, -btuelcol) |>
   select(-starts_with("rep_"), starts_with("rep_"))
-  #as.data.frame()
 
 usethis::use_data(recs, overwrite = TRUE)

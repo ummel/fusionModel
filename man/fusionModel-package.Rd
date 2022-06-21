@@ -9,7 +9,7 @@
 fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset.
 }
 \author{
-\strong{Maintainer}: Kevin Ummel \email{ummel@sas.upenn.edu}
+\strong{Maintainer}: Kevin Ummel \email{ummel@berkeley.edu}
 
 }
 \keyword{internal}

@@ -1,7 +1,7 @@
 #' Data from the 2015 Residential Energy Consumption Survey (RECS)
 #'
-#' Pre-processed, household-level microdata containing a selection of 28
-#' variables derived from the 2015 RECS. A variety of data types are included.
+#' Pre-processed, household-level microdata containing a selection of 31
+#' variables derived from the 2015 RECS, plus survey replicate weights. A variety of data types are included.
 #' There are no missing values. Variable names have been altered from the original.
 #'
 #' @format A tibble with 5,686 rows and 124 variables:
@@ -32,6 +32,9 @@
 #'   \item{propane}{Total annual propane usage, in gallons}
 #'   \item{propane_btu}{Total annual propane usage, in thousand Btu}
 #'   \item{propane_expend}{Total annual propane expenditure, in dollars}
+#'   \item{heating_share}{Share of total energy used for space heating}
+#'   \item{heating_share}{Share of total energy used for cooling (AC and fans)}
+#'   \item{other_share}{Share of total energy used for other end-uses}
 #'   \item{use_ng}{Logical indicating if household uses natural gas}
 #'   \item{have_ac}{Logical indicating if household has air conditioning}
 #'   \item{rep_1:rep_96}{Replicate weights for uncertainty estimation}

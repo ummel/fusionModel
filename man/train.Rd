@@ -2,72 +2,87 @@
 % Please edit documentation in R/train.R
 \name{train}
 \alias{train}
-\title{Train a fusion model using Classification and Regression Trees (CART)}
+\title{Train a fusion model using conditional distribution matching}
 \usage{
 train(
   data,
   y,
   x,
+  file = "fusion_model.fsn",
   weight = NULL,
-  order = NULL,
-  deriv = TRUE,
-  smoothed = FALSE,
-  cores = 1,
-  lasso = NULL,
-  maxcats = 12,
-  complexity = 0,
-  cvfolds = 0,
-  cvfactor = 0,
-  node.obs = c(20, 10),
-  initial = c(1, 0)
+  nfolds = 5,
+  ptiles = c(0.25, 0.75),
+  hyper = NULL,
+  threads = 1
 )
 }
 \arguments{
 \item{data}{Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.}
 
-\item{y}{Character vector. The variables to fuse to a recipient dataset.}
+\item{y}{Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.}
 
-\item{x}{Character vector. Predictor variables common to donor and eventual recipient.}
+\item{x}{Character. Predictor variables in \code{data} common to donor and eventual recipient.}
 
-\item{weight}{Character vector. Name of the observation weights column. If NULL (default), uniform weights are assumed.}
+\item{file}{Character. File where fusion model will be saved. Must use \code{.fsn} suffix.}
 
-\item{order}{Character vector. Order in which to fuse \code{y}. If NULL (default), a pseudo-optimal order is determined internally.}
+\item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
-\item{deriv}{Logical. Should algorithm check for derivative relationships prior to building fusion models?}
+\item{nfolds}{Integer. Number of cross-validation folds used for LightGBM model training.}
 
-\item{smoothed}{Logical. Should the synthetic values be smoothed via KDE? Default is \code{FALSE}.}
+\item{ptiles}{Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).}
 
-\item{cores}{Integer. Number of cores used for parallel operations. Passed to \code{cl} argument of \code{\link[pbapply]{pblapply}}. Ignored on Windows systems.}
+\item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
 
-\item{lasso}{Numeric (0-1) or NULL. Controls extent of predictor variable pre-screening via LASSO regression. If NULL (default), no screening is performed. \code{lasso = 1} invokes the least-restrictive screening. See Details.}
-
-\item{maxcats}{Positive integer or NULL. Maximum number of levels allowed in an unordered factor predictor variable when the response (fusion) variable is also an unordered factor. Prevents excessive \code{\link[rpart]{rpart}} computation time. A K-means clustering strategy is used to cluster the predictor to no more than \code{maxcats} levels.}
-
-\item{complexity}{Numeric. Passed to \code{cp} argument of \code{\link[rpart]{rpart.control}} to control complexity of decision trees.}
-
-\item{cvfolds}{Integer. Number of cross-validation folds used by \code{\link[rpart]{rpart}} to determine optimal tree complexity. Default is no cross-validation (\code{cvfolds = 0}).}
-
-\item{cvfactor}{Numeric. Controls how decision trees are pruned when \code{cvfolds > 0}. \code{cvfactor = 0} (the default) selects the tree complexity that minimizes the cross-validation error. \code{cvfactor = 1} is equivalent to Breiman's "1-SE" rule.}
-
-\item{node.obs}{Numeric vector of length 2. Minimum number of observations in tree nodes. First number is for numeric response variables; second for categorical. Each is passed to \code{minbucket} argument of \code{\link[rpart]{rpart.control}}.}
-
-\item{initial}{Numeric vector of length 2. Controls speed/performance of the initial model-fitting routune used to determine fusion order. First number is proportion of \code{data} observations to randomly sample. Second number is the \code{cp} argument passed to \code{\link[rpart]{rpart.control}}. See Details.}
+\item{threads}{Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.}
 }
 \value{
-A list containing trained model information to be passed to \link{fuse}.
+A fusion model object (.fsn) is saved to \code{file}.
 }
 \description{
-Train a fusion model on donor data using CART implemented via \code{\link[rpart]{rpart}}.
+Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can used with \link{fuse} to simulate outcomes for a "recipient" dataset.
 }
 \details{
-When \code{lasso} is non-NULL, predictor variables are "pre-screened" using LASSO regression via \code{\link[glmnet]{glmnet}} prior to fitting a \code{\link[rpart]{rpart}} model. Predictors with a LASSO coefficient of zero are excluded from consideration. This can speed up tree-fitting considerably when \code{data} is large. Lower values of \code{lasso} are more aggressive at excluding predictors; the LASSO \emph{lambda} is chosen such that the deviance explained is at least \code{lasso}-\% of the maximum. To ensure the LASSO step is fast, pre-screening is only used for numeric, logical, and ordered factor response variables (the latter integerized).
+When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 
-Since determination of the fusion order only makes use of variable importance results from the initial (fully-specified) models, employing a random subset of observations and less complex models (controlled via \code{initial}) can yield a competitive fusion order at less expense.
+The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
+
+The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
+
+\itemize{
+\item boosting
+\item num_leaves
+\item bagging_fraction
+\item feature_fraction
+\item min_data_in_leaf
+\item num_iterations
+\item learning_rate
+}
 }
 \examples{
 # Build a fusion model using RECS microdata
+# Note that "test_model.fsn" will be written to working directory
 ?recs
 fusion.vars <- c("electricity", "natural_gas", "aircon")
 predictor.vars <- names(recs)[2:12]
-fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
+train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+
+# When 'y' is a list, it can specify variables to fuse as a block
+fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
+fusion.vars
+train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+
+# Specify a single set of LightGBM hyperparameters
+train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+      hyper = list(boosting = "goss",
+                   feature_fraction = 0.8,
+                   num_iterations = 300
+      ))
+
+# Specify a range of LightGBM hyperparameters to search over
+# This takes longer, because there are more models to test
+train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+      hyper = list(num_leaves = c(10, 30),
+                   feature_fraction = c(0.8, 0.9, 1),
+                   num_iterations = 50
+      ))
 }

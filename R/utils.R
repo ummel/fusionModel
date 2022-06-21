@@ -270,3 +270,13 @@ tomat <- function(data) {
   dmat <- as(as.matrix(dmat), "dgCMatrix")
   return(dmat)
 }
+
+#------------------
+
+# Normalize continuous variables prior to KNN
+# Assumes that there are no NA's in 'x'
+normalize <- function(x, center, scale, eps = 0.001) {
+  y <- (x - center) / scale
+  z <- (y - qnorm(eps)) / (2 * qnorm(1 - eps))
+  return(z)
+}
