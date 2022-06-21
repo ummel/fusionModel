@@ -24,8 +24,8 @@ Imports:
     lightgbm,
     glmnet,
     RANN,
-    fst
+    fst,
+    rpart
 Suggests:
     pbapply,
-    rpart,
     biglm
