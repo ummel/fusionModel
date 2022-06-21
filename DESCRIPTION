@@ -22,7 +22,9 @@ Depends:
     Matrix
 Imports:
     lightgbm,
-    glmnet
+    glmnet,
+    RANN,
+    fst
 Suggests:
     pbapply,
     rpart,
