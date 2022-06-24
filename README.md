@@ -1,509 +1,281 @@
 fusionModel
 ================
-Kevin Ummel (<ummel@sas.upenn.edu>)
+Kevin Ummel (<ummel@berkeley.edu>)
 
-## Overview
+-   [Overview](#overview)
+-   [Motivation](#motivation)
+-   [Methodology](#methodology)
+-   [Installation](#installation)
+-   [Quick start example](#quick-start-example)
+-   [Advanced examples](#advanced-examples)
+-   [Analysis](#analysis)
+-   [Validation](#validation)
+
+# Overview
 
 **fusionModel** enables variables unique to a “donor” dataset to be
-statistically simulated for (i.e. *fused to*) a “recipient” dataset. The
-resulting “fused data” contains all of the recipient *and* donor
-variables. The latter are true “synthetic” data – *not* observations
-sampled/matched from the donor – and resemble the original donor data in
-key respects. fusionModel provides a simple and efficient interface for
-general data fusion in *R*. The current release is a beta version.
+statistically simulated for (i.e. *fused to*) a “recipient” dataset.
+Variables common to both the donor and recipient are used to model and
+simulate the fused variables. The package provides a simple and
+efficient interface for general data fusion in *R*, leveraging
+state-of-the-art machine learning algorithms from Microsoft’s
+[LightGBM](https://lightgbm.readthedocs.io/en/latest/) framework. It
+also provides tools for analyzing synthetic/simulated data, calculating
+uncertainty, and validating fusion output.
 
-The package was originally developed to allow statistical integration of
-microdata from disparate social surveys. fusionModel is the data fusion
-workhorse underpinning the larger fusionACS data platform under
-development at the [Socio-Spatial Climate
-Collaborative](https://web.sas.upenn.edu/sociospatialclimate/). In this
+fusionModel was developed to allow statistical integration of microdata
+from disparate social surveys. It is the data fusion workhorse
+underpinning the larger fusionACS data platform under development at the
+[Socio-Spatial Climate
+Collaborative](https://sc2.berkeley.edu/fusionacs-people/). In this
 context, fusionModel is used to fuse variables from a range of social
 surveys onto microdata from the American Community Survey, allowing for
 analysis and spatial resolution otherwise impossible.
 
-fusionModel can also be used for “pure” data synthesis; i.e. creation of
-a wholly synthetic version of a single dataset. This is a specific case
-of the more general data fusion problem.
+# Motivation
 
-## Methodology
+The desire to “fuse” or otherwise integrate independent datasets has a
+long history, dating to at least the early 1970’s ([Ruggles and Ruggles
+1974](https://www.nber.org/system/files/chapters/c10115/c10115.pdf);
+[Alter
+1974](https://www.nber.org/system/files/chapters/c10116/c10116.pdf)).
+Social scientists have long recognized that large amounts of unconnected
+data are “out there” – usually concerning the characteristics of
+households and individuals (i.e. microdata) – which we would, ideally,
+like to integrate and analyze as a whole. This process is also generally
+known as “Statistical Data Integration” (SDI).
 
-**fusionModel** builds on techniques developed for data synthesis and
-statistical disclosure control; e.g. the
-[synthpop](https://cran.r-project.org/web/packages/synthpop/index.html)
-package ([Nowok, Raab and Dibben
-2016](https://doi.org/10.18637%2Fjss.v074.i11)). It uses classification
-and regression tree (CART) models ([Breiman et
-al. 1984](https://www.routledge.com/Classification-and-Regression-Trees/Breiman-Friedman-Stone-Olshen/p/book/9780412048418);
-see [rpart](https://cran.r-project.org/web/packages/rpart/index.html))
-to partition donor observations into low-variance nodes. Observations in
-a given node are randomly sampled to create simulated values for
-recipient observations assigned to the same node, as originally
-introduced by [Reiter
-(2005)](https://nces.ed.gov/FCSM/pdf/2003FCSM_Reiter.pdf). In the
-continuous case, kernel density estimation is used to create a “smooth”
-conditional probability distribution for each node. This nonparametric
-approach is used to sequentially simulate the fusion variables, allowing
-previously-simulated variables to become predictors in subsequent models
-(i.e. “chained” models).
+The most prominent examples of data fusion have involved administrative
+record linkage. This consists of exact matching or probabilistic linking
+of independent datasets, using observable information like social
+security numbers, names, or birth dates of individuals. Record linkage
+is the gold standard and can yield incredibly important insights and
+high levels of statistical confidence, as evidenced by the pioneering
+work of Raj Chetty and colleagues.
 
-The package contains a number of features and innovations designed to
-improve performance across intended use cases:
+However, record linkage is rarely feasible for the kinds of microdata
+that most researchers use day-to-day (nevermind the difficulty of
+accessing administrative data). While the explosion of online tracking
+and social network data will undoubtedly offer new lines of analysis,
+for the time being, at least, social survey microdata remain
+indispensable. The challenge and promise recognized 50 years ago by
+Nancy and Richard Ruggles remains true today:
 
--   Pseudo-optimal ordering of the fusion variables is determined from
-    analysis of predictor importance in fully-specified `rpart` models
-    fit upfront.
+> Unfortunately, no single microdata set contains all of the different
+> kinds of information required for the problems which the economist
+> wishes to analyze. Different microdata sets contain different kinds of
+> information…A great deal of information is collected on a sample
+> basis. Where two samples are involved the probability of the same
+> individual appearing in both may be very small, so that exact matching
+> is impossible. Other methods of combining the types of information
+> contained in the two different samples into one microdata set will be
+> required. (Ruggles and Ruggles 1974; 353-354)
 
--   LASSO regression is used to “pre-screen” predictor variables prior
-    to calling `rpart()`. Predictors for which the LASSO coefficient is
-    shrunk to zero are excluded from consideration. This can speed up
-    tree-building considerably for larger datasets.
+Practitioners regularly impute or otherwise predict a variable or two
+from one dataset on to another. Piecemeal, *ad hoc* data fusion is a
+common necessity of quantitative research. Proper data fusion, on the
+other hand, seeks to systematically combine “two different samples into
+one microdata set”.
 
--   A K-means clustering strategy is used to “collapse” the levels of
-    unordered factor predictor variables. This allows much faster
-    tree-building when categorical variables with many levels are used
-    to model unordered factor response variables.
+Say we have microdata from two independent household surveys, A and B.
+We specify that A is the “recipient” dataset and B is the “donor”.
+Conceptually, our goal is to generate a new dataset, C, that has “the
+best of both worlds”: the original survey responses of A plus a
+realistic representation of how each respondent in A might have answered
+the questionnaire of survey B. To help do this, we identify a set of
+common variables, X, that both surveys solicit; in practice, these are
+often things like household size, income, or respondent age. We then
+attempt to fuse the variables unique to B (the “fusion variables”) to
+the original microdata of A, conditional on X.
 
--   Highly-linear or otherwise strictly dependent pairwise relationships
-    are automatically detected and preserved in the simulation output.
-    Such relationships can be problematic for decision tree simulation
-    algorithms.
+Note that this requires the simulation of outcomes across multiple
+variables, with realistic variance, and a realistic representation of
+the (typically unknown) joint distribution among those variables. No
+easy task!
 
--   When LASSO pre-screening is enabled, the LASSO results are used to
-    determine if a fusion variable should be simulated using a linear
-    model rather than a decision tree. This allows highly-linear
-    multivariate relationships to be modeled as such explicitly.
+# Methodology
 
--   For continuous and ordered factor data types, the fusion/simulation
-    step (optionally) identifies a minimal-change “reshuffling” of
-    initial simulated values that induces more realistic rank
-    correlations with other variables. *This feature is experimental*.
+The fusionModel package was designed with the general needs of the
+fusionACS project in mind. The goal was to create a data fusion tool
+that meets the following requirements:
 
--   The model-building process is fully parallel on UNIX-like systems.
+1.  Handle both categorical and continuous variables
+2.  Accommodate semi-continuous (zero-inflated) variables
+3.  Fuse variables “one-by-one” and/or in “blocks”
+4.  Ensure realistic values for fused variables
+5.  Scale efficiently for larger datasets
+6.  Employ a data modeling approach that:
+    -   Makes no distributional assumptions (i.e. non-parametric)
+    -   Automatically detects non-linear and interaction effects
+    -   Automatically selects predictor variables
+    -   Avoids overfitting to noise
+7.  Determine suitable fusion order/sequence
+8.  Calculate uncertainty of analyses using fused data
+9.  Assess the overall quality of fused data
 
--   Key parts of the code utilize
-    [data.table](https://cran.r-project.org/web/packages/data.table/index.html)
+In an effort to meet requirements (1-6), fusionModel combines gradient
+boosting machine learning with approximate nearest neighbor matching.
+This falls under the heading of “mixed methods” in statistical matching
+(SM); see Section 3.1.3 in [Lewaa et
+al. (2021)](https://content.iospress.com/articles/statistical-journal-of-the-iaos/sji210835)
+for a review. Mixed methods, including that employed by fusionModel,
+generally have the following structure:
+
+-   Step 1: A statistical model is fit to donor data to predict fusion
+    variable
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    conditional on shared variables
+    ![X](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;X "X").
+-   Step 2: A prediction of
+    ![Y\|X](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%7CX "Y|X")
+    is made for each record in the donor
+    (![\\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}"))
+    and recipient
+    (![\\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}")).
+-   Step 3: A “real” donor value from
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    is selected for each recipient record, based on the similarity of
+    ![\\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}")
     and
-    [biglm](https://cran.r-project.org/web/packages/biglm/index.html)
-    functionality for more efficient computation with larger datasets.
+    ![\\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}").
 
--   Fitted `rpart` models are “slimmed” to retain only the information
-    absolutely necessary for the data fusion process, leading to reduced
-    file size when saved to disk and improved load times.
+fusionModel’s approach can be viewed as a logical extension of existing
+mixed SM techniques that utilize either stochastic or predictive mean
+matching in the modeling step. It builds upon them in the following
+ways:
 
-## Installation
+-   Microsoft’s [LightGBM](https://lightgbm.readthedocs.io/en/latest/)
+    gradient boosting framework is used for Step 1. This allows the
+    extensive and flexible modeling requirements specified in (6) to be
+    met.
+-   When
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    is continuous, the conditional mean is modeled as well as
+    conditional quantiles, providing a non-parametric description of the
+    conditional distribution. Step 3 then pairs records with similar
+    conditional distributions.
+-   When
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    is categorical, LightGBM produces conditional class probabilities
+    that are easily sampled to create the fused values (i.e. Step 3 can
+    be ignored).
+-   When
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    is a “block” of variables (possibly a mix of categorical and
+    continuous), Step 3 utilizes all of the conditional distribution
+    and/or class probability information to pair similar records.
+-   When
+    ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
+    is semi-continuous (zero-inflated), a LightGBM classification model
+    first simulates zero values. Non-zero values are then fused as
+    above, conditional on
+    ![Y\\neq0](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%5Cneq0 "Y\neq0").
+
+In short, the novel aspects of fusionModel are its use of
+state-of-the-art gradient boosting techniques within a SM framework
+*and* its use of predicted quantiles in the continuous case to describe
+each record’s conditional distribution for the purposes of record
+matching. Together, they obviate the need for parametric assumptions,
+while automating selection of variables and detection of non-linear and
+interaction effects.
+
+The training of LightGBM models in Step 1 uses *k*-fold cross-validation
+to help select a suitable set of hyperparameters to “tune” the model for
+out-of-sample prediction (i.e. reduce overfitting). Since LightGBM uses
+[OpenMP](https://en.wikipedia.org/wiki/OpenMP) multithreading “under the
+hood”, this key piece of the processing chain can easily make use of
+multiple computing cores.
+
+Similarly, data manipulation tasks (via
+[data.table](https://github.com/Rdatatable/data.table)) and input-output
+operations (via [fst](https://github.com/fstpackage/fst)) are also
+OpenMP-enabled for speed.
+
+fusionModel uses the [ANN library](https://www.cs.umd.edu/~mount/ANN/)
+(implemented via [RANN](https://github.com/jefferislab/RANN)) for an
+approximate nearest neighbor hot deck in Step 3. This includes the
+ability to sample donor records from a fixed k nearest matches or,
+alternatively, to sample all records within a specified distance.
+Euclidean distance is calculated using all of the variables from Step 2
+describing the conditional distributions, after applying a scaling
+procedure to ensure all variables are of similar magnitude.
+
+*Under development*: The package includes an experimental chain()
+function to determine a pseudo-optimal sequencing (or “chaining”) of
+fusion variables. Since fusion variables early in the sequence become
+available as predictors for those later on, the sequence clearly matters
+to the quality of the output. But there is no consensus in the
+literature on how to go about it. The nascent chain() function uses
+fast-fitting, linear LASSO models to first fit a model for each Y where
+all other Y’s are available as predictors. It then fits a model for each
+Y using only X predictors. The R-squared of the latter is compared to
+the former, and the variable with the highest ratio is selected as the
+initial fusion variable. This process proceeds greedily until the full
+sequence is constructed.
+
+TO DO: analyze()…
+
+TO DO: compare()…
+
+# Installation
 
 ``` r
 devtools::install_github("ummel/fusionModel")
 library(fusionModel)
 ```
 
-## Data fusion example
+# Quick start example
 
-The fusionModel package contains example microdata constructed from the
-2015 Residential Energy Consumption Survey (see `?recs` for details and
-variable definitions). For real-world use cases, the donor and recipient
-input datasets are typically independent and possibly very different in
-the number of observations. For illustrative purposes, we will use the
-`recs` dataset to create both our “donor” and “recipient” data. This
-will also allow us to isolate the performance of fusionModel’s
-algorithms.
+The package includes example microdata from the 2015 Residential Energy
+Consumption Survey (see `?recs` for details). For real-world use cases,
+the donor and recipient data are typically independent. For illustrative
+purposes, we will use the `recs` dataset to create both our “donor” and
+“recipient”.
 
 ``` r
-# Donor dataset
-donor <- recs
-dim(donor)
+# Create donor and recipient datasets
+donor <- select(recs, 2:11, electricity, natural_gas, aircon)
+recipient <- select(recs, 2:11)
+
+# Specify fusion and shared/common predictor variables
+fusion.vars <- c("electricity", "natural_gas", "aircon")
+predictor.vars <- names(recipient)
+
+# Build the fusion model (see ?train)
+model <- train(data = donor, y = fusion.vars, x = predictor.vars)
 ```
 
-    [1] 5686  124
-
-``` r
-# Recipient dataset
-# Retain a handful of variables we will treat as "predictors" common to both donor and recipient
-recipient <- subset(recs, select = c(division, urban_rural, climate, income, age, race))
-head(recipient)
-```
-
-                division urban_rural                  climate            income age
-    1            Pacific       Urban IECC climate zones 3B-4B  $140,000 or more  42
-    2 West South Central       Rural IECC climate zones 1A-2A $20,000 - $39,999  60
-    3 East South Central       Urban     IECC climate zone 3A $20,000 - $39,999  73
-    4 West North Central       Urban     IECC climate zone 4A $40,000 - $59,999  69
-    5    Middle Atlantic       Urban     IECC climate zone 5A $40,000 - $59,999  51
-    6        New England       Urban IECC climate zones 6A-6B Less than $20,000  33
-                                  race
-    1                            White
-    2                            White
-    3                            White
-    4 American Indian or Alaska Native
-    5                            Asian
-    6                            White
-
-The `recipient` dataset contains 6 variables that are shared with
-`donor`. These shared “predictor” variables provide a statistical link
-between the two datasets. fusionModel exploits the information in these
-shared variables.
-
-``` r
-# The variables to be fused
-fusion.vars <- names(select(donor, -any_of(c(names(recipient), "weight")), -starts_with("rep_")))
-fusion.vars
-```
-
-     [1] "education"      "employment"     "hh_size"        "renter"        
-     [5] "home_type"      "year_built"     "square_feet"    "insulation"    
-     [9] "heating"        "aircon"         "centralac_age"  "televisions"   
-    [13] "disconnect"     "electricity"    "natural_gas"    "fuel_oil"      
-    [17] "propane"        "propane_btu"    "propane_expend" "use_ng"        
-    [21] "have_ac"       
-
-``` r
-# The types of variables to be fused
-table(sapply(donor[fusion.vars], vctrs::vec_ptype_abbr))
-```
-
-
-    dbl fct int lgl ord 
-      5   4   4   3   5 
-
-There are 21 “fusion variables” unique to `donor`. These are the
-variables that will be fused to `recipient`. This includes a mix of
-continuous, logical, ordered factor, and unordered factor variables.
-
-We build our fusion model using the `train()` function. The minimal
-usage is shown below. See `?train` for additional function arguments and
-options. Note that observation weights are ignored here for simplicity
-but can be incorporated via the optional `weights` argument.
-
-``` r
-fit <- train(data = donor, y = fusion.vars, x = names(recipient))
-```
-
-    21 fusion variables
-    6 initial predictor variables
+    3 fusion variables
+    10 initial predictor variables
     5686 observations
-    Searching for derivative relationships...
-    Detected 3 derivative variable(s) that can be omitted from modeling
-    Determining order of fusion variables...
-    Building fusion models...
+    Building LightGBM models...
+    Fusion model saved to: /home/kevin/Documents/Projects/fusionModel/fusion_model.fsn
 
-The resulting object (`fit`) contains all of the information necessary
-to statistically fuse the `fusion.vars` to *any* recipient dataset
-containing the necessary shared predictors. Fusion is performed using
-the `fuse()` function.
+By default, `train()` writes a fusion model object (“fusion_model.fsn”)
+to the current working directory and returns the file path. We can use
+it to fuse variables to the recipient:
 
 ``` r
-sim <- fuse(data = recipient, train.object = fit)
+# Fuse 'fusion.vars' to the recipient (see ?fuse)
+sim <- fuse(data = recipient, file = model)
 ```
 
-The output from `fuse()` contains simulated/synthetic values for each of
-the `fusion.vars` for each observation in `recipient`. The order of the
-columns reflects the order in which the variables were fused. A
-pseudo-optimal order is determined automatically within `train()`. Let’s
-look at just a few of the simulated variables.
+    Fusing donor variables to recipient...
 
 ``` r
-head(sim[, 1:7])
+head(sim)
 ```
 
-                employment                               education
-    1   Employed full-time Bachelor's degree (for example: BA, BS)
-    2   Employed full-time              High school diploma or GED
-    3   Employed part-time      Some college or Associate's degree
-    4   Employed part-time      Some college or Associate's degree
-    5   Employed full-time Bachelor's degree (for example: BA, BS)
-    6 Not employed/retired    Less than high school diploma or GED
-                                 heating hh_size         disconnect natural_gas
-    1           Do not use space heating       2              Never         156
-    2                        Electricity       2              Never           0
-    3                        Electricity       3              Never           0
-    4 Natural gas from underground pipes       2              Never         495
-    5 Natural gas from underground pipes       2        Some months         896
-    6                  Fuel oil/kerosene       1 Almost every month           0
-            insulation
-    1   Well insulated
-    2   Well insulated
-    3   Well insulated
-    4 Poorly insulated
-    5 Poorly insulated
-    6 Poorly insulated
+       electricity natural_gas                                     aircon
+    1:        5270       300.0            Central air conditioning system
+    2:       12170         0.0            Central air conditioning system
+    3:       19660       294.4 Both a central system and individual units
+    4:        9850       992.0            Central air conditioning system
+    5:        7900       395.0   Individual window/wall or portable units
+    6:        2777       315.4   Individual window/wall or portable units
 
-**If you run the same code yourself, your results for `sim` *will look
-different*.** This is because each call to `fuse()` produces a different
-random sampling from the underlying, conditional probability
-distributions (see section below on “Generating implicates”).
+# Advanced examples
 
-## Sanity testing
+# Analysis
 
-Successful fusion should result in simulated/synthetic variables that
-“look like” the donor in key respects. We can perform a series of
-comparisons to confirm that this is the case.
-
-The continuous variables in `recs` – like many social survey variables –
-can be quite sparse (lots of zeros). Let’s first check that the
-proportion of zero values is similar in the donor and simulated data.
-
-              hh_size natural_gas square_feet televisions electricity propane
-    donor           0      0.4193           0      0.0239           0  0.8992
-    simulated       0      0.4193           0      0.0206           0  0.9010
-              fuel_oil propane_expend propane_btu
-    donor       0.9483         0.8992      0.8992
-    simulated   0.9490         0.9010      0.9010
-
-Comparatively few households use propane or fuel oil, and almost
-everyone has a television.
-
-Notice that the proportion of zero values is identical for the “propane”
-(gallons consumed), “propane\_btu” (thousand Btu), and “propane\_expend”
-(dollars spent) variables. These variables *must* be either all zero or
-all non-zero for any given household. Such “structural zeros” are not
-uncommon in survey microdata, and they are typically difficult for
-tree-based modeling techniques to replicate. fusionModel automatically
-detects structural zero patterns and ensures they are correctly
-represented in the fusion output.
-
-Now, let’s look at the means of the non-zero values.
-
-              hh_size natural_gas square_feet televisions electricity  propane
-    donor      2.5774    576.6752    2081.443      2.4195    11028.97 346.7819
-    simulated  2.5939    574.0109    2106.313      2.4347    11098.22 338.7003
-              fuel_oil propane_expend propane_btu
-    donor     502.8666       672.0280    31672.67
-    simulated 517.2817       654.2291    30934.71
-
-Notice that the ratio of mean “propane\_btu” to “propane” is the same
-for the donor and simulated datasets (ratio = 91.333). This is as
-expected, since the two variables report the same phenomena (propane
-consumption) with different units of measurement (gallons vs. Btu). That
-is, the relationship is linear. However, decision trees struggle to
-capture *strictly* linear relationships. fusionModel automatically
-detects highly-linear pairwise relationships and models them explicitly
-using linear models rather than decision trees.
-
-Related, fusionModel also detects when one variable is explicitly
-“derivative” of another. For example, the “have\_ac” variable can de
-deduced entirely from the “aircon” variable. Rather than model
-“have\_ac” separately, fusionModel simply merges the known “have\_ac”
-outcomes to the simulated “aircon” values. Derivative relationships are
-also detected for zero/non-zero outcomes (a tricky case for decision
-trees). For example, “natural\_gas” can only be non-zero when “use\_ng”
-is TRUE. This dependency is respected in the fusion output.
-
-``` r
-# Confirm zero/non-zero relationship is respected for "natural_gas" and "use_ng"
-sim %>% select(natural_gas, use_ng) %>% distinct() %>% arrange(natural_gas) %>% head()
-```
-
-      natural_gas use_ng
-    1       0.000  FALSE
-    2       2.640   TRUE
-    3       3.824   TRUE
-    4       5.450   TRUE
-    5       7.630   TRUE
-    6       7.830   TRUE
-
-Next, let’s look at kernel density plots of the non-zero values for the
-continuous variables where this kind of visualization makes sense.
-Recall that “propane” and “fuel\_oil” are quite sparse, which generally
-results in noisier simulation.
-
-![](man/figures/README-unnamed-chunk-10-1.png)<!-- -->
-
-For the remaining fused variables, we can compare the relative frequency
-(proportion) of different outcomes in the donor and simulated data. Here
-is one such comparison for the “insulation” variable.
-
-              Not insulated Poorly insulated Adequately insulated Well insulated
-    donor            0.0125           0.1588               0.4880         0.3407
-    simulated        0.0137           0.1597               0.4893         0.3373
-
-This kind of comparison can be extended to all of the fusion variables
-and summarized in a single plot.
-
-![](man/figures/README-unnamed-chunk-12-1.png)<!-- -->
-
-So far, we’ve only looked at univariate distributions. The much trickier
-task in data synthesis is to replicate *interactions* between variables
-(e.g. bivariate relationships). For continuous and ordered factor data
-types, we can calculate the correlation for each variable pairing
-(e.g. the correlation between “income” and “electricity”) and compare
-the value calculated for the donor and simulated data. The following
-plot shows just that, including pairwise correlations between fused
-variables and *predictor* variables.
-
-![](man/figures/README-unnamed-chunk-13-1.png)<!-- -->
-
-The same kind of bivariate comparisons can be made for discrete
-variables by looking at the relative frequency of the cells in all
-possible 2-way contingency tables. And *voila*:
-
-![](man/figures/README-unnamed-chunk-14-1.png)<!-- -->
-
-Extending to 3-way contingency tables, things get a little bit noisier.
-
-![](man/figures/README-unnamed-chunk-15-1.png)<!-- -->
-
-Bivariate relationships between continuous and categorical variables can
-be assessed by plotting the distribution of the former for each level of
-the latter – for example, with a boxplot. The plot below shows how
-electricity consumption varies with a household’s air conditioning
-technology for both the donor and simulated data.
-
-![](man/figures/README-unnamed-chunk-16-1.png)<!-- -->
-
-We can generalize this kind of comparison by calculating “level-wise
-means” for the donor and simulated data (again, including predictor
-*and* fused variables). Since continuous variables are measured on
-widely-varying scales, they are scaled to mean zero and unit variance
-for the purposes of comparison.
-
-![](man/figures/README-unnamed-chunk-17-1.png)<!-- -->
-
-Next, for illustrative purposes, we assess the non-linear relationship
-between two continuous variables – “square\_feet” and “electricity” –
-both overall and for rural and urban areas defined by the “urban\_rural”
-variable. The plot below shows the GAM-smoothed relationship for the
-donor and simulated data. Note the high degree of overlap for the
-confidence interval shading, implying that the relationships are
-statistically indistinguishable.
-
-![](man/figures/README-unnamed-chunk-18-1.png)<!-- -->
-
-Finally, we can conduct a more extensive multivariate test by comparing
-regression coefficients from models fit to the donor with analogous
-coefficients derived from the simulated data. That is, do the results of
-a regression analysis using the donor data look similar to results
-produced by the simulated data? This is a rather stiff test of
-simulation quality, since the simulated data must replicate multivariate
-relationships across a range of phenomena.
-
-Each continuous or ordered factor variable is entered as the dependent
-variable in an OLS model. A subset of all the other variables (up to
-seven total) is selected via LASSO regression to serve as the
-predictors. The same model is then fit to both the donor and simulated
-data and the coefficients compared. To make the coefficients comparable
-across models, all variables are scaled to zero-mean and unit-variance
-(i.e. standardized coefficients).
-
-![](man/figures/README-unnamed-chunk-19-1.png)<!-- -->
-
-This exercise yields a total of 166 model terms (including intercepts)
-for which coefficients can be compared. The plot above shows that models
-fit to the simulated data do a good job replicating coefficients derived
-from the original data (R-squared = 0.966).
-
-## Data synthesis
-
-To generate a wholly synthetic version of `recs`, we proceed as above
-but use only a single predictor variable. That predictor is then
-manually sampled to “seed” the recipient dataset for fusion.
-
-``` r
-# Create fusion model with a single predictor ("division" in this case)
-recipient <- subset(donor, select = division)
-fusion.vars <- names(select(donor, -any_of(c(names(recipient), "weight")), -starts_with("rep_")))
-fit <- train(data = recs, y = fusion.vars, x = names(recipient))
-
-# Randomly sample "division" in the recipient and then run fuse()
-recipient$division <- sample(recipient$division, size = nrow(recipient))
-sim <- fuse(data = recipient, train.object = fit)
-```
-
-## Reducing computation time
-
-The `train()` function has a number of optional arguments that can be
-used to speed up the model building process. One option is to throw
-additional computing resources at the problem via parallel processing
-using the `cores` argument. This is only enabled for UNIX-like systems
-(i.e. will operate serially on Windows).
-
-``` r
-# Function to return computation time
-timeMe <- function(...) system.time(capture.output(...))["elapsed"]
-
-# cores = 1
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 1) %>% timeMe()
-```
-
-    elapsed 
-      6.018 
-
-``` r
-# cores = 3
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 3) %>% timeMe()
-```
-
-    elapsed 
-      3.654 
-
-Binary split decision trees are usually fast, but they can be
-*painfully* slow when there are unordered factor response (fusion)
-variables in the presence of unordered factor predictors. This situation
-requires complete enumeration of the potential split strategies, which
-can be very slow if the predictor has many levels. The `maxcats`
-argument allows `train` to cluster predictor variable categories in such
-cases (up to `maxcats` clusters), thereby reducing the number of splits
-that need to be assessed. There is some loss of accuracy in exchange for
-(potentially) faster computation. This is most noticeable if you have an
-unordered factor with many (e.g. &gt; 15) levels.
-
-``` r
-# Make the 'climate' variable a problematic unordered factor with 20 levels
-donor$climate <- factor(sample(LETTERS[1:20], nrow(donor), replace = TRUE))
-
-# maxcats = NULL
-# Note that train() issues a warning about long compute time
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, maxcats = NULL) %>% timeMe()
-```
-
-    Warning in train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, : 
-    Be careful: Unordered factors are present that could cause long compute times.
-    See 'maxcats' argument in ?train.
-
-    elapsed 
-     11.496 
-
-``` r
-# maxcats = 10
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, maxcats = 10) %>% timeMe()
-```
-
-    elapsed 
-      7.999 
-
-The `lasso` argument directs `train()` to use LASSO regression via
-[glmnet](https://cran.r-project.org/web/packages/glmnet/index.html) to
-quickly eliminate potential predictor variables prior to tree building.
-The idea here is that a predictor whose coefficient is shrunk to zero in
-the LASSO model is unlikely to be highly influential in the tree and can
-be discarded without significant loss of overall model skill. See
-`?train` for more details. As with `maxcats`, there is some (unknown)
-loss of accuracy in exchange for faster computation. This is most
-helpful for larger datasets, especially when some of the variables are
-highly correlated.
-
-``` r
-# Make 'donor' larger (more rows and columns)
-donor <- recs[sample.int(nrow(recs), 50e3, replace = TRUE), ]
-donor[LETTERS] <- runif(26 * nrow(donor))
-dim(donor)
-```
-
-    [1] 50000   150
-
-``` r
-# lasso = NULL
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, lasso = NULL) %>% timeMe()
-```
-
-    elapsed 
-      28.01 
-
-``` r
-# lasso = 0.9
-train(data = donor, y = fusion.vars, x = names(recipient), cores = 3, lasso = 0.9) %>% timeMe()
-```
-
-    elapsed 
-     26.645 
-
-### Happy fusing!
+# Validation
