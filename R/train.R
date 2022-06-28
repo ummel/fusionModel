@@ -1,4 +1,4 @@
-#' Train a fusion model using conditional distribution matching
+#' Train a fusion model
 #'
 #' @description
 #' Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can used with \link{fuse} to simulate outcomes for a "recipient" dataset.
@@ -14,7 +14,6 @@
 #' @param threads Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
-#'
 #' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
 #'
 #' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
@@ -63,13 +62,11 @@
 
 # Manual testing
 # library(fusionModel)
-# library(lightgbm)
 #
 # source("R/utils.R")
 # source("R/stratify.R")
-# source("R/chain.R")
 # source("R/fitLGB.R")
-#
+
 # # Inputs for testing - with some modification for harder test cases
 # data <- recs[1:28]
 # recipient <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
@@ -262,7 +259,8 @@ train <- function(data,
   #-----
 
   # Placeholder lists for metadata outputs
-  xlist.lgb <- ycenter <- yscale <- vector(mode = "list", length = length(yord))
+  xlist.lgb <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
+  meddist <- vector(mode = "numeric", length = length(yord))
 
   # Temporary directory to save lightGBM models to
   td <- tempfile()
@@ -319,7 +317,7 @@ train <- function(data,
         lightgbm::lgb.Dataset.construct(dfull)
 
         # List indicating random assignment of folds
-        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds)
+        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
 
         # Set the loss function and performance metric used with lightGBM
         params.obj <- list(objective = "binary", metric = "binary_logloss")
@@ -350,7 +348,7 @@ train <- function(data,
       lightgbm::lgb.Dataset.construct(dfull)
 
       # List indicating random assignment of folds
-      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10)
+      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
 
       # Set the loss function and performance metric used with lightGBM
       # This is here so that the Huber loss 'alpha' is set based on observed MAD
@@ -412,10 +410,9 @@ train <- function(data,
         d <- data.table(zc, mc, qc)
         if (type == "continuous") {
           cnorm <- c(colnames(mc), colnames(qc))
-          ncenter <- sapply(d[, ..cnorm], median)
-          nscale <- sapply(d[, ..cnorm], mad)
-          nscale[nscale == 0] <- sapply(d[, ..cnorm[nscale == 0]], IQR) # Attempt to prevent zero value
-          nscale[nscale == 0] <- sapply(d[, ..cnorm[nscale == 0]], sd) # Attempt to prevent zero value
+          ncenter <- sapply(d[, cnorm, with = FALSE], median)
+          nscale <- sapply(d[, cnorm, with = FALSE], mad)
+          nscale[nscale == 0] <- sapply(d[, cnorm[nscale == 0], with = FALSE], sd) # Use sd() if mad() returns zero
           for (j in cnorm) {
             if (nscale[[j]] == 0) {
               set(d, i = NULL, j = j, value = NULL)  # If the scale parameter is still zero, remove the column
@@ -427,18 +424,34 @@ train <- function(data,
           ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
           yscale[[i]] <- c(yscale[[i]], unlist(nscale))
         }
+
+        # Add column weights to be kept in metadata
+        wtemp <- rep((1 / length(v)) / ncol(d), ncol(d))
+        names(wtemp) <- names(d)
+        colweight[[i]] <- c(colweight[[i]], wtemp)
+
         cdata <- cbind(cdata, d)
       }
 
     }
 
     # Once 'y' is processed, write the 'donor' data frame to disk, if necessary
-    # TO DO: Make data.table operation for efficiency?
     if (!is.null(cdata)) {
-      dout <- cdata %>%
+
+      # Apply the column weights to 'cdata'
+      for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cdata[[j]] * colweight[[i]][[j]])
+
+      # Calculate and retain the median distance between all donor observations
+      # This is used to scale the search distance used by nn2() within fuse()
+      meddist[i] <- median(as.numeric(dist(cdata)))
+
+      # Clean final donor data, add the observed response variable values, and write to disk
+      # TO DO: Make data.table operation for efficiency?
+      cdata <- cdata %>%
         mutate_all(cleanNumeric, tol = 0.001) %>%
         cbind(data[pi, v, drop = FALSE])
-      fst::write_fst(x = dout, path = file.path(path, "donor.fst"), compress = 100)
+      fst::write_fst(x = cdata, path = file.path(path, "donor.fst"), compress = 100)
+
     }
 
   }
@@ -456,6 +469,8 @@ train <- function(data,
     xlist.lgb = xlist.lgb,
     ycenter = ycenter,
     yscale = yscale,
+    colweight = colweight,
+    meddist = meddist,
     ptiles = ptiles,
     call = match.call()
   )
