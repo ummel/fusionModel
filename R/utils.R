@@ -56,112 +56,6 @@ novary <- function(x) length(unique(na.omit(x))) == 1
 
 #------------------
 
-# Create nice ggplot2 barplot of variable importance in rpart() model
-# varImp <- function(m) {
-#   imp <- m$variable.importance / sum(m$variable.importance)
-#   enframe(imp) %>%
-#     filter(value > 0) %>%
-#     ggplot(aes(x = reorder(name, value), y = value)) +
-#     geom_bar(stat = "identity") +
-#     coord_flip() +
-#     theme_bw(11)
-# }
-
-#------------------
-
-# Remove elements of rpart() model object to reduce size while still allowing prediction
-slimRpart <- function(m) {
-  m$call <- NULL
-  m$numresp <- NULL
-  m$parms <- NULL
-  m$functions <- NULL
-  m$ordered <- NULL
-  m$y <- NULL
-  #attr(m, "xlevels") <- NULL
-  if ("splits" %in% names(m)) m$splits[, c('improve', 'adj')] <- 0
-  if ("frame" %in% names(m)) m$frame[, c('n', 'wt', 'dev', 'complexity')] <- 0
-  if ("terms" %in% names(m)) attributes(m$terms)['.Environment'] <- NULL
-  return(m)
-}
-
-#------------------
-
-# Remove elements of biglm() model object to reduce size while still allowing prediction
-# slimBiglm <- function(m) {
-#   m$call <- NULL
-#   m$assign <- NULL
-#   m$df.resid <- NULL
-#   m$weights <- NULL
-#   m$n <- NULL
-#   m$names <- NULL
-#   return(m)
-# }
-
-#------------------
-
-# Validate input variable vector against a given set of names
-# 'x' can include regular expressions
-validNames <- function(x, nms, exclude = FALSE) {
-  rgx <- setdiff(x, nms)
-  v <- c(intersect(x, nms), unlist(lapply(rgx, function(x) grep(x, nms, value = TRUE))))
-  if (exclude) v <- setdiff(nms, v)
-  out <- v[na.omit(match(nms, v))]
-  return(out)
-}
-
-#------------------
-
-# Return rpart() model prediction node for each observation in 'newdata'
-# Based on: https://github.com/cran/rpart.plot/blob/master/R/rpart.predict.R
-predictNode <- function(object, newdata) {
-
-  where <-
-    if (missing(newdata)) {
-      object$where
-    } else {
-      if(is.null(attr(newdata, "terms"))) {
-        Terms <- delete.response(object$terms)
-        newdata <- model.frame(Terms, newdata, na.action = na.pass,
-                               xlev = attr(object, "xlevels"))
-        if(!is.null(cl <- attr(Terms, "dataClasses")))
-          .checkMFClasses(cl, newdata, TRUE)
-      }
-      newdata <- getFromNamespace("rpart.matrix", ns="rpart")(newdata)
-      getFromNamespace("pred.rpart", ns="rpart")(object, newdata)
-    }
-
-  # nn <- as.numeric(rownames(object$frame)[where])
-  #
-  # # Index assigning each row in 'pred' to a node number
-  # node <- match(nn, as.integer(row.names(object$frame)))
-
-  #return(node)
-  return(where)
-
-}
-
-#------------------
-
-# TO DO: REPLACE use in train() with faster application
-# Function to create appropriate matrix object (perhaps dummy variables) for variable 'v' in data frame 'data'
-# This used within both train() and fuse()
-# matFun <- function(v, data) {
-#   stopifnot(length(v) == 1L)
-#   x <- data[[v]]
-#   if (is.numeric(x) | is.ordered(x)) {
-#     m <- data.table::frank(x)
-#     dim(m) <- c(length(m), 1L)  # See "Note" in ?matrix about converting vector to matrix
-#     dimnames(m) <- list(NULL, v)
-#   } else {
-#     u <- levels(x)
-#     m <- matrix(data = 0L, nrow = length(x), ncol = length(u), dimnames = list(NULL, paste0(v, u)))
-#     for (i in 1:ncol(m)) m[x == u[i], i] <- 1L
-#   }
-#   return(m)
-# }
-
-#------------------
-
 # Function to detect and impute any missing values in 'data'
 # Performs median imputation of continuous variables and frequency-weighted sampling of categorical variables
 imputationValue <- function(x, na.ind) {
@@ -220,26 +114,24 @@ inflated <- function(x, threshold = 0.9) {
 # Function to integerize real (non-integer) positive weights
 # 'mincor' refers to the minimum allowable Pearson correlation between 'x' and the integerized version of 'x'
 # Function will also handle 'x' that is constant or already integer
-integerize <- function(x, mincor = 0.999) {
-  stopifnot(all(x > 0))
-  if (sd(x) == 0) {
-    return(rep(1L, length(x)))
-  } else {
-    p <- 0
-    i <- 0
-    r <- max(x) / min(x)
-    while (p < mincor) {
-      i <- i + 1
-      mx <- ifelse(is.integer(x), r, max(r, 10 ^ i))
-      z <- 1 + mx * ((x - min(x)) / r)
-      z <- as.integer(round(z))
-      p <- cor(x, z)
-    }
-    return(z)
-  }
-}
-
-#------------------
+# integerize <- function(x, mincor = 0.999) {
+#   stopifnot(all(x > 0))
+#   if (sd(x) == 0) {
+#     return(rep(1L, length(x)))
+#   } else {
+#     p <- 0
+#     i <- 0
+#     r <- max(x) / min(x)
+#     while (p < mincor) {
+#       i <- i + 1
+#       mx <- ifelse(is.integer(x), r, max(r, 10 ^ i))
+#       z <- 1 + mx * ((x - min(x)) / r)
+#       z <- as.integer(round(z))
+#       p <- cor(x, z)
+#     }
+#     return(z)
+#   }
+# }
 
 # Examples
 # x <- rlnorm(1e3)
@@ -279,4 +171,80 @@ normalize <- function(x, center, scale, eps = 0.001) {
   y <- (x - center) / scale
   z <- (y - qnorm(eps)) / (2 * qnorm(1 - eps))
   return(z)
+}
+
+#------------------
+
+# One-hot encoding of data.table for use in fitting LASSO models
+# Based on: https://github.com/ben519/mltools/blob/master/R/one_hot.R
+# Note that some arguments have been dropped and their original default values are assumed
+
+one_hot <- function(dt, sparsifyNAs = FALSE, naCols = FALSE) {
+  stopifnot(is.data.table(dt))
+  OHEID <- NULL
+  cols <- colnames(dt)[which(sapply(dt, function(x) is.factor(x) & !is.ordered(x)))]
+  if (length(cols) == 0) return(dt)
+  tempDT <- dt[, cols, with = FALSE]
+  tempDT[, `:=`(OHEID, .I)]
+  for (col in cols) set(tempDT, j = col, value = factor(paste(col, tempDT[[col]], sep = "_"), levels = paste(col, levels(tempDT[[col]]), sep = "_")))
+  melted <- data.table::melt(tempDT, id = "OHEID", value.factor = T, na.rm = TRUE)
+  newCols <- data.table::dcast(melted, OHEID ~ value, drop = T, fun.aggregate = length)
+  newCols <- newCols[tempDT[, list(OHEID)]]
+  newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)),
+                                            "OHEID"), 0L)]
+  if (!sparsifyNAs | naCols) {
+    na_cols <- character(0)
+    for (col in cols) if (any(is.na(tempDT[[col]])))
+      na_cols <- c(na_cols, col)
+    if (!sparsifyNAs)
+      for (col in na_cols) newCols[is.na(tempDT[[col]]), `:=`(intersect(levels(tempDT[[col]]), colnames(newCols)), NA_integer_)]
+    if (naCols)
+      for (col in na_cols) newCols[, `:=`(eval(paste0(col, "_NA")), is.na(tempDT[[col]]) * 1L)]
+  }
+  result <- cbind(dt, newCols[, !"OHEID"])
+  possible_colnames <- character(0)
+  for (col in colnames(dt)) {
+    possible_colnames <- c(possible_colnames, col)
+    if (col %in% cols) {
+      possible_colnames <- c(possible_colnames, paste0(col, "_NA"))
+      possible_colnames <- c(possible_colnames, paste(levels(tempDT[[col]])))
+    }
+  }
+  sorted_colnames <- intersect(possible_colnames, colnames(result))
+  setcolorder(result, sorted_colnames)
+  result <- result[, !cols, with = FALSE]
+  return(result)
+}
+
+#------------------
+
+# Create stratified training set or cross-validation fold assignment
+# ycont: logical. Should 'y' be treated as continuous?
+# tfrac: Either a fraction of training data to retain (if less than 1) or the number of CV folds if greater than 1
+# ntiles: Number of buckets to break continuous 'y' into for stratified sampling
+# cv_list: If TRUE, a list of length 'tfrac' is returned with indices of fold assignment; otherwise, a single vector of length(y) with values 1:tfrac giving the fold assignment
+
+stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
+  stopifnot((tfrac > 0 & tfrac <= 1) | (tfrac > 1 & tfrac %% 1 == 0))
+  if (ycont) y <- dplyr::ntile(y, ntiles)
+  if (tfrac <= 1) { # Training set indicator (logical)
+    out <- vector(mode = "logical", length = length(y))
+    for (i in unique(y)) {
+      ind <- y == i
+      N <- sum(ind)
+      out[ind] <- data.table::frank(runif(N), ties.method = "random") <= round(tfrac * N)
+    }
+  }
+  if (tfrac > 1) {  # Cross-validation folds (list of integer row indices)
+    out <- vector(mode = "integer", length = length(y))
+    for (i in unique(y)) {
+      ind <- y == i
+      out[ind] <- dplyr::ntile(runif(sum(ind)), tfrac)
+    }
+    if (cv_list) {
+      out <- data.table::as.data.table(out)[, list(list(.I)), by = out]
+      out <- out$V1
+    }
+  }
+  return(out)
 }
