@@ -2,7 +2,7 @@
 % Please edit documentation in R/train.R
 \name{train}
 \alias{train}
-\title{Train a fusion model using conditional distribution matching}
+\title{Train a fusion model}
 \usage{
 train(
   data,
