@@ -1,12 +1,12 @@
 Package: fusionModel
-Title: Fuse Variables from One Dataset to Another
+Title: Tools for data fusion and analysis of synthetic data in R
 Version: 2.0.0
 Authors@R: 
     person(given = "Kevin",
            family = "Ummel",
            role = c("aut", "cre"),
            email = "ummel@berkeley.edu")
-Description: fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset.
+Description: fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset. The package provides a simple and efficient interface for general data fusion in R, leveraging state-of-the-art machine learning algorithms from Microsoft’s LightGBM framework. It also provides tools for analyzing synthetic/simulated data, calculating uncertainty, and validating fusion output.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -25,7 +25,8 @@ Imports:
     glmnet,
     RANN,
     fst,
-    rpart
+    rpart,
+    cli
 Suggests:
     pbapply,
     biglm

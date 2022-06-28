@@ -4,9 +4,9 @@
 \name{fusionModel-package}
 \alias{fusionModel}
 \alias{fusionModel-package}
-\title{fusionModel: Fuse Variables from One Dataset to Another}
+\title{fusionModel: Tools for data fusion and analysis of synthetic data in R}
 \description{
-fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset.
+fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset. The package provides a simple and efficient interface for general data fusion in R, leveraging state-of-the-art machine learning algorithms from Microsoft’s LightGBM framework. It also provides tools for analyzing synthetic/simulated data, calculating uncertainty, and validating fusion output.
 }
 \author{
 \strong{Maintainer}: Kevin Ummel \email{ummel@berkeley.edu}
