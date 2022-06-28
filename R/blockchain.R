@@ -1,0 +1,275 @@
+#' Block and chain fusion variables
+#'
+#' @description
+#' Given a set of prospective fusion variables, \code{blockchain()} derives a pseudo-optimal "chain" (fusion sequence/order) for the variables and (optionally) groups them into "blocks" for joint fusion of multiple variables at once. The output can be passed directly to the \code{y} argument of \code{\link{train}}.
+#'
+#' @param data Data frame. Donor dataset. All categorical variables should be factors and ordered whenever possible.
+#' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. If \code{y} is a list, any pre-specified blocks are preserved in the output.
+#' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
+#' @param delta Numeric. Controls how aggressively variables are grouped into blocks. \code{delta = 0} results in no new blocks. See Details.
+#' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
+#' @param nfolds Integer. Number of cross-validation folds used to fit LASSO models.
+#' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#'
+#' @details The algorithm uses cross-validated LASSO models fit via \code{\link[glmnet]{glmnet}}. It first builds a "complete" model for each \code{y} using all \code{x} and other fusion variables as predictors; the cross-validated model skill is the maximum possible. Next, models are fit using only \code{x} predictors; the model skill is divided by the maximum to create a score metric. The \code{y} with the maximum score is selected as the initial fusion variable and included as a predictor in subsequent models. The remaining \code{y} are assigned to the chain in the same, greedy fashion.
+#' @details When a \code{y} is selected for inclusion in the chain, its score is compared to that of the previous iteration; i.e. prior to the inclusion of the immediately preceding fusion variable. If the skill does not improve by at least \code{delta}, then the \code{y} is grouped into a block with the immediately preceding fusion variable. The logic here is that a \code{y} should follow other fusion variables if/when they add substantial explanatory power. If not, it makes sense to group the variables into a block.
+#' @examples
+#' ?recs
+#' fusion.vars <- c("electricity", "natural_gas", "aircon")
+#' predictor.vars <- names(recs)[2:12]
+#' yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
+#' yorder
+#'
+#' 'y' can be a list with pre-specified blocks that are preserved in the output
+#' fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
+#' yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
+#' yorder
+#' @export
+
+#---------------------
+
+# library(fusionModel)
+# source("R/stratify.R")
+
+# # Example data
+# data <- recs[1:26]
+# recipient <- subset(data, select = c(division, urban_rural, climate, income, age, race, hh_size, renter))
+# x <- names(recipient)
+# y <- setdiff(names(data), c(x, "weight"))
+# w <- NULL
+# nfolds <- 10
+# cores <- 2
+#
+# y <- as.list(y)
+# y[[15]] <- unlist(y[c(8, 15:17)])
+# y <- y[c(1:7,9:15)]
+
+#-----
+
+blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cores = 1) {
+
+  stopifnot(exprs = {
+    is.data.frame(data)
+    !anyNA(data)
+    all(unlist(y) %in% names(data))
+    all(x %in% names(data))
+    delta >= 0
+    is.null(weight) | weight %in% names(data)
+    nfolds > 1 & nfolds %% 1 == 0
+    cores >= 1 & cores %% 1 == 0
+  })
+
+  if (is.list(y)) {
+    input <- y
+    y <- unlist(input)
+  } else {
+    input <- as.list(y)
+  }
+
+  w <- if (is.null(weight)) {
+    rep(1L, nrow(data))
+  } else {
+    data[[weight]] / mean(data[[weight]])
+  }
+
+  cli::cli_progress_step("Preparing data")
+  d <- data[c(x, y)]
+  d <- mutate_if(d, is.numeric, rank)
+  d <- mutate_if(d, is.ordered, as.integer)
+  d <- mutate_if(d, is.logical, as.integer)
+  lev <- lapply(d, levels)
+
+  # Get one-hot expanded variable names
+  V <- lapply(names(lev), function(v) if (is.null(lev[[v]])) v else paste(v, lev[[v]], sep = "_"))
+  names(V) <- names(lev)
+
+  # Observed class proportions/probabilities for the 'y' variables (if nominal)
+  yweight <- lapply(y, function(v) {
+    yv <- V[[v]]
+    w <- if (length(yv) == 1) {
+      1
+    } else {
+      xt <- xtabs(paste0("~", v), data = d)
+      xt / sum(xt)
+    }
+  })
+  names(yweight) <- y
+  rm(data)
+
+  # One-hot encode unordered factors
+  d <- one_hot(as.data.table(d))
+  stopifnot(all(unlist(V) == colnames(d)))
+
+  # Create sparse matrix for input to glmnet()
+  d <- as(as.matrix(d), "dgCMatrix")
+
+  #-----
+
+  # Names of the stable 'x' predictor variables
+  X <- unlist(V[x])
+
+  # Names of the individual 'y' columns to be modeled
+  Y <- unlist(V[y])
+
+  # Create stratified cross-validation fold assignments
+  cli::cli_progress_step("Constructing cross-validation folds")
+  cv.foldid <- parallel::mclapply(Y, function(y) {
+    stratify(d[, y], ycont = length(unique(d[, y])) > 10, tfrac = 5, ntiles = 10)
+  }, mc.cores = cores)
+
+  #-----
+
+  # Fit Gaussian lasso model function
+  # lasso <- function(y, x) {
+  #   m <- glmnet::glmnet(
+  #     x = d[, x],
+  #     y = d[, y],
+  #     family = "gaussian",
+  #     weights = w,
+  #     alpha = 1)
+  #   #i <- which(m$dev.ratio / max(m$dev.ratio) >= 0.95)[1] # Index of preferred lambda
+  #   # plot(m$dev.ratio, type = "l")
+  #   # abline(v = i, h = m$dev.ratio[i], lty = 2)
+  #   # m$lambda[i]
+  #   #m$dev.ratio[i] # Akin to R-squared
+  #   max(m$dev.ratio)
+  # }
+
+  # Cross-validated LASSO
+  lassoCV <- function(y, x, return_x = FALSE) {
+
+    mcv <- glmnet::cv.glmnet(
+      x = d[, x],
+      y = d[, y],
+      weights = w,
+      type.measure = "deviance",
+      foldid = cv.foldid[[y]],
+      family = "gaussian",
+      alpha = 1)
+
+    # DEPRECATED FOR NOW -- pain to set up
+    # xkeep <- if (return_x) {
+    #   m <- glmnet::glmnet(
+    #     x = d[, x],
+    #     y = d[, y],
+    #     weights = w,
+    #     family = "gaussian",
+    #     alpha = 1,
+    #     lambda = mcv$lambda)
+    #   cf <- coef(m, s = mcv$lambda.1se)
+    #   nonzero <- sapply(V, function(x) any(x %in% X[cf[-1, ] != 0]))
+    #   names(which(nonzero))
+    # } else {
+    #   NULL
+    # }
+
+    weighted.r2 <- function(obs, pred, w) {
+      res <- obs - pred
+      SSe <- sum(w * res ^ 2)
+      SSt <- sum(w * (obs - weighted.mean(obs, w)) ^ 2)
+      1 - SSe / SSt
+    }
+
+    r2 <- weighted.r2(obs = d[, y], pred = predict(object = mcv, newx = d[, x], s = "lambda.1se"), w = w)
+    return(r2)
+    #return(list(r2 = r2, xkeep = xkeep))
+
+  }
+
+  # test <- lassoCV("education", X)
+  # test <- lassoCV("electricity", X)
+
+  #-----
+
+  # # Testing -- compare gaussian to multinomial
+  #
+  # v <- "heat_type"
+  #
+  # m <- glmnet::glmnet(
+  #   x = d[, X],
+  #   y = recs[[v]],
+  #   family = "multinomial",
+  #   weights = w,
+  #   alpha = 1)
+  # #i <- which(m$dev.ratio / max(m$dev.ratio) >= 0.95)[1] # Index of preferred lambda
+  # #m$dev.ratio[i]
+  #
+  # f <- function(v) {
+  #   m <- sapply(V[[v]], lasso, x = X)
+  #   w <- yweight[[v]]
+  #   sum(m * w)
+  # }
+  # f(v)
+
+  #-----
+
+  # Placeholder for results sequence
+  N <- length(input)
+  ord <- vector(mode = "list", length = N)
+  ratio <- vector(mode = "list", length = N)
+
+  # Extract R2 for the "full" model that includes all possible predictors
+  cli::cli_progress_step("Fitting complete models")
+  Y <- unlist(V[y])
+  mfull <- parallel::mclapply(input, function(g) {
+    sapply(g, function(v) {
+      yv <- unlist(V[v])
+      w <- yweight[[v]]
+      m <- sapply(yv, lassoCV, x = c(X, setdiff(Y, unlist(V[g]))))
+      sum(m * w)
+    })
+  }, mc.cores = cores)
+
+  #-----
+
+  # Selection sequence
+  cli::cli_progress_bar("Determining order and blocks", total = N, clear = TRUE)
+  i <- 0
+  while (length(input) > 0) {
+
+    i <- i + 1
+    Y <- unlist(V[unlist(ord)])
+
+    m0 <- parallel::mclapply(input, function(g) {
+      sapply(g, function(v) {
+        yv <- unlist(V[v])
+        w <- yweight[[v]]
+        m <- sapply(yv, lassoCV, x = c(X, Y))
+        sum(m * w)
+      })
+    }, mc.cores = cores)
+
+    # How strong is m0 relative to mfull?
+    stopifnot(all(lengths(m0) == lengths(mfull)))
+    rel <- sapply(m0, mean) / sapply(mfull, mean)
+
+    # Select the input for highest 'rel'
+    b <- which.max(rel)  # best
+
+    if (i > 1) {
+      if (pmax(0, rel[b] - rel0[b]) < delta) {
+        i <- i - 1
+        rel[-b] <- rel0[-b]
+      }
+    }
+
+    ratio[[i]] <- c(ratio[[i]], rel[b])  # Could print or return this result?
+    ord[[i]] <- c(ord[[i]], input[[b]])
+    input <- input[-b]
+    mfull <- mfull[-b]
+    rel0 <- rel[-b]
+
+    cli::cli_progress_update()
+
+  }
+
+  cli::cli_progress_done()
+  cli::cli_alert_success("Determining order and blocks")
+
+  #-----
+
+  # Return preferred order and blocks
+  ord <- if (all(lengths(ord) == 1)) unlist(ord) else compact(ord)
+  return(ord)
+
+}
