@@ -81,18 +81,21 @@ sameClass <- function(x, y) {
 #------------------
 
 # Weighted mean; slightly faster than weighted.mean()
-wmean <- function(x, w) sum(w * x) / sum(w)
+wmean <- function(x, w) {
+  w <- w / sum(w)
+  sum(w * x) / sum(w)
+}
 
 #------------------
 
 # Weighted standard deviation
 # Equivalent to Hmisc::wtd.var() with normwt = TRUE and taking sqrt() of result
-# wsd <- function(x, w) {
-#   w <- w * length(x) / sum(w)
-#   sw <- sum(w)
-#   xbar <- sum(w * x) / sw
-#   sqrt(sum(w * ((x - xbar) ^ 2)) / (sw - 1))
-# }
+wsd <- function(x, w) {
+  w <- (w / sum(w)) * length(x)
+  sw <- sum(w)
+  xbar <- sum(w * x) / sw
+  sqrt(sum(w * ((x - xbar) ^ 2)) / (sw - 1))
+}
 
 #------------------
 
@@ -179,8 +182,14 @@ normalize <- function(x, center, scale, eps = 0.001) {
 # Based on: https://github.com/ben519/mltools/blob/master/R/one_hot.R
 # Note that some arguments have been dropped and their original default values are assumed
 
-one_hot <- function(dt, sparsifyNAs = FALSE, naCols = FALSE) {
-  stopifnot(is.data.table(dt))
+one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = FALSE, naCols = FALSE) {
+
+  if (!is.data.table(dt)) dt <- as.data.table(dt)
+
+  # Convert ordered factors and logicals to integer
+  dt <- mutate_if(dt, is.ordered, as.integer)
+  dt <- mutate_if(dt, is.logical, as.integer)
+
   OHEID <- NULL
   cols <- colnames(dt)[which(sapply(dt, function(x) is.factor(x) & !is.ordered(x)))]
   if (length(cols) == 0) return(dt)
@@ -213,6 +222,9 @@ one_hot <- function(dt, sparsifyNAs = FALSE, naCols = FALSE) {
   sorted_colnames <- intersect(possible_colnames, colnames(result))
   setcolorder(result, sorted_colnames)
   result <- result[, !cols, with = FALSE]
+
+  if (sparse_matrix) result <- as(as.matrix(result), "dgCMatrix")
+
   return(result)
 }
 
