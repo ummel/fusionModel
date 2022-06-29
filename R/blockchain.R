@@ -74,7 +74,6 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
 
   cli::cli_progress_step("Preparing data")
   d <- data[c(x, y)]
-  d <- mutate_if(d, is.numeric, rank)
   d <- mutate_if(d, is.ordered, as.integer)
   d <- mutate_if(d, is.logical, as.integer)
   lev <- lapply(d, levels)
@@ -96,12 +95,9 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
   names(yweight) <- y
   rm(data)
 
-  # One-hot encode unordered factors
-  d <- one_hot(as.data.table(d))
+  # One-hot encode unordered factors and convert to sparse matrix
+  d <- one_hot(d)
   stopifnot(all(unlist(V) == colnames(d)))
-
-  # Create sparse matrix for input to glmnet()
-  d <- as(as.matrix(d), "dgCMatrix")
 
   #-----
 
