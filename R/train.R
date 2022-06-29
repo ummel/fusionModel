@@ -426,7 +426,9 @@ train <- function(data,
         }
 
         # Add column weights to be kept in metadata
+        # Use square root of the raw weights
         wtemp <- rep((1 / length(v)) / ncol(d), ncol(d))
+        wtemp <- sqrt(wtemp)
         names(wtemp) <- names(d)
         colweight[[i]] <- c(colweight[[i]], wtemp)
 
