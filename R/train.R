@@ -236,6 +236,7 @@ train <- function(data,
     num_iterations = 100,
     learning_rate = 0.1,
     max_depth = -1,
+    max_bin = 255,
     num_threads = threads  # 0 means default number of threads in OpenMP
   )
 
@@ -246,6 +247,11 @@ train <- function(data,
     }
   }
 
+  # Here I am taking max_bin from the general hyperparameters, as it should be 
+  # an input to lgb.Dataset(), not to the training models, see:
+  # https://github.com/microsoft/LightGBM/issues/4019
+  mb <- hyper[["max_bin"]]
+  
   # Create hyperparameter grid to search
   hyper.grid <- hyper %>%
     expand.grid() %>%
@@ -313,7 +319,8 @@ train <- function(data,
         dfull <- lightgbm::lgb.Dataset(data = dmat[, xv],
                                        label = as.integer(Y == 0),
                                        weight = W.lgb,
-                                       categorical_feature = intersect(xv, nominal))
+                                       categorical_feature = intersect(xv, nominal),
+                                       params = list("max_bin" = mb))
         lightgbm::lgb.Dataset.construct(dfull)
 
         # List indicating random assignment of folds
@@ -344,7 +351,8 @@ train <- function(data,
       dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv],
                                      label = Y[ti],
                                      weight = W.lgb[ti],
-                                     categorical_feature = intersect(xv, nominal))
+                                     categorical_feature = intersect(xv, nominal),
+                                     params = list("max_bin" = mb))
       lightgbm::lgb.Dataset.construct(dfull)
 
       # List indicating random assignment of folds
@@ -485,7 +493,7 @@ train <- function(data,
   # Zip up all of the models directories
   zip::zip(zipfile = file, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)  # Zips to the temporary directory
   file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = file, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
-  cat("Fusion model saved to:", file)
+  cat("Fusion model saved to:", file,"\n")
   unlink(td)
   invisible(file)
 

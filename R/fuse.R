@@ -11,6 +11,7 @@
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#' @param seed Fix random seed if needed
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}.
 #' @details The \code{max_dist} value is a relative scaling factor. The search radius passed to \code{\link[RANN]{nn2}} is \code{max_dist * medDist}, where \code{medDist} is the median pairwise distance calculated among all of the donor observations. This approach allows \code{max_dist} to adjust the search radius in a consistent way across all fusion variables/blocks.
@@ -63,8 +64,10 @@ fuse <- function(data,
                  file,
                  k = 5,
                  max_dist = 0,
-                 idw = FALSE) {
-
+                 idw = FALSE,
+                 seed = NULL,
+                 parallel = FALSE) {
+  
   stopifnot(exprs = {
     is.data.frame(data)
     file.exists(file) & endsWith(file, ".fsn")
@@ -72,45 +75,46 @@ fuse <- function(data,
     max_dist >= 0
     is.logical(idw)
   })
-
+  
   if (is.data.table(data)) data <- as.data.frame(data)
-
+  if (!is.null(seed)) set.seed(seed)
+  
   # Temporary directory to unzip to
   td <- tempfile()
   dir.create(td)
-
+  
   # Names of files within the .fsn object
   fsn.files <- zip::zip_list(file)
   pfixes <- sort(unique(dirname(fsn.files$filename)))
   pfixes <- pfixes[pfixes != "."]
-
+  
   # Load model metadata
   zip::unzip(zipfile = file, files = "metadata.rds", exdir = td)
   meta <- readRDS(file.path(td, "metadata.rds"))
-
+  
   # Names, order, and 'blocks' of response variables
   yord <- meta$yorder
-
+  
   # Check that necessary predictor variables are present
   xvars <- names(meta$xclass)
   miss <- setdiff(xvars, names(data))
   if (length(miss) > 0) stop("The following predictor variables are missing from 'data':\n", paste(miss, collapse = ", "))
-
+  
   # Restrict 'data' to 'xvars'
   data <- data[xvars]
-
+  
   # Check for appropriate class/type of predictor variables
   xclass <- meta$xclass
   xtest <- lapply(data, class)
   miss <- !map2_lgl(xclass, xtest, sameClass)
   if (any(miss)) stop("Incompatible data type for the following predictor variables:\n", paste(names(miss)[miss], collapse = ", "))
-
+  
   # Check for appropriate levels of factor predictor variables
   xlevels <- meta$xlevels
   xtest <- lapply(subset(data, select = names(xlevels)), levels)
   miss <- !map2_lgl(xlevels, xtest, identical)
   if (any(miss)) stop("Incompatible levels for the following predictor variables\n", paste(names(miss)[miss], collapse = ", "))
-
+  
   # Detect and impute any missing values in 'data'
   na.cols <- names(which(sapply(data, anyNA)))
   if (length(na.cols) > 0) {
@@ -121,32 +125,33 @@ fuse <- function(data,
       data[ind, j] <-  imputationValue(x, ind)
     }
   }
-
+  
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
   dmat <- tomat(data)
-
+  
   #-----
-
-  cat("Fusing donor variables to recipient...\n")
-
+  
+  # Run this only if not running in parallel, otherwise it messes up the progress bar
+  if (!parallel) cat("Fusing donor variables to recipient...\n")
+  
   for (i in 1:length(pfixes)) {
-
+    
     v <- meta$yorder[[i]]
     block <- length(v) > 1
-
+    
     # LightGBM predictor variables
     xv <- meta$xlist.lgb[[i]]
-
+    
     # Unzip the lightGBM model(s) to temp directory
     mods <- grep(pattern = glob2rx(paste0(pfixes[i], "*.txt")), x = fsn.files$filename, value = TRUE)
     zip::unzip(zipfile = file, files = mods, exdir = td)
-
+    
     # Row indices where to generate predictions
     # Modified, if necessary, is next code chunk when single continuous variables has a zero model
     zind <- rep(FALSE, nrow(dmat))
-
+    
     #---
-
+    
     # Simulate zero values for case of single continuous variable
     if (!block & meta$ytype[v[[1]]] == "continuous") {
       m <- grep("z\\.txt$", mods, value = TRUE)
@@ -157,9 +162,9 @@ fuse <- function(data,
       }
       mods <- setdiff(mods, m)
     }
-
+    
     #---
-
+    
     # Load and make predictions for each model
     # This should be made more efficient...
     # NOTE: NEEDS TO HANDLE BINARY
@@ -176,9 +181,9 @@ fuse <- function(data,
       set(pred, i = NULL, j = paste0(y, "_", n, if (q | z) NULL else 1:ncol(p)), value = p)
       rm(p)
     }
-
+    
     #---
-
+    
     # Apply normalization, as necessary, to recipient conditional values
     norm.vars <- intersect(names(pred), names(meta$ycenter[[i]]))
     for (j in norm.vars) {
@@ -191,9 +196,9 @@ fuse <- function(data,
         set(pred, i = NULL, j = j, value = val)
       }
     }
-
+    
     #---
-
+    
     # Simulate values for case of single categorical variable
     if (!block & meta$ytype[v[[1]]] != "continuous") {
       ptile <- runif(n = nrow(pred))
@@ -205,23 +210,23 @@ fuse <- function(data,
         pred[[1]] > ptile  # The binary case
       }
     }
-
+    
     #---
-
+    
     if (block | meta$ytype[[v[1]]] == "continuous") {
-
+      
       # Get the donor conditional prediction and response variables
       x <- paste0(pfixes[i], "/donor.fst")
       zip::unzip(zipfile = file, files = x, exdir = td)
       dpred <- fst::read_fst(file.path(td, x), as.data.table = TRUE, columns = colnames(pred))
       dresp <- fst::read_fst(file.path(td, x), as.data.table = TRUE, columns = v)
       setcolorder(pred, names(dpred))
-
+      
       # Apply the column weights to 'pred'
       for (j in names(pred)) set(pred, i = NULL, j = j, value = pred[[j]] * meta$colweight[[i]][[j]])
-
+      
       #----
-
+      
       # Perform k-nearest-neighbor search
       nn <- RANN::nn2(data = dpred,
                       query = pred,
@@ -229,7 +234,7 @@ fuse <- function(data,
                       searchtype = ifelse(max_dist == 0, "standard", "radius"),
                       radius = meta$meddist[i] * max_dist,
                       eps = 0.1)
-
+      
       # Apply potential 'fix up' for cases where there is no nearest neighbor within the search radius
       if (max_dist > 0) {
         fix <- which(nn$nn.idx[, 1] == 0)
@@ -244,9 +249,9 @@ fuse <- function(data,
           rm(fix, nn.fix)
         }
       }
-
+      
       #----
-
+      
       # Randomly select observation from the donor
       # Option for inverse-distance weighted
       if (idw) {
@@ -260,36 +265,36 @@ fuse <- function(data,
       } else {
         S <- sample.int(n = k, size = nrow(pred), replace = TRUE)
       }
-
+      
       # Simulated values
       ind <- nn$nn.idx[cbind(1:nrow(nn$nn.idx), S)]
       S <- dresp[ind, ]
-
+      
       # If zeros are simulated separately, integrate them into 'S'
       if (any(zind)) {
         out <- data.table(rep(0, nrow(dmat)))
         set(out, i = which(!zind), j = "V1", value = S)
         S <- out
       }
-
+      
     }
-
+    
     # Add the simulated values to 'dmat' prior to next iteration
     S <- tomat(S)
     colnames(S) <- v
     dmat <- cbind(dmat, S)
     rm(S, pred)
-
+    
   }
-
+  
   unlink(td)
-
+  
   #---
-
+  
   # Convert 'dmat' to desired output
   sim <- dmat[, unlist(yord)]
   sim <- data.table(as.matrix(sim))
-
+  
   # Ensure simulated variables are correct data type with appropriate labels/levels
   for (v in names(sim)) {
     yclass <- meta$yclass[[v]]
@@ -300,9 +305,9 @@ fuse <- function(data,
     if ("logical" %in% yclass) set(sim, i = NULL, j = v, value = as.logical(sim[[v]]))
     if ("integer" %in% yclass)  set(sim, i = NULL, j = v, value = as.integer(sim[[v]]))
   }
-
+  
   return(sim)
-
+  
 }
 
 #------------------------------
@@ -310,14 +315,21 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(..., M, fun = fuse, cores = 1) {
+fuseM <- function(..., M, fun = fuse, cores = 1, seeds=NULL) {
+  
+  if (is.null(seeds)) seeds<-NULL
+  
   stopifnot({
     M >= 1 & M %% 1 == 0
     cores > 0 & cores %% 1 == 0
   })
-  pbapply::pblapply(1:M, function(i) {
-    fun(...)
+  
+  out<-pbapply::pblapply(1:M, function(i) {
+    fun(..., seed=seeds[i], parallel=T)
   }, cl = cores) %>%
     bind_rows(.id = "M") %>%
     mutate(M = as.integer(M))
+  
+  return(out)
+  
 }
