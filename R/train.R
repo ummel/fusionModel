@@ -62,9 +62,7 @@
 
 # Manual testing
 # library(fusionModel)
-#
 # source("R/utils.R")
-# source("R/stratify.R")
 # source("R/fitLGB.R")
 
 # # Inputs for testing - with some modification for harder test cases
@@ -106,13 +104,13 @@ train <- function(data,
     is.data.frame(data)
     all(unlist(y) %in% names(data))
     all(x %in% names(data))
+    length(intersect(y, x)) == 0
     is.character(file) & endsWith(file, ".fsn")
-    is.null(weight) | weight %in% names(data)
-    length(unique(c(x, y, weight))) == length(c(x, y, weight))
-    nfolds > 0 & nfolds %% 1 == 0
+    is.null(weight) | (length(weight) == 1 & weight %in% names(data) & !weight %in% c(y, x))
+    nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
-    threads >= 0 & threads %% 1 == 0
+    threads > 0 & threads %% 1 == 0
   })
 
   if (is.null(hyper)) hyper <- list()
@@ -130,9 +128,6 @@ train <- function(data,
   } else {
     yord <- as.list(y)
   }
-
-  # Cluster number assignment for each 'y' variable
-  cn <- unlist(mapply(rep, seq_along(yord), each = lengths(yord)))
 
   #-----
 
@@ -157,12 +152,12 @@ train <- function(data,
 
   # Check that the 'xvars' and 'yvars' contain only syntactically valid names
   bad <- setdiff(c(x, y), make.names(c(x, y)))
-  if (length(bad)) cat("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
+  if (length(bad)) stop("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
 
   # Check for no-variance (constant) variables
   # Stop with error if any 'y' are constant; remove constant 'x' with message
   constant <- names(which(sapply(data[y], novary)))
-  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "), "\n")
+  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "))
   constant <- names(which(sapply(data[x], novary)))
   if (length(constant)) {
     x <- setdiff(x, constant)
@@ -175,9 +170,9 @@ train <- function(data,
   if (length(na.cols) > 0) {
     cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
     for (j in na.cols) {
-      x <- data[[j]]
-      ind <- is.na(x)
-      data[ind, j] <-  imputationValue(x, ind)
+      xj <- data[[j]]
+      ind <- is.na(xj)
+      data[ind, j] <-  imputationValue(xj, ind)
     }
   }
 
@@ -236,6 +231,8 @@ train <- function(data,
     num_iterations = 100,
     learning_rate = 0.1,
     max_depth = -1,
+    max_bin = 255,
+    min_data_in_bin = 3,
     num_threads = threads  # 0 means default number of threads in OpenMP
   )
 
@@ -245,6 +242,17 @@ train <- function(data,
       hyper[[v]] <- hyper.default[[v]]
     }
   }
+
+  # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (the are not eligible to be varied within the CV routine)
+  # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
+  for (v in c("max_bin", "min_data_in_bin")) {
+    if (length(hyper[[v]]) > 1) {
+      hyper[[v]] <- hyper[[v]][1]
+      cat("Only one", v, "value allowed. Using:", hyper[[v]], "\n")
+    }
+  }
+  dparams <- list(max_bin = hyper$max_bin, min_data_in_bin = hyper$min_data_in_bin)
+  hyper$max_bin <- NULL; hyper$min_data_in_bin <- NULL
 
   # Create hyperparameter grid to search
   hyper.grid <- hyper %>%
@@ -301,6 +309,8 @@ train <- function(data,
       qc <- NULL
       ti <- rep(TRUE, length(Y))
       pi <- ti
+      dtrain <- NULL
+      dvalid <- NULL
 
       #-----
 
@@ -309,21 +319,54 @@ train <- function(data,
         ti <- Y != 0
         if (!block) pi <- ti
 
-        # Create the LGB training dataset
+        #---
+
+        # Build LightGBM datasets for zero-inflated model
+
+        # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
+        # List indicating random assignment of folds
+        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
+
+        # Create full LGB training dataset with all available observations
         dfull <- lightgbm::lgb.Dataset(data = dmat[, xv],
                                        label = as.integer(Y == 0),
                                        weight = W.lgb,
-                                       categorical_feature = intersect(xv, nominal))
-        lightgbm::lgb.Dataset.construct(dfull)
+                                       categorical_feature = which(xv %in% nominal),
+                                       params = dparams) %>%
+          lightgbm::lgb.Dataset.construct()
 
-        # List indicating random assignment of folds
-        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
+        # Create 'dtrain' and 'dvalid' sets, if requested
+        if (nfolds <= 1) {
+          ind <- which(cv.folds)
+          dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
+                                          label = as.integer(Y == 0)[ind],
+                                          weight = W.lgb[ind],
+                                          categorical_feature = which(xv %in% nominal),
+                                          params = dparams) %>%
+            lightgbm::lgb.Dataset.construct()
+
+          dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
+                                          label = as.integer(Y == 0)[-ind],
+                                          weight = W.lgb[-ind],
+                                          categorical_feature = which(xv %in% nominal),
+                                          params = dparams,
+                                          reference = dtrain) %>%
+            lightgbm::lgb.Dataset.construct()
+        }
+
+        #---
 
         # Set the loss function and performance metric used with lightGBM
         params.obj <- list(objective = "binary", metric = "binary_logloss")
 
         # Fit model
-        zmod <- fitLGB(data.lgb = dfull, hyper.grid = hyper.grid, params.obj = params.obj, cv.folds = cv.folds)
+        zmod <- fitLGB(dfull = dfull,
+                       dtrain = dtrain,
+                       dvalid = dvalid,
+                       hyper.grid = hyper.grid,
+                       params.obj = params.obj,
+                       cv.folds = cv.folds,
+                       threads = threads)
 
         # Save LightGBM mean model (m.txt) to disk
         lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
@@ -338,17 +381,41 @@ train <- function(data,
 
       }
 
-      #-----
+      #---
 
-      # Create the LGB training dataset
+      # Build LightGBM datasets for mean and quantile models
+
+      # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
+      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
+
+      # Create full LGB training dataset with all available observations
       dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv],
                                      label = Y[ti],
                                      weight = W.lgb[ti],
-                                     categorical_feature = intersect(xv, nominal))
-      lightgbm::lgb.Dataset.construct(dfull)
+                                     categorical_feature = which(xv %in% nominal),
+                                     params = dparams) %>%
+        lightgbm::lgb.Dataset.construct()
 
-      # List indicating random assignment of folds
-      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
+      # Create 'dtrain' and 'dvalid' sets, if requested
+      if (nfolds <= 1) {
+        ind <- which(ti)[cv.folds]
+        dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
+                                        label = Y[ind],
+                                        weight = W.lgb[ind],
+                                        categorical_feature = which(xv %in% nominal),
+                                        params = dparams) %>%
+          lightgbm::lgb.Dataset.construct()
+
+        dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
+                                        label = Y[-ind],
+                                        weight = W.lgb[-ind],
+                                        categorical_feature = which(xv %in% nominal),
+                                        params = dparams,
+                                        reference = dtrain) %>%
+          lightgbm::lgb.Dataset.construct()
+      }
+
+      #---
 
       # Set the loss function and performance metric used with lightGBM
       # This is here so that the Huber loss 'alpha' is set based on observed MAD
@@ -360,8 +427,16 @@ train <- function(data,
                            multiclass = list(objective = "multiclass", metric = "multi_logloss", num_class = 1L + max(Y)),
                            binary = list(objective = "binary", metric = "binary_logloss"))
 
-      # Fit model
-      mmod <- fitLGB(data.lgb = dfull, hyper.grid = hyper.grid, params.obj = params.obj, cv.folds = cv.folds)
+      #-----
+
+      # Fit mean response model
+      mmod <- fitLGB(dfull = dfull,
+                     dtrain = dtrain,
+                     dvalid = dvalid,
+                     hyper.grid = hyper.grid,
+                     params.obj = params.obj,
+                     cv.folds = cv.folds,
+                     threads = threads)
 
       # Save LightGBM mean model (m.txt) to disk
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
@@ -385,10 +460,13 @@ train <- function(data,
         names(qmods) <- paste0("q", 1:length(ptiles))
 
         for (k in seq_along(ptiles)) {
-          qmods[[k]] <- fitLGB(data.lgb = dfull,
+          qmods[[k]] <- fitLGB(dfull = dfull,
+                               dtrain = dtrain,
+                               dvalid = dvalid,
                                hyper.grid = hyper.grid,
                                params.obj = list(objective = "quantile", metric = "quantile", alpha = ptiles[k]),
-                               cv.folds = cv.folds)
+                               cv.folds = cv.folds,
+                               threads = threads)
         }
 
         # Predict conditional quantiles for full dataset
@@ -413,13 +491,10 @@ train <- function(data,
           ncenter <- sapply(d[, cnorm, with = FALSE], median)
           nscale <- sapply(d[, cnorm, with = FALSE], mad)
           nscale[nscale == 0] <- sapply(d[, cnorm[nscale == 0], with = FALSE], sd) # Use sd() if mad() returns zero
+          nscale[nscale == 0] <- 1  # If scale is still zero, set to 1 so that normalized values will all be 0.5 (prevents errors)
           for (j in cnorm) {
-            if (nscale[[j]] == 0) {
-              set(d, i = NULL, j = j, value = NULL)  # If the scale parameter is still zero, remove the column
-            } else {
               val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
               set(d, i = NULL, j = j, value = val)
-            }
           }
           ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
           yscale[[i]] <- c(yscale[[i]], unlist(nscale))
@@ -445,7 +520,9 @@ train <- function(data,
 
       # Calculate and retain the median distance between all donor observations
       # This is used to scale the search distance used by nn2() within fuse()
-      meddist[i] <- median(as.numeric(dist(cdata)))
+      # Take a random sample to prevent excessive compute time with large datasets
+      cdist <- dist(slice_sample(cdata, n = min(nrow(cdata), 20e3)))
+      meddist[i] <- median(as.numeric(cdist))
 
       # Clean final donor data, add the observed response variable values, and write to disk
       # TO DO: Make data.table operation for efficiency?
