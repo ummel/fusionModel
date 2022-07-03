@@ -49,7 +49,6 @@
 #
 # library(fusionModel)
 # library(lightgbm)
-# library(partykit)
 # source("R/utils.R")
 # #Example inputs
 # data <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
@@ -236,7 +235,7 @@ fuse <- function(data,
         if (length(fix) > 0) {
           nn.fix <- RANN::nn2(data = dpred,
                               query = pred[fix, ],
-                              k = 1,
+                              k = 1,  # Returns single nearest-neighbor
                               searchtype = "standard",
                               eps = 0.1)
           nn$nn.idx[fix, 1] <- nn.fix$nn.idx
@@ -247,21 +246,26 @@ fuse <- function(data,
 
       #----
 
-      # Randomly select observation from the donor
-      # Option for inverse-distance weighted
-      if (idw) {
-        nn$nn.dists[nn$nn.idx == 0] <- NA
-        p <- 1 / nn$nn.dists
-        p[is.infinite(p)] <- min(p)  # Prevent infinite inverse distance
+      # Randomly select a similar observation from the donor
+      # Optionally using inverse-distance probabilities for selection
+      if (max_dist > 0 | idw) {
+        p <- nn$nn.dists
+        p[nn$nn.idx == 0] <- NA
+        if (idw) {
+          p <- 1 / nn$nn.dists
+          p[is.infinite(p)] <- min(p, na.rm = TRUE)  # Prevent infinite inverse distance
+        } else {
+          p[!is.na(p)] <- runif(sum(!is.na(p)))
+        }
         p <- p / rowSums(p, na.rm = TRUE)
         for (j in 2:ncol(p)) p[, j] <- p[, j - 1] + p[, j]
         ptile <- runif(n = nrow(p))
         S <- rowSums(ptile > p, na.rm = TRUE) + 1L
       } else {
-        S <- sample.int(n = k, size = nrow(pred), replace = TRUE)
+        S <- sample.int(n = k, size = nrow(pred), replace = TRUE)  # Simple case; randomly select a column
       }
 
-      # Simulated values
+      # Extract simulated values from donor observations
       ind <- nn$nn.idx[cbind(1:nrow(nn$nn.idx), S)]
       S <- dresp[ind, ]
 
@@ -289,6 +293,7 @@ fuse <- function(data,
   # Convert 'dmat' to desired output
   sim <- dmat[, unlist(yord)]
   sim <- data.table(as.matrix(sim))
+  rm(dmat)
 
   # Ensure simulated variables are correct data type with appropriate labels/levels
   for (v in names(sim)) {
