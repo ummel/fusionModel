@@ -1,30 +1,59 @@
-fitLGB <- function(data.lgb, hyper.grid, params.obj, cv.folds) {
 
-  cv.perf <- hyper.grid %>%
-    lapply(FUN = function(x) {
+fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, threads = 1, hyper.grid, params.obj) {
+
+  perf <- if (is.null(dvalid)) {
+
+    # If full cross-validation is requested...
+    # In this case, LightGBM's own parallel processing is used via 'num_threads' parameter
+    lapply(hyper.grid, FUN = function(x) {
       sink <- capture.output({
-        mod.cv <- lightgbm::lgb.cv(
+        mod <- lightgbm::lgb.cv(
           params = c(as.list(x), params.obj),
-          data = data.lgb,
+          data = dfull,
           folds = cv.folds,
           early_stopping_rounds = 1L,
           verbose = -1L
         )
       })
-      c(mod.cv$best_score, mod.cv$best_iter)
+      c(mod$best_score, mod$best_iter)
     })
 
-  # Compare cross-validated performance across hyper-parameter sets
-  comp <- do.call(rbind, cv.perf)
+  } else {
+
+    # If single training/test-set validation is requested...
+    # In this case, we can use mclapply() to loop over hyper.grid parameter sets and lgb.train() is forced to serial
+    p <- c(as.list(x), params.obj)
+    p$num_threads <- 1
+    parallel::mclapply(hyper.grid, FUN = function(x) {
+      sink <- capture.output({
+        mod <- lightgbm::lgb.train(
+          params = p,
+          data = dtrain,
+          valids = list(valid = dvalid),
+          early_stopping_rounds = 1L,
+          verbose = -1L
+        )
+      })
+      c(mod$best_score, mod$best_iter)
+    }, mc.cores = threads)
+
+  }
+
+  # Compare validation set performance across hyper-parameter sets
+  comp <- do.call(rbind, perf)
   opt <- which.min(comp[, 1])
   params.opt <- hyper.grid[[opt]]
   params.opt$num_iterations <- comp[opt, 2]
 
+  # Fit final model using full dataset and optimal parameter values
   mod <- lightgbm::lgb.train(
     params = c(params.opt, params.obj),
-    data = data.lgb,
+    data = dfull,
     verbose = -1L
   )
+
+  # Plot the evolution of the loss function
+  #plot(unlist(mod$record_evals[[2]]))
 
   return(mod)
 
