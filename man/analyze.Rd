@@ -8,7 +8,7 @@ analyze(
   formula,
   implicates,
   donor.N,
-  sample_weights,
+  sample_weights = NULL,
   replicate_weights = NULL,
   static = NULL,
   by = NULL,

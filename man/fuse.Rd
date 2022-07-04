@@ -5,9 +5,9 @@
 \alias{fuseM}
 \title{Fuse variables to a recipient dataset}
 \usage{
-fuse(data, file, k = 5, max_dist = 0, idw = FALSE)
+fuse(data, file, k = 5, max_dist = 0, idw = FALSE, seed = NULL)
 
-fuseM(..., M, fun = fuse, cores = 1)
+fuseM(data, ..., M, fun = fuse, cores = 1, seeds = NULL)
 }
 \arguments{
 \item{data}{Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{model}.}
@@ -19,6 +19,8 @@ fuseM(..., M, fun = fuse, cores = 1)
 \item{max_dist}{Numeric. Controls the maximum allowable distance when identifying up to \code{k} nearest neighbors. \code{max_dist = 0} (default) means no distance restriction is applied.}
 
 \item{idw}{Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?}
+
+\item{seed}{Set random seed if needed.}
 
 \item{...}{Arguments passed to \code{fuse()}.}
 

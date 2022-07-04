@@ -27,7 +27,7 @@ train(
 
 \item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
-\item{nfolds}{Integer. Number of cross-validation folds used for LightGBM model training.}
+\item{nfolds}{Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).}
 
 \item{ptiles}{Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).}
 
@@ -56,6 +56,8 @@ The \code{hyper} argument can be used to specify the LightGBM hyperparameter val
 \item min_data_in_leaf
 \item num_iterations
 \item learning_rate
+\item max_bin
+\item min_data_in_bin
 }
 }
 \examples{

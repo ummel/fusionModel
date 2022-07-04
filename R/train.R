@@ -25,7 +25,9 @@
 #'   \item min_data_in_leaf
 #'   \item num_iterations
 #'   \item learning_rate
-#'   }
+#'   \item max_bin
+#'   \item min_data_in_bin
+#'  }
 #'
 #' @return A fusion model object (.fsn) is saved to \code{file}.
 #'
@@ -494,8 +496,8 @@ train <- function(data,
           nscale[nscale == 0] <- sapply(d[, cnorm[nscale == 0], with = FALSE], sd) # Use sd() if mad() returns zero
           nscale[nscale == 0] <- 1  # If scale is still zero, set to 1 so that normalized values will all be 0.5 (prevents errors)
           for (j in cnorm) {
-              val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
-              set(d, i = NULL, j = j, value = val)
+            val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
+            set(d, i = NULL, j = j, value = val)
           }
           ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
           yscale[[i]] <- c(yscale[[i]], unlist(nscale))
