@@ -114,7 +114,7 @@ train <- function(data,
   })
 
   if (is.null(hyper)) hyper <- list()
-  if (is.data.table(data)) data <- as.data.frame(data)
+  if (is.data.table(data)) data <- as.data.frame(data)  # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
 
   # Check 'file' path and create parent directories, if necessary
   dir <- normalizePath(dirname(file), mustWork = FALSE)
@@ -212,9 +212,7 @@ train <- function(data,
 
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
   dmat <- tomat(data)
-
-  # Determine response variable prefixes for saving to disk
-  pfixes <- formatC(seq_along(yord), width = nchar(length(yord)), format = "d", flag = "0")
+  rm(data)
 
   #-----
 
@@ -266,8 +264,11 @@ train <- function(data,
 
   #-----
 
+  # Determine response variable prefixes for saving to disk
+  pfixes <- formatC(seq_along(yord), width = nchar(length(yord)), format = "d", flag = "0")
+
   # Placeholder lists for metadata outputs
-  xlist.lgb <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
+  lgbpred <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
   meddist <- vector(mode = "numeric", length = length(yord))
 
   # Temporary directory to save lightGBM models to
@@ -289,9 +290,9 @@ train <- function(data,
     yv <- if (i == 1) NULL else unlist(yord[1:(i - 1)])
 
     # Full set of predictor variables, including 'y' from clusters earlier in sequence
-    # Assign the x predictors to 'xlist'
+    # Assign the x predictors to 'lgbpred'
     xv <- as.vector(c(xvars, yv))
-    xlist.lgb[[i]] <- xv
+    lgbpred[[i]] <- xv
 
     path <- file.path(td, pfixes[i])
     dir.create(path)
@@ -507,7 +508,11 @@ train <- function(data,
         names(wtemp) <- names(d)
         colweight[[i]] <- c(colweight[[i]], wtemp)
 
+        # Apply the column weights to 'd'
+        for (j in names(d)) set(d, i = NULL, j = j, value = d[[j]] * wtemp[[j]])
+
         cdata <- cbind(cdata, d)
+        rm(d)
       }
 
     }
@@ -515,21 +520,19 @@ train <- function(data,
     # Once 'y' is processed, write the 'donor' data frame to disk, if necessary
     if (!is.null(cdata)) {
 
-      # Apply the column weights to 'cdata'
-      for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cdata[[j]] * colweight[[i]][[j]])
-
       # Calculate and retain the median distance between all donor observations
       # This is used to scale the search distance used by nn2() within fuse()
       # Take a random sample to prevent excessive compute time with large datasets
-      cdist <- dist(slice_sample(cdata, n = min(nrow(cdata), 20e3)))
-      meddist[i] <- median(as.numeric(cdist))
+      ind <- sample.int(nrow(cdata), min(nrow(cdata), 10e3))
+      cdist <- as.numeric(dist(cdata[ind, ]))
+      meddist[i] <- median(cdist)
 
       # Clean final donor data, add the observed response variable values, and write to disk
-      # TO DO: Make data.table operation for efficiency?
-      cdata <- cdata %>%
-        mutate_all(cleanNumeric, tol = 0.001) %>%
-        cbind(data[pi, v, drop = FALSE])
+      for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cleanNumeric(cdata[[j]], tol = 0.001))
+      for (j in v) set(cdata, i = NULL, j = j, value = dmat[pi, j])
+      #cdata <- cbind(cdata, as.matrix(dmat[pi, v]))  # Drops column names
       fst::write_fst(x = cdata, path = file.path(path, "donor.fst"), compress = 100)
+      rm(cdata)
 
     }
 
@@ -545,12 +548,13 @@ train <- function(data,
     ylevels = ylevels,
     yorder = yord,
     ytype = ytype,
-    xlist.lgb = xlist.lgb,
+    lgbpred = lgbpred,
     ycenter = ycenter,
     yscale = yscale,
     colweight = colweight,
     meddist = meddist,
     ptiles = ptiles,
+    version = list(fusionModel = packageVersion("fusionModel"), R = getRversion()),
     call = match.call()
   )
   saveRDS(metadata, file = file.path(td, "metadata.rds"))

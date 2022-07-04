@@ -11,7 +11,7 @@
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
-#' @param seed Fix random seed if needed
+#' @param seed Set random seed if needed.
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}.
 #' @details The \code{max_dist} value is a relative scaling factor. The search radius passed to \code{\link[RANN]{nn2}} is \code{max_dist * medDist}, where \code{medDist} is the median pairwise distance calculated among all of the donor observations. This approach allows \code{max_dist} to adjust the search radius in a consistent way across all fusion variables/blocks.
@@ -64,8 +64,7 @@ fuse <- function(data,
                  k = 5,
                  max_dist = 0,
                  idw = FALSE,
-                 seed = NULL,
-                 parallel = FALSE) {
+                 seed = NULL) {
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -127,11 +126,12 @@ fuse <- function(data,
 
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
   dmat <- tomat(data)
+  rm(data)
 
   #-----
 
-  # Run this only if not running in parallel, otherwise it messes up the progress bar
-  if (!parallel) cat("Fusing donor variables to recipient...\n")
+  # Run this only if not running in parallel, otherwise the messsage messes up the progress bar
+  #if (!parallel) cat("Fusing donor variables to recipient...\n")
 
   for (i in 1:length(pfixes)) {
 
@@ -139,14 +139,14 @@ fuse <- function(data,
     block <- length(v) > 1
 
     # LightGBM predictor variables
-    xv <- meta$xlist.lgb[[i]]
+    xv <- meta$lgbpred[[i]]
 
     # Unzip the lightGBM model(s) to temp directory
     mods <- grep(pattern = glob2rx(paste0(pfixes[i], "*.txt")), x = fsn.files$filename, value = TRUE)
     zip::unzip(zipfile = file, files = mods, exdir = td)
 
     # Row indices where to generate predictions
-    # Modified, if necessary, is next code chunk when single continuous variables has a zero model
+    # Modified, if necessary, in next code chunk when single continuous variables has a zero model
     zind <- rep(FALSE, nrow(dmat))
 
     #---
@@ -296,22 +296,21 @@ fuse <- function(data,
   #---
 
   # Convert 'dmat' to desired output
-  sim <- dmat[, unlist(yord)]
-  rm(dmat)
-  sim <- data.table(as.matrix(sim))
+  dmat <- dmat[, unlist(yord)]
+  dmat <- data.table(as.matrix(dmat))
 
   # Ensure simulated variables are correct data type with appropriate labels/levels
-  for (v in names(sim)) {
+  for (v in names(dmat)) {
     yclass <- meta$yclass[[v]]
     if ("factor" %in% yclass) {
       lev <- meta$ylevels[[v]]
-      set(sim, i = NULL, j = v, value = factor(lev[sim[[v]] + 1], levels = lev, ordered = "ordered" %in% yclass))
+      set(dmat, i = NULL, j = v, value = factor(lev[dmat[[v]] + 1], levels = lev, ordered = "ordered" %in% yclass))
     }
-    if ("logical" %in% yclass) set(sim, i = NULL, j = v, value = as.logical(sim[[v]]))
-    if ("integer" %in% yclass)  set(sim, i = NULL, j = v, value = as.integer(sim[[v]]))
+    if ("logical" %in% yclass) set(dmat, i = NULL, j = v, value = as.logical(dmat[[v]]))
+    if ("integer" %in% yclass)  set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]))
   }
 
-  return(sim)
+  return(dmat)
 
 }
 
@@ -320,7 +319,7 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds=NULL) {
+fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds = NULL) {
 
   if (is.null(seeds)) seeds<-NULL
 
@@ -337,7 +336,7 @@ fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds=NULL) {
     parallel::clusterEvalQ(cl, library(fusionModel))
     parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
     out <- pbapply::pblapply(1:M, function(i) {
-      fun(data, ..., seed=seeds[i], parallel=T)
+      fun(data, ..., seed = seeds[i], parallel=T)
     }, cl = cl) %>%
       bind_rows(.id = "M") %>%
       mutate(M = as.integer(M))
@@ -345,7 +344,7 @@ fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds=NULL) {
 
   } else {
     out <- pbapply::pblapply(1:M, function(i) {
-      fun(data, ..., seed=seeds[i], parallel=T)
+      fun(data, ..., seed = seeds[i], parallel=T)
     }, cl = cores) %>%
       bind_rows(.id = "M") %>%
       mutate(M = as.integer(M))
