@@ -8,7 +8,7 @@
 #' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
 #' @param file Character. File where fusion model will be saved. Must use \code{.fsn} suffix.
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
-#' @param nfolds Integer. Number of cross-validation folds used for LightGBM model training.
+#' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
 #' @param threads Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.
