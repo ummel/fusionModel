@@ -195,12 +195,11 @@ one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = FALSE, naCols = FALS
   if (length(cols) == 0) return(dt)
   tempDT <- dt[, cols, with = FALSE]
   tempDT[, `:=`(OHEID, .I)]
-  for (col in cols) set(tempDT, j = col, value = factor(paste(col, tempDT[[col]], sep = "_"), levels = paste(col, levels(tempDT[[col]]), sep = "_")))
+  for (col in cols) set(tempDT, j = col, value = factor(paste(col, tempDT[[col]], sep = ".."), levels = paste(col, levels(tempDT[[col]]), sep = "..")))
   melted <- data.table::melt(tempDT, id = "OHEID", value.factor = T, na.rm = TRUE)
   newCols <- data.table::dcast(melted, OHEID ~ value, drop = T, fun.aggregate = length)
   newCols <- newCols[tempDT[, list(OHEID)]]
-  newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)),
-                                            "OHEID"), 0L)]
+  newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)), "OHEID"), 0L)]
   if (!sparsifyNAs | naCols) {
     na_cols <- character(0)
     for (col in cols) if (any(is.na(tempDT[[col]])))
