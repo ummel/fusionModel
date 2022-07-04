@@ -17,23 +17,35 @@
 #' @export
 
 compare <- function(analysis1, analysis2) {
-  join.by <- names(analysis1)[1:(which(names(analysis1) == "estimate") - 1)]
-  stopifnot(all(join.by %in% names(analysis2)))
-  temp <- full_join(analysis1, analysis2, by = join.by, suffix = c(".1", ".2"))
-  stopifnot(nrow(temp) < nrow(analysis1) + nrow(analysis2))
+  a1 <- analysis1
+  a2 <- analysis2
+  join.by <- names(a1)[1:(which(names(a1) == "estimate") - 1)]
+  stopifnot(all(join.by %in% names(a2)))
+  by.vars <- join.by[-(which(join.by == "response"):length(join.by))]
+  temp <- full_join(a1, a2, by = join.by, suffix = c(".1", ".2"))
+  stopifnot(nrow(temp) < nrow(a1) + nrow(a2))
   comp <- temp %>%
-    mutate(overlap = CIoverlap(lwr_obs = lower_ci.1, upr_obs = upper_ci.1,  lwr_sim = lower_ci.2, upr_sim = upper_ci.2)) %>%
-    select(any_of(join.by), overlap, starts_with("lower_ci"), starts_with("upper_ci")) %>%
+    mutate(
+      ci_overlap = CIoverlap(lwr_obs = lower_ci.1, upr_obs = upper_ci.1,  lwr_sim = lower_ci.2, upr_sim = upper_ci.2),
+      est_ape = abs(estimate.2 - estimate.1) / abs(estimate.1),
+      est_zscore = abs(estimate.2 - estimate.1) / std_error.1,
+      est_pscore = (1 - pt(est_zscore, df = degf.1)) / 0.5  # Equals 1 when the estimates are identical
+    ) %>%
+    group_by_at(by.vars) %>%
+    mutate(subset_id = cur_group_id()) %>%
+    ungroup() %>%
+    #select(any_of(join.by), overlap, starts_with("lower_ci"), starts_with("upper_ci")) %>%
     arrange_at(join.by)
   return(comp)
 }
 
 # Confidence interval overlap
 # See Compare.CI() here: https://github.com/cran/synthpop/blob/master/R/compare.syn.r
+# CIoverlap(10, 20, 5, 25)
 CIoverlap <- function(lwr_obs, upr_obs, lwr_sim, upr_sim) {
-  overlap.lower <- pmax(lwr_obs, lwr_sim)
-  overlap.upper <- pmin(upr_obs, upr_sim)
-  0.5 * (((overlap.upper - overlap.lower) / (upr_obs - lwr_obs)) + ((overlap.upper - overlap.lower) / (upr_sim - lwr_sim)))
+  L <- pmax(lwr_obs, lwr_sim)
+  U <- pmin(upr_obs, upr_sim)
+  0.5 * (((U - L) / (upr_obs - lwr_obs)) + ((U - L) / (upr_sim - lwr_sim)))
 }
 
 # Check

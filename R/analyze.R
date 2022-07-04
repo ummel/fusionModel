@@ -181,7 +181,7 @@
 analyze <- function(formula,
                     implicates,
                     donor.N,
-                    sample_weights,
+                    sample_weights = NULL,
                     replicate_weights = NULL,
                     static = NULL,
                     by = NULL,
@@ -192,7 +192,7 @@ analyze <- function(formula,
     class(formula) == "formula"
     is.data.frame(implicates)
     donor.N > 0 & donor.N %% 1 == 0
-    is.numeric(sample_weights)
+    is.null(sample_weights) | is.numeric(sample_weights)
     is.null(replicate_weights) | (is.data.frame(replicate_weights) & ncol(replicate_weights) >= 2 & all(sapply(replicate_weights, is.numeric)))
     is.null(static) | is.data.frame(static)
     is.null(by) | is.character(by)
@@ -202,11 +202,11 @@ analyze <- function(formula,
 
   # Add 'M' columns to 'implicates' if it does not exist; assume there is only 1 implicate in this case
   # If already present, ensure the values of M are dense-ranked from 1 onward
-  if (!"M" %in% names(implicates)) {
+  if ("M" %in% names(implicates)) {
+    implicates$M <- dplyr::dense_rank(implicates$M)
+  } else {
     implicates$M <- 1L
     warning("Assuming 'implicates' contains a single implicate (M = 1)")
-  } else {
-    implicates$M <- dplyr::dense_rank(implicates$M)
   }
 
   # Check that other inputs' dimensions are consistent with 'implicates'
@@ -215,6 +215,7 @@ analyze <- function(formula,
   tb <- table(implicates$M)
   stopifnot(all(names(tb) %in% seq_len(mcnt)))
   stopifnot(all(tb == N))
+  if (is.null(sample_weights)) sample_weights = rep(1L, N)
   if (length(sample_weights) != N) ("'sample_weights' is incorrect length")
   if (!is.null(replicate_weights) & any(nrow(replicate_weights) != N)) ("'replicate_weights' has incorrect number of rows")
   if (!is.null(static) & any(nrow(static) != N)) ("'static' has incorrect number of rows")
@@ -376,7 +377,7 @@ analyze <- function(formula,
         if (!is.null(wrep)) {
 
           # Generate the design matrix only once
-          mm <- model.matrix(formula, x)
+          mm <- model.matrix(object = formula, data = x)
 
           # Get the point estimate coefficients
           est <- coef(glm.fit(x = mm, y = x[[rvar]], weights = x$.WGT))
@@ -397,7 +398,8 @@ analyze <- function(formula,
 
         } else {
 
-          fit <- summary(lm(formula, x))$coefficients
+          # NOTE: appears lm() is generally faster than glm(); may want to replace glm above with lm?
+          fit <- coef(summary(lm(formula, data = x, weights = .WGT)))
           est <- fit[, "Estimate"]
           se <- fit[, "Std. Error"]
 
@@ -445,27 +447,52 @@ analyze <- function(formula,
     summarize(
       nobs = mean(nobs),  # Mean number of un-weighted observations per implicate
       m = n(),  # Number of implicates for which there are data
-      estimate = mean(.data$est),  # Pooled complete data estimate
-      ubar = mean(.data$se ^ 2) * N / donor.N,  # Within-implicate variance of estimate; ADJUSTED for sample size
+      estimate = mean(.data$est),  # Pooled complete data estimate ('Qbar')
+
+      # !!! Empirical standard deviation/error (TESTING)
+      #std_error = ifelse(m == 1, .data$se, sd(.data$est)) * sqrt(N / donor.N),  # Empirical standard deviation/error (TESTING)
+
+      # Reiter formulae...
+      ubar = mean(.data$se ^ 2) * N / donor.N,  # Within-implicate variance of estimate ('Ubar'); adjusted for sample size
       b = ifelse(m == 1, 0, var(.data$est)),  # Between-implicate variance of estimate (zero when M = 1)
-      t = ubar + (1 / m) * b,  # Total variance, of estimate; the square root of 't' is the standard error (see below)
-      degf = ifelse(m == 1, nobs - 1, (m - 1) * (1 + (ubar / (b / m))) ^ 2),  # Degrees of freedom of t-statistic
-      degf = ifelse(type == "proportion", 0, degf),
+
+      #t = ubar + (1 / m) * b,  # Reiter's total variance of estimate; the square root of 't' is the standard error (see below)
+
+      # TEST: 't' based on Rubin's rules (https://cran.r-project.org/web/packages/mitml/vignettes/Analysis.html
+      # code (see 'pool results'): https://github.com/cran/mitml/blob/master/R/testEstimates.R
+      t = ubar + (1 + m ^ (-1)) * b,  # Total variance, of estimate; the square root of 't' is the standard error (see below)
+      r = (1 + m ^ (-1)) * b / ubar,
+      degf = (m - 1) * (1 + r ^ (-1)) ^ 2,  # Rubin's formula assuming infinite sample size (Reiter 2007 correction below for finite sample)
+
+      # Technically, the 'nobs' entry here should be nobs - k, where k is the number of terms in the analysis (effect is small)
+      lam = r / (r + 1),
+      vobs = (1 - lam) * ((nobs + 1) / (nobs + 3)) * nobs,
+      degf = (degf ^ (-1) + vobs ^ (-1)) ^ (-1),
+
+      degf = ifelse(m == 1, nobs - 1, degf),  # Account for single implicate case
+
+      #degf = ifelse(m == 1, nobs - 1, (m - 1) * (1 + (ubar / (b / m))) ^ 2),  # Degrees of freedom of t-statistic
+      #degf = ifelse(type == "proportion", 0, degf),
       .groups = "drop"
     ) %>%
     mutate(
-      std_error = sqrt(t),  # Standard error
+      std_error = sqrt(t),  # !!! Standard error (Reiter)
       lower_ci = estimate + ifelse(degf == 0, qnorm(0.025), qt(0.025, df = degf)) * std_error, # 95% confidence interval lower bound
       upper_ci = estimate + ifelse(degf == 0, qnorm(0.975), qt(0.975, df = degf)) * std_error,  # 95% confidence interval upper bound
       statistic = estimate / std_error,  # t-statistic (or z-statistic if proportion)
       pvalue = 2 * ifelse(degf == 0, pnorm(abs(statistic), lower.tail = FALSE), pt(abs(statistic), df = degf, lower.tail = FALSE)), # p-value; Pr(>|t|)
       statistic = round(statistic, 5),
       pvalue = round(pvalue, 5),
-      degf = convertInteger(round(degf, 5)),
-      nobs = convertInteger(round(nobs, 5))
+      # degf = convertInteger(round(degf, 5)),
+      # nobs = convertInteger(round(nobs, 5))
+      degf = as.integer(round(degf)),
+      nobs = as.integer(round(nobs))
     ) %>%
     select(all_of(c(by, grp)), estimate, std_error, lower_ci, upper_ci, statistic, pvalue, degf, nobs) %>%
     select(-any_of("by..placeholder"))  # Drop the by-group placeholder, if present
+    # group_by_at(by) %>%
+    # mutate(by_id = cur_group_id()) %>%  # Assign the 'by' subset grouping ID (numeric)
+    # ungroup()
 
   #---------
 
