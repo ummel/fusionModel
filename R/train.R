@@ -562,7 +562,7 @@ train <- function(data,
   # Zip up all of the models directories
   zip::zip(zipfile = file, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)  # Zips to the temporary directory
   file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = file, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
-  cat("Fusion model saved to:", file)
+  cat("Fusion model saved to:", file, "\n")
   unlink(td)
   invisible(file)
 

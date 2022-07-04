@@ -11,6 +11,7 @@
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#' @param seed Fix random seed if needed
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}.
 #' @details The \code{max_dist} value is a relative scaling factor. The search radius passed to \code{\link[RANN]{nn2}} is \code{max_dist * medDist}, where \code{medDist} is the median pairwise distance calculated among all of the donor observations. This approach allows \code{max_dist} to adjust the search radius in a consistent way across all fusion variables/blocks.
@@ -62,7 +63,9 @@ fuse <- function(data,
                  file,
                  k = 5,
                  max_dist = 0,
-                 idw = FALSE) {
+                 idw = FALSE,
+                 seed = NULL,
+                 parallel = FALSE) {
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -73,6 +76,7 @@ fuse <- function(data,
   })
 
   if (is.data.table(data)) data <- as.data.frame(data)
+  if (!is.null(seed)) set.seed(seed)
 
   # Temporary directory to unzip to
   td <- tempfile()
@@ -126,7 +130,8 @@ fuse <- function(data,
 
   #-----
 
-  cat("Fusing donor variables to recipient...\n")
+  # Run this only if not running in parallel, otherwise it messes up the progress bar
+  if (!parallel) cat("Fusing donor variables to recipient...\n")
 
   for (i in 1:length(pfixes)) {
 
@@ -292,8 +297,8 @@ fuse <- function(data,
 
   # Convert 'dmat' to desired output
   sim <- dmat[, unlist(yord)]
-  sim <- data.table(as.matrix(sim))
   rm(dmat)
+  sim <- data.table(as.matrix(sim))
 
   # Ensure simulated variables are correct data type with appropriate labels/levels
   for (v in names(sim)) {
@@ -315,14 +320,38 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(..., M, fun = fuse, cores = 1) {
+fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds=NULL) {
+
+  if (is.null(seeds)) seeds<-NULL
+
   stopifnot({
     M >= 1 & M %% 1 == 0
     cores > 0 & cores %% 1 == 0
   })
-  pbapply::pblapply(1:M, function(i) {
-    fun(...)
-  }, cl = cores) %>%
-    bind_rows(.id = "M") %>%
-    mutate(M = as.integer(M))
+
+  cat("Fusing donor variables to recipient...\n")
+
+  # Note: for windows, this requires the "parallel" package to work
+  if (.Platform$OS.type=="windows") {
+    cl <- parallel::makeCluster(cores)
+    parallel::clusterEvalQ(cl, library(fusionModel))
+    parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
+    out <- pbapply::pblapply(1:M, function(i) {
+      fun(data, ..., seed=seeds[i], parallel=T)
+    }, cl = cl) %>%
+      bind_rows(.id = "M") %>%
+      mutate(M = as.integer(M))
+    parallel::stopCluster(cl)
+
+  } else {
+    out <- pbapply::pblapply(1:M, function(i) {
+      fun(data, ..., seed=seeds[i], parallel=T)
+    }, cl = cores) %>%
+      bind_rows(.id = "M") %>%
+      mutate(M = as.integer(M))
+  }
+
+  return(out)
+
 }
+
