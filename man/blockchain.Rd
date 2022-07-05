@@ -4,7 +4,7 @@
 \alias{blockchain}
 \title{Block and chain fusion variables}
 \usage{
-blockchain(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cores = 1)
+blockchain(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, cores = 1)
 }
 \arguments{
 \item{data}{Data frame. Donor dataset. All categorical variables should be factors and ordered whenever possible.}
@@ -17,7 +17,7 @@ blockchain(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cores = 1)
 
 \item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
-\item{nfolds}{Integer. Number of cross-validation folds used to fit LASSO models.}
+\item{nfolds}{Integer > 3. Number of cross-validation folds used to fit LASSO models.}
 
 \item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
 }

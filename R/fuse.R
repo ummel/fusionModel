@@ -336,7 +336,7 @@ fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds = NULL) {
     parallel::clusterEvalQ(cl, library(fusionModel))
     parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
     out <- pbapply::pblapply(1:M, function(i) {
-      fun(data, ..., seed = seeds[i], parallel=T)
+      fun(data, ..., seed = seeds[i])
     }, cl = cl) %>%
       bind_rows(.id = "M") %>%
       mutate(M = as.integer(M))
@@ -344,7 +344,7 @@ fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds = NULL) {
 
   } else {
     out <- pbapply::pblapply(1:M, function(i) {
-      fun(data, ..., seed = seeds[i], parallel=T)
+      fun(data, ..., seed = seeds[i])
     }, cl = cores) %>%
       bind_rows(.id = "M") %>%
       mutate(M = as.integer(M))

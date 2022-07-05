@@ -8,7 +8,7 @@
 #' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
 #' @param delta Numeric. Controls how aggressively variables are grouped into blocks. \code{delta = 0} results in no new blocks. See Details.
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
-#' @param nfolds Integer. Number of cross-validation folds used to fit LASSO models.
+#' @param nfolds Integer > 3. Number of cross-validation folds used to fit LASSO models.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
 #'
 #' @details The algorithm uses cross-validated LASSO models fit via \code{\link[glmnet]{glmnet}}. It first builds a "complete" model for each \code{y} using all \code{x} and other fusion variables as predictors; the cross-validated model skill is the maximum possible. Next, models are fit using only \code{x} predictors; the model skill is divided by the maximum to create a score metric. The \code{y} with the maximum score is selected as the initial fusion variable and included as a predictor in subsequent models. The remaining \code{y} are assigned to the chain in the same, greedy fashion.
@@ -46,18 +46,20 @@
 
 #-----
 
-blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cores = 1) {
+blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, cores = 1) {
 
   stopifnot(exprs = {
     is.data.frame(data)
-    !anyNA(data)
     all(unlist(y) %in% names(data))
     all(x %in% names(data))
     delta >= 0
     is.null(weight) | weight %in% names(data)
-    nfolds > 1 & nfolds %% 1 == 0
+    nfolds > 3 & nfolds %% 1 == 0  # glmnet requires nfolds by > 3 (recommends 10)
     cores >= 1 & cores %% 1 == 0
   })
+
+  # TO DO: Make data.table operations throughout (just applies to pre-checks)
+  if (is.data.table(data)) data <- as.data.frame(data)
 
   if (is.list(y)) {
     input <- y
@@ -72,28 +74,50 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
     data[[weight]] / mean(data[[weight]])
   }
 
-  cli::cli_progress_step("Preparing data")
-  d <- data[c(x, y)]
-  d <- mutate_if(d, is.ordered, as.integer)
-  d <- mutate_if(d, is.logical, as.integer)
-  lev <- lapply(d, levels)
+  # Check for character-type variables; stop with error if any detected
+  xc <- sapply(data[c(x, y)], is.character)
+  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # Get one-hot expanded variable names
-  V <- lapply(names(lev), function(v) if (is.null(lev[[v]])) v else paste(v, lev[[v]], sep = "_"))
-  names(V) <- names(lev)
+  # Detect and impute any missing values in 'x' variables
+  na.cols <- names(which(sapply(data[x], anyNA)))
+  if (length(na.cols) > 0) {
+    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
+    for (j in na.cols) {
+      xj <- data[[j]]
+      ind <- is.na(xj)
+      data[ind, j] <-  imputationValue(xj, ind)
+    }
+  }
 
-  # Observed class proportions/probabilities for the 'y' variables (if nominal)
+  # Which 'y' variable are continuous?
+  ycont <- names(which(sapply(data[y], is.numeric)))
+
+  # Observed class proportions/probabilities for the 'y' variables (if nominal; 1 otherwise)
   yweight <- lapply(y, function(v) {
     yv <- V[[v]]
     w <- if (length(yv) == 1) {
       1
     } else {
-      xt <- xtabs(paste0("~", v), data = d)
+      xt <- xtabs(formula(paste("w~", v)), data = data)
       xt / sum(xt)
     }
   })
   names(yweight) <- y
+
+  cli::cli_progress_step("Preparing data")
+  d <- data[c(x, y)]
+  d <- mutate_if(d, is.ordered, as.integer)
+  d <- mutate_if(d, is.logical, as.integer)
+  d <- mutate_if(d, is.factor, ~ factor(.x, levels = intersect(levels(.x), unique(.x))))  # This is necessary to ensure that the levels are actually present in the data
+  lev <- lapply(d, levels)
   rm(data)
+
+  #-----
+
+  # Get one-hot expanded variable names
+  # Note that the 'sep' argument must match that used in one_hot()
+  V <- lapply(names(lev), function(v) if (is.null(lev[[v]])) v else paste(v, lev[[v]], sep = ".."))
+  names(V) <- names(lev)
 
   # One-hot encode unordered factors and convert to sparse matrix
   d <- one_hot(d)
@@ -109,9 +133,9 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
 
   # Create stratified cross-validation fold assignments
   cli::cli_progress_step("Constructing cross-validation folds")
-  cv.foldid <- parallel::mclapply(Y, function(y) {
-    stratify(d[, y], ycont = length(unique(d[, y])) > 10, tfrac = 5, ntiles = 10)
-  }, mc.cores = cores)
+  cv.foldid <- lapply(Y, function(y) {
+    stratify(d[, y], ycont = y %in% ycont, tfrac = nfolds, ntiles = 10)
+  })
 
   #-----
 
@@ -138,10 +162,13 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
       x = d[, x],
       y = d[, y],
       weights = w,
-      type.measure = "deviance",
+      type.measure = "mae",  # Use mean absolute error for robustness
       foldid = cv.foldid[[y]],
       family = "gaussian",
       alpha = 1)
+
+    # Get the coefficients...
+
 
     # DEPRECATED FOR NOW -- pain to set up
     # xkeep <- if (return_x) {
@@ -159,16 +186,23 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 10, cor
     #   NULL
     # }
 
-    weighted.r2 <- function(obs, pred, w) {
-      res <- obs - pred
-      SSe <- sum(w * res ^ 2)
-      SSt <- sum(w * (obs - weighted.mean(obs, w)) ^ 2)
-      1 - SSe / SSt
-    }
+    # Coefficients of preferred model
+    #cf <- coef(mcv$glmnet.fit, s = mcv$lambda.1se)
+    #cf <- coef(mcv$glmnet.fit, s = mcv$lambda.min)
 
-    r2 <- weighted.r2(obs = d[, y], pred = predict(object = mcv, newx = d[, x], s = "lambda.1se"), w = w)
-    return(r2)
-    #return(list(r2 = r2, xkeep = xkeep))
+    # weighted.r2 <- function(obs, pred, w) {
+    #   res <- obs - pred
+    #   SSe <- sum(w * res ^ 2)
+    #   SSt <- sum(w * (obs - weighted.mean(obs, w)) ^ 2)
+    #   1 - SSe / SSt
+    # }
+    #
+    # r2 <- weighted.r2(obs = d[, y], pred = predict(object = mcv, newx = d[, x], s = "lambda.1se"), w = w)
+    # return(r2)
+
+    # Mean cross-validated error using lambda with error with 1SE of the minimum
+    cvm <- mcv$cvm[which(mcv$lambda == mcv$lambda.1se)]
+    return(cvm)
 
   }
 
