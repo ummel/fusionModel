@@ -52,6 +52,7 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
     is.data.frame(data)
     all(unlist(y) %in% names(data))
     all(x %in% names(data))
+    length(x) > 1  # glmnet requires at least two predictor variables
     delta >= 0
     is.null(weight) | weight %in% names(data)
     nfolds > 3 & nfolds %% 1 == 0  # glmnet requires nfolds by > 3 (recommends 10)
@@ -92,18 +93,6 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
   # Which 'y' variable are continuous?
   ycont <- names(which(sapply(data[y], is.numeric)))
 
-  # Observed class proportions/probabilities for the 'y' variables (if nominal; 1 otherwise)
-  yweight <- lapply(y, function(v) {
-    yv <- V[[v]]
-    w <- if (length(yv) == 1) {
-      1
-    } else {
-      xt <- xtabs(formula(paste("w~", v)), data = data)
-      xt / sum(xt)
-    }
-  })
-  names(yweight) <- y
-
   cli::cli_progress_step("Preparing data")
   d <- data[c(x, y)]
   d <- mutate_if(d, is.ordered, as.integer)
@@ -111,6 +100,17 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
   d <- mutate_if(d, is.factor, ~ factor(.x, levels = intersect(levels(.x), unique(.x))))  # This is necessary to ensure that the levels are actually present in the data
   lev <- lapply(d, levels)
   rm(data)
+
+  # Observed class proportions/probabilities for the 'y' variables (if unordered factor; 1 otherwise)
+  yweight <- lapply(y, function(v) {
+    if (!is.numeric(d[[v]])) {
+      xt <- xtabs(formula(paste("w~", v)), data = d)
+      xt / sum(xt)
+    } else {
+      1
+    }
+  })
+  names(yweight) <- y
 
   #-----
 
@@ -269,9 +269,10 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
       })
     }, mc.cores = cores)
 
-    # How strong is m0 relative to mfull?
+    # How does mfull error compare to m0 error?
+    # Variable with high 'rel' indicates current iteration error is similar to the minimum possible (full model)
     stopifnot(all(lengths(m0) == lengths(mfull)))
-    rel <- sapply(m0, mean) / sapply(mfull, mean)
+    rel <- sapply(seq_along(m0), function(i) mean(mfull[[i]] / m0[[i]]))
 
     # Select the input for highest 'rel'
     b <- which.max(rel)  # best
