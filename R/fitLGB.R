@@ -22,9 +22,9 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, threads
 
     # If single training/test-set validation is requested...
     # In this case, we can use mclapply() to loop over hyper.grid parameter sets and lgb.train() is forced to serial
-    p <- c(as.list(x), params.obj)
-    p$num_threads <- 1
     parallel::mclapply(hyper.grid, FUN = function(x) {
+      p <- c(as.list(x), params.obj)
+      p$num_threads <- 1
       sink <- capture.output({
         mod <- lightgbm::lgb.train(
           params = p,
