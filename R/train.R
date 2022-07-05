@@ -334,7 +334,7 @@ train <- function(data,
         dfull <- lightgbm::lgb.Dataset(data = dmat[, xv],
                                        label = as.integer(Y == 0),
                                        weight = W.lgb,
-                                       categorical_feature = which(xv %in% nominal),
+                                       categorical_feature = intersect(xv, nominal),
                                        params = dparams) %>%
           lightgbm::lgb.Dataset.construct()
 
@@ -344,14 +344,14 @@ train <- function(data,
           dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
                                           label = as.integer(Y == 0)[ind],
                                           weight = W.lgb[ind],
-                                          categorical_feature = which(xv %in% nominal),
+                                          categorical_feature = intersect(xv, nominal),
                                           params = dparams) %>%
             lightgbm::lgb.Dataset.construct()
 
           dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
                                           label = as.integer(Y == 0)[-ind],
                                           weight = W.lgb[-ind],
-                                          categorical_feature = which(xv %in% nominal),
+                                          categorical_feature = intersect(xv, nominal),
                                           params = dparams,
                                           reference = dtrain) %>%
             lightgbm::lgb.Dataset.construct()
@@ -395,7 +395,7 @@ train <- function(data,
       dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv],
                                      label = Y[ti],
                                      weight = W.lgb[ti],
-                                     categorical_feature = which(xv %in% nominal),
+                                     categorical_feature = intersect(xv, nominal),
                                      params = dparams) %>%
         lightgbm::lgb.Dataset.construct()
 
@@ -405,14 +405,14 @@ train <- function(data,
         dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
                                         label = Y[ind],
                                         weight = W.lgb[ind],
-                                        categorical_feature = which(xv %in% nominal),
+                                        categorical_feature = intersect(xv, nominal),
                                         params = dparams) %>%
           lightgbm::lgb.Dataset.construct()
 
         dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
                                         label = Y[-ind],
                                         weight = W.lgb[-ind],
-                                        categorical_feature = which(xv %in% nominal),
+                                        categorical_feature = intersect(xv, nominal),
                                         params = dparams,
                                         reference = dtrain) %>%
           lightgbm::lgb.Dataset.construct()
