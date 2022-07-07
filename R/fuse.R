@@ -156,7 +156,9 @@ fuse <- function(data,
       m <- grep("z\\.txt$", mods, value = TRUE)
       if (length(m)) {
         mod <- lightgbm::lgb.load(filename = file.path(td, m))
-        p <- predict(object = mod, data = dmat[, xv], reshape = TRUE)
+        p <- predict(object = mod,
+                     data = dmat[, xv],
+                     reshape = TRUE)
         zind <- p > runif(n = nrow(dmat)) # Row indices where a zero is randomly simulated (TRUE for a zero)
       }
       mods <- setdiff(mods, m)
@@ -319,7 +321,7 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds = NULL) {
+fuseM <- function(data, ..., M, fun = fusionModel::fuse, cores = 1, seeds = NULL) {
 
   if (is.null(seeds)) seeds<-NULL
 
@@ -330,27 +332,38 @@ fuseM <- function(data, ..., M, fun = fuse, cores = 1, seeds = NULL) {
 
   cat("Fusing donor variables to recipient...\n")
 
-  # Note: for windows, this requires the "parallel" package to work
-  if (.Platform$OS.type=="windows") {
-    cl <- parallel::makeCluster(cores)
-    parallel::clusterEvalQ(cl, library(fusionModel))
-    parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
-    out <- pbapply::pblapply(1:M, function(i) {
-      fun(data, ..., seed = seeds[i])
-    }, cl = cl) %>%
-      bind_rows(.id = "M") %>%
-      mutate(M = as.integer(M))
-    parallel::stopCluster(cl)
+  if (cores > 1) {
+
+    # Note: for windows, this requires the "parallel" package to work
+    if (.Platform$OS.type=="windows") {
+      cl <- parallel::makeCluster(cores)
+      parallel::clusterEvalQ(cl, library(fusionModel))
+      parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
+      out <- pbapply::pblapply(1:M, function(i) {
+        fun(data, ..., seed = seeds[i])
+      }, cl = cl) %>%
+        bind_rows(.id = "M") %>%
+        mutate(M = as.integer(M))
+      parallel::stopCluster(cl)
+
+    } else {
+      out <- pbapply::pblapply(1:M, function(i) {
+        fun(data, ..., seed = seeds[i])
+      }, cl = cores) %>%
+        bind_rows(.id = "M") %>%
+        mutate(M = as.integer(M))
+    }
 
   } else {
-    out <- pbapply::pblapply(1:M, function(i) {
+
+    out <- lapply(1:M, function(i) {
       fun(data, ..., seed = seeds[i])
-    }, cl = cores) %>%
+    }) %>%
       bind_rows(.id = "M") %>%
       mutate(M = as.integer(M))
+
   }
 
   return(out)
 
 }
-
