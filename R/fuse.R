@@ -8,9 +8,11 @@
 #' @param k Integer. Number of nearest neighbors to identify among the donor observations.
 #' @param max_dist Numeric. Controls the maximum allowable distance when identifying up to \code{k} nearest neighbors. \code{max_dist = 0} (default) means no distance restriction is applied.
 #' @param idw Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?
+#' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#' @param ignore_nearest Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
-#' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+
 #' @param seed Set random seed if needed.
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}.
@@ -64,6 +66,8 @@ fuse <- function(data,
                  k = 5,
                  max_dist = 0,
                  idw = FALSE,
+                 cores = 1,
+                 ignore_nearest = FALSE,
                  seed = NULL) {
 
   stopifnot(exprs = {
@@ -72,6 +76,8 @@ fuse <- function(data,
     k > 0 & k %% 1 == 0
     max_dist >= 0
     is.logical(idw)
+    cores > 0 & cores %% 1 == 0
+    is.logical(ignore_nearest)
   })
 
   if (is.data.table(data)) data <- as.data.frame(data)
@@ -135,6 +141,8 @@ fuse <- function(data,
 
   for (i in 1:length(pfixes)) {
 
+    cat("Processing block", i, "of", length(pfixes), "...\n")
+
     v <- meta$yorder[[i]]
     block <- length(v) > 1
 
@@ -167,8 +175,7 @@ fuse <- function(data,
     #---
 
     # Load and make predictions for each model
-    # This should be made more efficient...
-    # NOTE: NEEDS TO HANDLE BINARY
+    cat("-- Predicting LightGBM models ...\n")
     pred <- data.table()
     for (m in mods) {
       y <- sub("_[^_]+$", "", basename(m))
@@ -229,26 +236,49 @@ fuse <- function(data,
       #----
 
       # Perform k-nearest-neighbor search
-      nn <- RANN::nn2(data = dpred,
-                      query = pred,
-                      k = k,
-                      searchtype = ifelse(max_dist == 0, "standard", "radius"),
-                      radius = meta$meddist[i] * max_dist,
-                      eps = 0.1)
+      # By default, this uses parallel processing as determined by 'cores' argument
+      # The 'query' argument to nn2() is split into 'cores' chunks and processed in parallel
+      # This could generate memory issues if 'pred' is too large
+      # Safer approach would be to detect available memory and set number of chunks dynamically
 
-      # Apply potential 'fix up' for cases where there is no nearest neighbor within the search radius
-      if (max_dist > 0) {
-        fix <- which(nn$nn.idx[, 1] == 0)
-        if (length(fix) > 0) {
-          nn.fix <- RANN::nn2(data = dpred,
-                              query = pred[fix, ],
-                              k = 1,  # Returns single nearest-neighbor
-                              searchtype = "standard",
-                              eps = 0.1)
-          nn$nn.idx[fix, 1] <- nn.fix$nn.idx
-          nn$nn.dists[fix, 1] <- nn.fix$nn.dists
-          rm(fix, nn.fix)
+      getNN <- function(x) {
+        nn <- RANN::nn2(data = dpred,
+                        query = x,
+                        k = k + ignore_nearest,
+                        searchtype = ifelse(max_dist == 0, "standard", "radius"),
+                        radius = meta$meddist[i] * max_dist,
+                        eps = 0.1)
+        # Apply potential 'fix up' for cases where there is no nearest neighbor within the search radius
+        if (max_dist > 0) {
+          fix <- which(nn$nn.idx[, 1] == 0)
+          if (length(fix) > 0) {
+            nn.fix <- RANN::nn2(data = dpred,
+                                query = x[fix, ],
+                                k = 1 + ignore_nearest,  # Returns single nearest-neighbor
+                                searchtype = "standard",
+                                eps = 0.1)
+            nn$nn.idx[fix, 1] <- nn.fix$nn.idx
+            nn$nn.dists[fix, 1] <- nn.fix$nn.dists
+            rm(fix, nn.fix)
+          }
         }
+        return(nn)
+      }
+
+      cat("-- Finding nearest neighbors ...\n")
+      pred <- split(pred, f = rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)])
+      nn <- pbapply::pblapply(pred, getNN, cl = cores)
+      rm(pred, dpred)
+
+      nn[[1]]$nn.idx <- do.call(rbind, map(nn, "nn.idx"))
+      nn[[1]]$nn.dists <- do.call(rbind, map(nn, "nn.dists"))
+      nn <- nn[[1]]
+
+      # If requested, remove the nearest match from 'nn'
+      # Useful when simulating outcomes for validation exercises
+      if (ignore_nearest) {
+        nn$nn.idx <- nn$nn.idx[, -1, drop = FALSE]
+        nn$nn.dists <- nn$nn.dists[, -1, drop = FALSE]
       }
 
       #----
@@ -269,7 +299,8 @@ fuse <- function(data,
         ptile <- runif(n = nrow(p))
         S <- rowSums(ptile > p, na.rm = TRUE) + 1L
       } else {
-        S <- sample.int(n = k, size = nrow(pred), replace = TRUE)  # Simple case; randomly select a column
+        # Simple case; randomly select a column
+        S <- sample.int(n = ncol(nn$nn.idx), size = nrow(nn$nn.idx), replace = TRUE)
       }
 
       # Extract simulated values from donor observations
@@ -289,7 +320,7 @@ fuse <- function(data,
     S <- tomat(S)
     colnames(S) <- v
     dmat <- cbind(dmat, S)
-    rm(S, pred)
+    rm(S)
 
   }
 
@@ -321,48 +352,19 @@ fuse <- function(data,
 # Fuse multiple implicates
 #' @rdname fuse
 #' @export
-fuseM <- function(data, ..., M, fun = fusionModel::fuse, cores = 1, seeds = NULL) {
-
-  if (is.null(seeds)) seeds<-NULL
+fuseM <- function(..., M, fun = fusionModel::fuse, seeds = NULL) {
 
   stopifnot({
     M >= 1 & M %% 1 == 0
-    cores > 0 & cores %% 1 == 0
   })
 
-  cat("Fusing donor variables to recipient...\n")
-
-  if (cores > 1) {
-
-    # Note: for windows, this requires the "parallel" package to work
-    if (.Platform$OS.type=="windows") {
-      cl <- parallel::makeCluster(cores)
-      parallel::clusterEvalQ(cl, library(fusionModel))
-      parallel::clusterExport(cl, rlang::expr_text(substitute(data)))
-      out <- pbapply::pblapply(1:M, function(i) {
-        fun(data, ..., seed = seeds[i])
-      }, cl = cl) %>%
-        bind_rows(.id = "M") %>%
-        mutate(M = as.integer(M))
-      parallel::stopCluster(cl)
-
-    } else {
-      out <- pbapply::pblapply(1:M, function(i) {
-        fun(data, ..., seed = seeds[i])
-      }, cl = cores) %>%
-        bind_rows(.id = "M") %>%
-        mutate(M = as.integer(M))
-    }
-
-  } else {
-
-    out <- lapply(1:M, function(i) {
-      fun(data, ..., seed = seeds[i])
-    }) %>%
-      bind_rows(.id = "M") %>%
-      mutate(M = as.integer(M))
-
-  }
+  # The lapply() wrapper is serial, but the underlying call to fuse() can be parallel via 'cores' argument
+  out <- lapply(1:M, function(i) {
+    cat("<< Generating implicate", i, "of", M, ">>\n")
+    fun(..., seed = seeds[i])
+  }) %>%
+    bind_rows(.id = "M") %>%
+    mutate(M = as.integer(M))
 
   return(out)
 

@@ -5,9 +5,18 @@
 \alias{fuseM}
 \title{Fuse variables to a recipient dataset}
 \usage{
-fuse(data, file, k = 5, max_dist = 0, idw = FALSE, seed = NULL)
+fuse(
+  data,
+  file,
+  k = 5,
+  max_dist = 0,
+  idw = FALSE,
+  cores = 1,
+  ignore_nearest = FALSE,
+  seed = NULL
+)
 
-fuseM(data, ..., M, fun = fuse, cores = 1, seeds = NULL)
+fuseM(..., M, fun = fusionModel::fuse, seeds = NULL)
 }
 \arguments{
 \item{data}{Data frame. Recipient dataset. All categorical variables should be factors and ordered whenever possible. Data types and levels are strictly validated against predictor variables defined in \code{model}.}
@@ -20,13 +29,15 @@ fuseM(data, ..., M, fun = fuse, cores = 1, seeds = NULL)
 
 \item{idw}{Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?}
 
+\item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
+
+\item{ignore_nearest}{Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.}
+
 \item{seed}{Set random seed if needed.}
 
 \item{...}{Arguments passed to \code{fuse()}.}
 
 \item{M}{Integer. Number of implicates to simulate.}
-
-\item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
 }
 \value{
 For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable. The order of the columns reflects the order in which they where fused.
