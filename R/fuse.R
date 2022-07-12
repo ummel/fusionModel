@@ -243,6 +243,8 @@ fuse <- function(data,
       # The 'query' argument to nn2() is split into 'cores' chunks and processed in parallel
       # This could generate memory issues if 'pred' is too large
       # Safer approach would be to detect available memory and set number of chunks dynamically
+      # NOTE: The 'eps' error bound in nn2() is set dynamically (speed/precision tradeoff)
+      #  This appears to be a reasonable setting based on limited testing, but not definitive
 
       cat("-- Finding nearest neighbors\n")
 
@@ -252,7 +254,7 @@ fuse <- function(data,
                         k = k + ignore_nearest,
                         searchtype = ifelse(max_dist == 0, "standard", "radius"),
                         radius = meta$meddist[i] * max_dist,
-                        eps = 0.1)
+                        eps = sqrt(meta$meddist[i]))
         # Apply potential 'fix up' for cases where there is no nearest neighbor within the search radius
         if (max_dist > 0) {
           fix <- which(nn$nn.idx[, 1] == 0)
@@ -261,7 +263,7 @@ fuse <- function(data,
                                 query = x[fix, ],
                                 k = 1 + ignore_nearest,  # Returns single nearest-neighbor
                                 searchtype = "standard",
-                                eps = 0.1)
+                                eps = sqrt(meta$meddist[i]))
             nn$nn.idx[fix, 1] <- nn.fix$nn.idx
             nn$nn.dists[fix, 1] <- nn.fix$nn.dists
             rm(fix, nn.fix)
