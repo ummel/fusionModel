@@ -7,6 +7,7 @@
 #' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. If \code{y} is a list, any pre-specified blocks are preserved in the output.
 #' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
 #' @param delta Numeric. Controls how aggressively variables are grouped into blocks. \code{delta = 0} results in no new blocks. See Details.
+#' @param maxsize Integer. Maximum number of variables allowed in a block (excluding pre-specified blocks).
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
 #' @param nfolds Integer > 3. Number of cross-validation folds used to fit LASSO models.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
@@ -15,12 +16,12 @@
 #' @details When a \code{y} is selected for inclusion in the chain, its score is compared to that of the previous iteration; i.e. prior to the inclusion of the immediately preceding fusion variable. If the skill does not improve by at least \code{delta}, then the \code{y} is grouped into a block with the immediately preceding fusion variable. The logic here is that a \code{y} should follow other fusion variables if/when they add substantial explanatory power. If not, it makes sense to group the variables into a block.
 #' @examples
 #' ?recs
-#' fusion.vars <- c("electricity", "natural_gas", "aircon")
+#' fusion.vars <- names(recs)[13:18]
 #' predictor.vars <- names(recs)[2:12]
 #' yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
 #' yorder
 #'
-#' 'y' can be a list with pre-specified blocks that are preserved in the output
+#' # 'y' can be a list with pre-specified blocks that are preserved in the output
 #' fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 #' yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
 #' yorder
@@ -29,15 +30,17 @@
 #---------------------
 
 # library(fusionModel)
-# source("R/stratify.R")
+# source("R/utils.R")
 
 # # Example data
 # data <- recs[1:26]
 # recipient <- subset(data, select = c(division, urban_rural, climate, income, age, race, hh_size, renter))
 # x <- names(recipient)
 # y <- setdiff(names(data), c(x, "weight"))
-# w <- NULL
+# weight <- NULL
+# maxsize <- 4
 # nfolds <- 10
+# delta <- 0.01
 # cores <- 2
 #
 # y <- as.list(y)
@@ -46,7 +49,14 @@
 
 #-----
 
-blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, cores = 1) {
+blockchain <- function(data,
+                       y,
+                       x,
+                       delta = 0.01,
+                       maxsize = 4,
+                       weight = NULL,
+                       nfolds = 5,
+                       cores = 1) {
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -54,6 +64,7 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
     all(x %in% names(data))
     length(x) > 1  # glmnet requires at least two predictor variables
     delta >= 0
+    maxsize >= 1 & maxsize %% 1 == 0
     is.null(weight) | weight %in% names(data)
     nfolds > 3 & nfolds %% 1 == 0  # glmnet requires nfolds by > 3 (recommends 10)
     cores >= 1 & cores %% 1 == 0
@@ -277,10 +288,16 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
     # Select the input for highest 'rel'
     b <- which.max(rel)  # best
 
+    check <-
+
+    # Check if variable should be added to block
     if (i > 1) {
-      if (pmax(0, rel[b] - rel0[b]) < delta) {
-        i <- i - 1
-        rel[-b] <- rel0[-b]
+      bsize <- length(ord[[i - 1]]) + length(input[[b]])  # Subsequent block size if best input variables are added to current block (cannot exceed 'maxsize')
+      if (bsize <= maxsize) {
+        if (pmax(0, rel[b] - rel0[b]) < delta) {
+          i <- i - 1
+          rel[-b] <- rel0[-b]
+        }
       }
     }
 
@@ -300,7 +317,7 @@ blockchain <- function(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, core
   #-----
 
   # Return preferred order and blocks
-  ord <- if (all(lengths(ord) == 1)) unlist(ord) else compact(ord)
+  ord <- if (all(lengths(ord) == 1)) unlist(ord) else purrr::compact(ord)
   return(ord)
 
 }

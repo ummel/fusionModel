@@ -4,7 +4,16 @@
 \alias{blockchain}
 \title{Block and chain fusion variables}
 \usage{
-blockchain(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, cores = 1)
+blockchain(
+  data,
+  y,
+  x,
+  delta = 0.01,
+  maxsize = 4,
+  weight = NULL,
+  nfolds = 5,
+  cores = 1
+)
 }
 \arguments{
 \item{data}{Data frame. Donor dataset. All categorical variables should be factors and ordered whenever possible.}
@@ -14,6 +23,8 @@ blockchain(data, y, x, delta = 0.01, weight = NULL, nfolds = 5, cores = 1)
 \item{x}{Character. Predictor variables in \code{data} common to donor and eventual recipient.}
 
 \item{delta}{Numeric. Controls how aggressively variables are grouped into blocks. \code{delta = 0} results in no new blocks. See Details.}
+
+\item{maxsize}{Integer. Maximum number of variables allowed in a block (excluding pre-specified blocks).}
 
 \item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
@@ -31,12 +42,12 @@ When a \code{y} is selected for inclusion in the chain, its score is compared to
 }
 \examples{
 ?recs
-fusion.vars <- c("electricity", "natural_gas", "aircon")
+fusion.vars <- names(recs)[13:18]
 predictor.vars <- names(recs)[2:12]
 yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
 yorder
 
-'y' can be a list with pre-specified blocks that are preserved in the output
+# 'y' can be a list with pre-specified blocks that are preserved in the output
 fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 yorder <- blockchain(data = recs, y = fusion.vars, x = predictor.vars)
 yorder
