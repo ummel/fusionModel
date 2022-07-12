@@ -51,7 +51,6 @@
 # Manual testing
 #
 # library(fusionModel)
-# library(lightgbm)
 # source("R/utils.R")
 # #Example inputs
 # data <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
@@ -175,7 +174,7 @@ fuse <- function(data,
     #---
 
     # Load and make predictions for each model
-    cat("-- Predicting LightGBM models ...\n")
+    cat("-- Predicting LightGBM models\n")
     pred <- data.table()
     for (m in mods) {
       y <- sub("_[^_]+$", "", basename(m))
@@ -183,7 +182,7 @@ fuse <- function(data,
       q <- substring(n, 1, 1) == "q"
       z <- substring(n, 1, 1) == "z"
       mod <- lightgbm::lgb.load(filename = file.path(td, m))
-      p <- predict(object = mod, data = dmat[!zind, xv], reshape = TRUE)
+      p <- predict(object = mod, data = dmat[!zind, xv], reshape = TRUE, params = list(num_threads = cores))
       if (!is.matrix(p)) p <- matrix(p)
       p <- as.data.table(p)
       set(pred, i = NULL, j = paste0(y, "_", n, if (q | z) NULL else 1:ncol(p)), value = p)
@@ -239,11 +238,13 @@ fuse <- function(data,
 
       #----
 
-      # Perform k-nearest-neighbor search
+      # Perform K-nearest-neighbor search
       # By default, this uses parallel processing as determined by 'cores' argument
       # The 'query' argument to nn2() is split into 'cores' chunks and processed in parallel
       # This could generate memory issues if 'pred' is too large
       # Safer approach would be to detect available memory and set number of chunks dynamically
+
+      cat("-- Finding nearest neighbors\n")
 
       getNN <- function(x) {
         nn <- RANN::nn2(data = dpred,
@@ -269,17 +270,23 @@ fuse <- function(data,
         return(nn)
       }
 
-      cat("-- Finding nearest neighbors ...\n")
+      # Attempt PCA to reduce dimensionality prior to nn2?
+      # https://github.com/ummel/fusionModel/issues/29
+      # pca.fit <- prcomp(x = dpred, retx = TRUE, center = FALSE, scale. = FALSE, rank. = 8)
+      # dpred2 <- pca.fit$x
+      # pred2 <- predict(pca.fit, newdata = pred)
+
+      # Split 'pred' into chunks and process in parallel
       pred <- split(pred, f = rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)])
-      nn <- pbapply::pblapply(pred, getNN, cl = cores)
+      nn <- parallel::mclapply(pred, getNN, mc.cores = cores)
       rm(pred, dpred)
 
+      # Compile the chunked nearest-neighbor results
       nn[[1]]$nn.idx <- do.call(rbind, map(nn, "nn.idx"))
       nn[[1]]$nn.dists <- do.call(rbind, map(nn, "nn.dists"))
       nn <- nn[[1]]
 
       # If requested, remove the nearest match from 'nn'
-      # Useful when simulating outcomes for validation exercises
       if (ignore_nearest) {
         nn$nn.idx <- nn$nn.idx[, -1, drop = FALSE]
         nn$nn.dists <- nn$nn.dists[, -1, drop = FALSE]
@@ -289,6 +296,7 @@ fuse <- function(data,
 
       # Randomly select a similar observation from the donor
       # Optionally using inverse-distance probabilities for selection
+      cat("-- Simulating fused values\n")
       if (max_dist > 0 | idw) {
         p <- nn$nn.dists
         p[nn$nn.idx == 0] <- NA
