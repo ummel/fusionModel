@@ -233,6 +233,10 @@ fuse <- function(data,
       # Apply the column weights to 'pred'
       for (j in names(pred)) set(pred, i = NULL, j = j, value = pred[[j]] * meta$colweight[[i]][[j]])
 
+      # Ensure none of the normalized conditional values fall outside the range observed in 'dpred'
+      for (j in names(pred)) set(pred, i = NULL, j = j, value = pmin(pred[[j]], max(dpred[[j]])))
+      for (j in names(pred)) set(pred, i = NULL, j = j, value = pmax(pred[[j]], min(dpred[[j]])))
+
       #----
 
       # Perform k-nearest-neighbor search
