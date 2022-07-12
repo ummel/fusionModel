@@ -181,17 +181,21 @@ normalize <- function(x, center, scale, eps = 0.001) {
 # One-hot encoding of data.table for use in fitting LASSO models
 # Based on: https://github.com/ben519/mltools/blob/master/R/one_hot.R
 # Note that some arguments have been dropped and their original default values are assumed
+# Default assumptions:
+# dropCols = TRUE -- Remove original columns
+# dropUnusedLevels = TRUE -- Remove columns of all zeros
+# naCols = FALSE
 
-one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = FALSE, naCols = FALSE) {
+one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = TRUE, ord_to_int = FALSE) {
 
   if (!is.data.table(dt)) dt <- as.data.table(dt)
 
   # Convert ordered factors and logicals to integer
-  dt <- mutate_if(dt, is.ordered, as.integer)
+  if (ord_to_int) dt <- mutate_if(dt, is.ordered, as.integer)
   dt <- mutate_if(dt, is.logical, as.integer)
 
   OHEID <- NULL
-  cols <- colnames(dt)[which(sapply(dt, function(x) is.factor(x) & !is.ordered(x)))]
+  cols <- colnames(dt)[which(sapply(dt, function(x) is.factor(x)))]
   if (length(cols) == 0) return(dt)
   tempDT <- dt[, cols, with = FALSE]
   tempDT[, `:=`(OHEID, .I)]
@@ -200,14 +204,10 @@ one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = FALSE, naCols = FALS
   newCols <- data.table::dcast(melted, OHEID ~ value, drop = T, fun.aggregate = length)
   newCols <- newCols[tempDT[, list(OHEID)]]
   newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)), "OHEID"), 0L)]
-  if (!sparsifyNAs | naCols) {
+  if (!sparsifyNAs) {
     na_cols <- character(0)
-    for (col in cols) if (any(is.na(tempDT[[col]])))
-      na_cols <- c(na_cols, col)
-    if (!sparsifyNAs)
-      for (col in na_cols) newCols[is.na(tempDT[[col]]), `:=`(intersect(levels(tempDT[[col]]), colnames(newCols)), NA_integer_)]
-    if (naCols)
-      for (col in na_cols) newCols[, `:=`(eval(paste0(col, "_NA")), is.na(tempDT[[col]]) * 1L)]
+    for (col in cols) if (any(is.na(tempDT[[col]]))) na_cols <- c(na_cols, col)
+    if (!sparsifyNAs) for (col in na_cols) newCols[is.na(tempDT[[col]]), `:=`(intersect(levels(tempDT[[col]]), colnames(newCols)), NA_integer_)]
   }
   result <- cbind(dt, newCols[, !"OHEID"])
   possible_colnames <- character(0)
