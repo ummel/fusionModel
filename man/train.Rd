@@ -13,7 +13,7 @@ train(
   nfolds = 5,
   ptiles = c(0.25, 0.75),
   hyper = NULL,
-  threads = 1
+  cores = 1
 )
 }
 \arguments{
@@ -33,7 +33,7 @@ train(
 
 \item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
 
-\item{threads}{Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.}
+\item{cores}{Integer. Number of cores used for LightGBM parallel operations. \code{cores = 0} will use all threads detected by OpenMP.}
 }
 \value{
 A fusion model object (.fsn) is saved to \code{file}.

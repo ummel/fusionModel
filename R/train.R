@@ -11,7 +11,7 @@
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param threads Integer. Number of threads used for LightGBM parallel operations. \code{threads = 0} will use all threads detected by OpenMP. NOTE: This may change in future.
+#' @param cores Integer. Number of cores used for LightGBM parallel operations. \code{cores = 0} will use all threads detected by OpenMP.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
@@ -76,7 +76,7 @@
 # nfolds <- 5L
 # ptiles <- c(0.25, 0.75)
 # file = "fusion_model_test.fsn"
-# threads = 1
+# cores = 1
 # hyper <- list()
 #
 # # Create clustering of 'y' variables
@@ -100,7 +100,7 @@ train <- function(data,
                   nfolds = 5,
                   ptiles = c(0.25, 0.75),
                   hyper = NULL,
-                  threads = 1) {
+                  cores = 1) {
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -112,7 +112,7 @@ train <- function(data,
     nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
-    threads > 0 & threads %% 1 == 0
+    cores > 0 & cores %% 1 == 0
   })
 
   if (is.null(hyper)) hyper <- list()
@@ -233,7 +233,7 @@ train <- function(data,
     max_depth = -1,
     max_bin = 255,
     min_data_in_bin = 3,
-    num_threads = threads  # 0 means default number of threads in OpenMP
+    num_threads = cores  # 0 means default number of threads in OpenMP
   )
 
   # Use default hyperparameters, if not specified by user
@@ -369,7 +369,7 @@ train <- function(data,
                        hyper.grid = hyper.grid,
                        params.obj = params.obj,
                        cv.folds = cv.folds,
-                       threads = threads)
+                       cores = cores)
 
         # Save LightGBM mean model (m.txt) to disk
         lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
@@ -439,7 +439,7 @@ train <- function(data,
                      hyper.grid = hyper.grid,
                      params.obj = params.obj,
                      cv.folds = cv.folds,
-                     threads = threads)
+                     cores = cores)
 
       # Save LightGBM mean model (m.txt) to disk
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
@@ -469,7 +469,7 @@ train <- function(data,
                                hyper.grid = hyper.grid,
                                params.obj = list(objective = "quantile", metric = "quantile", alpha = ptiles[k]),
                                cv.folds = cv.folds,
-                               threads = threads)
+                               cores = cores)
         }
 
         # Predict conditional quantiles for full dataset
