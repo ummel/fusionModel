@@ -11,7 +11,8 @@ blockchain(
   delta = 0.01,
   maxsize = 4,
   weight = NULL,
-  nfolds = 5,
+  nfolds = 10,
+  criterion = c("1se", "min"),
   cores = 1
 )
 }
@@ -29,6 +30,8 @@ blockchain(
 \item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
 \item{nfolds}{Integer > 3. Number of cross-validation folds used to fit LASSO models.}
+
+\item{criterion}{Character. Either \code{"min"} or \code{"1se"}. Determines what level of cross-validated model complexity is returned by \code{\link[glmnet]{cv.glmnet}}. All else equal, \code{criterion = "1se"} will lead to more aggressive blocking.}
 
 \item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
 }

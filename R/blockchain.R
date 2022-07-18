@@ -10,6 +10,7 @@
 #' @param maxsize Integer. Maximum number of variables allowed in a block (excluding pre-specified blocks).
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
 #' @param nfolds Integer > 3. Number of cross-validation folds used to fit LASSO models.
+#' @param criterion Character. Either \code{"min"} or \code{"1se"}. Determines what level of cross-validated model complexity is returned by \code{\link[glmnet]{cv.glmnet}}. All else equal, \code{criterion = "1se"} will lead to more aggressive blocking.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
 #'
 #' @details The algorithm uses cross-validated LASSO models fit via \code{\link[glmnet]{glmnet}}. It first builds a "complete" model for each \code{y} using all \code{x} and other fusion variables as predictors; the cross-validated model skill is the maximum possible. Next, models are fit using only \code{x} predictors; the model skill is divided by the maximum to create a score metric. The \code{y} with the maximum score is selected as the initial fusion variable and included as a predictor in subsequent models. The remaining \code{y} are assigned to the chain in the same, greedy fashion.
@@ -31,7 +32,7 @@
 
 # library(fusionModel)
 # source("R/utils.R")
-
+#
 # # Example data
 # data <- recs[1:26]
 # recipient <- subset(data, select = c(division, urban_rural, climate, income, age, race, hh_size, renter))
@@ -41,6 +42,7 @@
 # maxsize <- 4
 # nfolds <- 10
 # delta <- 0.01
+# criterion <- "min"
 # cores <- 2
 #
 # y <- as.list(y)
@@ -55,7 +57,8 @@ blockchain <- function(data,
                        delta = 0.01,
                        maxsize = 4,
                        weight = NULL,
-                       nfolds = 5,
+                       nfolds = 10,
+                       criterion = c("1se", "min"),
                        cores = 1) {
 
   stopifnot(exprs = {
@@ -67,11 +70,13 @@ blockchain <- function(data,
     maxsize >= 1 & maxsize %% 1 == 0
     is.null(weight) | weight %in% names(data)
     nfolds > 3 & nfolds %% 1 == 0  # glmnet requires nfolds by > 3 (recommends 10)
+    is.character(criterion) & all(criterion %in% c("min", "1se"))
     cores >= 1 & cores %% 1 == 0
   })
 
   # TO DO: Make data.table operations throughout (just applies to pre-checks)
   if (is.data.table(data)) data <- as.data.frame(data)
+  if (length(criterion) > 1) criterion <- criterion[1]
 
   if (is.list(y)) {
     input <- y
@@ -80,7 +85,7 @@ blockchain <- function(data,
     input <- as.list(y)
   }
 
-  w <- if (is.null(weight)) {
+  W <- if (is.null(weight)) {
     rep(1L, nrow(data))
   } else {
     data[[weight]] / mean(data[[weight]])
@@ -115,7 +120,7 @@ blockchain <- function(data,
   # Observed class proportions/probabilities for the 'y' variables (if unordered factor; 1 otherwise)
   yweight <- lapply(y, function(v) {
     if (!is.numeric(d[[v]])) {
-      xt <- xtabs(formula(paste("w~", v)), data = d)
+      xt <- xtabs(formula(paste("W~", v)), data = d)
       xt / sum(xt)
     } else {
       1
@@ -172,7 +177,7 @@ blockchain <- function(data,
     mcv <- glmnet::cv.glmnet(
       x = d[, x],
       y = d[, y],
-      weights = w,
+      weights = W,
       type.measure = "mae",  # Use mean absolute error for robustness
       foldid = cv.foldid[[y]],
       family = "gaussian",
@@ -212,7 +217,7 @@ blockchain <- function(data,
     # return(r2)
 
     # Mean cross-validated error using lambda with error with 1SE of the minimum
-    cvm <- mcv$cvm[which(mcv$lambda == mcv$lambda.1se)]
+    cvm <- mcv$cvm[which(mcv$lambda == mcv[[paste0("lambda.", criterion)]])]
     return(cvm)
 
   }
@@ -290,16 +295,16 @@ blockchain <- function(data,
 
     check <-
 
-    # Check if variable should be added to block
-    if (i > 1) {
-      bsize <- length(ord[[i - 1]]) + length(input[[b]])  # Subsequent block size if best input variables are added to current block (cannot exceed 'maxsize')
-      if (bsize <= maxsize) {
-        if (pmax(0, rel[b] - rel0[b]) < delta) {
-          i <- i - 1
-          rel[-b] <- rel0[-b]
+      # Check if variable should be added to block
+      if (i > 1) {
+        bsize <- length(ord[[i - 1]]) + length(input[[b]])  # Subsequent block size if best input variables are added to current block (cannot exceed 'maxsize')
+        if (bsize <= maxsize) {
+          if (pmax(0, rel[b] - rel0[b]) < delta) {
+            i <- i - 1
+            rel[-b] <- rel0[-b]
+          }
         }
       }
-    }
 
     ratio[[i]] <- c(ratio[[i]], rel[b])  # Could print or return this result?
     ord[[i]] <- c(ord[[i]], input[[b]])

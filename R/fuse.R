@@ -8,7 +8,7 @@
 #' @param k Integer. Number of nearest neighbors to identify among the donor observations.
 #' @param max_dist Numeric. Controls the maximum allowable distance when identifying up to \code{k} nearest neighbors. \code{max_dist = 0} (default) means no distance restriction is applied.
 #' @param idw Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?
-#' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#' @param cores Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).
 #' @param ignore_nearest Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
@@ -135,14 +135,12 @@ fuse <- function(data,
 
   #-----
 
-  # Run this only if not running in parallel, otherwise the messsage messes up the progress bar
-  #if (!parallel) cat("Fusing donor variables to recipient...\n")
-
   for (i in 1:length(pfixes)) {
 
-    cat("Processing block", i, "of", length(pfixes), "...\n")
-
     v <- meta$yorder[[i]]
+
+    cat("Fusion ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
+
     block <- length(v) > 1
 
     # LightGBM predictor variables
@@ -208,6 +206,7 @@ fuse <- function(data,
 
     # Simulate values for case of single categorical variable
     if (!block & meta$ytype[v[[1]]] != "continuous") {
+      cat("-- Simulating fused values\n")
       ptile <- runif(n = nrow(pred))
       S <- if (ncol(pred) > 1) {
         for (j in 2:ncol(pred)) set(pred, i = NULL, j = j, value = pred[[j - 1]] + pred[[j]])

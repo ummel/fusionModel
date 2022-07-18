@@ -29,7 +29,7 @@ fuseM(..., M, fun = fusionModel::fuse, seeds = NULL)
 
 \item{idw}{Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?}
 
-\item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
+\item{cores}{Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).}
 
 \item{ignore_nearest}{Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.}
 
