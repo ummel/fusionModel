@@ -6,10 +6,9 @@ Kevin Ummel (<ummel@berkeley.edu>)
 -   [Motivation](#motivation)
 -   [Methodology](#methodology)
 -   [Installation](#installation)
--   [Quick start example](#quick-start-example)
--   [Advanced example](#advanced-example)
--   [Analysis](#analysis)
--   [Validation](#validation)
+-   [Simple fusion](#simple-fusion)
+-   [Advanced fusion](#advanced-fusion)
+-   [Analyzing fused data](#analyzing-fused-data)
 
 # Overview
 
@@ -149,11 +148,11 @@ al. (2021)](https://content.iospress.com/articles/statistical-journal-of-the-ia
 for a review. Mixed methods, including that employed by fusionModel,
 generally have the following structure:
 
-1.  A statistical model is fit to donor data to predict fusion variable
+1.  A statistical model is fit to donor data to predict fusion variables
     ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
     conditional on shared variables
     ![X](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;X "X").
-2.  A prediction of
+2.  A prediction (possibly stochastic) of
     ![Y\|X](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%7CX "Y|X")
     is made for each record in the donor
     (![\\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}"))
@@ -167,9 +166,8 @@ generally have the following structure:
     ![\\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}").
 
 fusionModel’s approach can be viewed as a logical extension of existing
-mixed statistical matching techniques that utilize either stochastic or
-predictive mean matching in the modeling step. It builds upon them in
-the following ways:
+mixed statistical matching techniques that utilize conditional mean
+models in Step 1. It builds upon them in the following ways:
 
 -   Microsoft’s [LightGBM](https://lightgbm.readthedocs.io/en/latest/)
     gradient boosting framework is used for Step 1. This allows the
@@ -206,17 +204,20 @@ of record matching. Together, they obviate the need for parametric
 assumptions, while automating selection of variables and detection of
 non-linear and interaction effects.
 
-The training of LightGBM models in Step 1 uses k-fold cross-validation
+The training of LightGBM models in Step 1 uses *k*-fold cross-validation
 to help select a suitable set of hyperparameters to “tune” the model for
 out-of-sample prediction (i.e. reduce overfitting). Since LightGBM uses
-OpenMP multithreading “under the hood”, this key piece of the processing
-chain can easily make use of multiple computing cores. Similarly, data
-manipulation tasks (via data.table) and input-output operations (via
-fst) are also OpenMP-enabled for speed.
+[OpenMP](https://en.wikipedia.org/wiki/OpenMP) multithreading “under the
+hood”, this key piece of the processing chain easily makes use of
+multiple computing cores. Similarly, data manipulation tasks (via
+[data.table](https://github.com/Rdatatable/data.table)) and input-output
+operations (via [fst](https://github.com/fstpackage/fst)) are also
+OpenMP-enabled for speed.
 
-fusionModel uses the ANN library (implemented via RANN) for an
+fusionModel uses the [ANN](https://www.cs.umd.edu/~mount/ANN/) library
+(implemented via [RANN](https://github.com/jefferislab/RANN)) for an
 approximate nearest neighbor hot deck in Step 3. This includes the
-ability to sample donor records from a fixed k nearest matches or,
+ability to sample donor records from a fixed *k* nearest matches or,
 alternatively, to sample all records within a specified distance.
 Euclidean distance is calculated using all of the variables from Step 2
 describing the conditional distributions, after applying a scaling
@@ -227,13 +228,14 @@ a pseudo-optimal sequencing (or “chaining”) of fusion variables. Since
 fusion variables early in the sequence become available as predictors
 for those later on, the sequence clearly matters to the quality of the
 output. But there is no consensus in the literature on how to go about
-it. The nascent chain() function uses fast-fitting, linear LASSO models
-to first fit a model for each Y where all other Y’s are available as
+it. The blockchain() function uses linear LASSO models (via
+[glmnet](https://cran.r-project.org/web/packages/glmnet/index.html)) to
+first fit a model for each Y where X and all other Y’s are available as
 predictors. It then fits a model for each Y using only X predictors. The
 cross-validated skill of the latter is compared to the former, and the
 variable with the highest ratio is selected as the initial fusion
-variable. This process proceeds greedily until the full sequence is
-constructed.
+variable. This process proceeds greedily until all fusion variables are
+assigned a place in the “chain”.
 
 # Installation
 
@@ -242,18 +244,19 @@ devtools::install_github("ummel/fusionModel")
 library(fusionModel)
 ```
 
-# Quick start example
+# Simple fusion
 
-The package includes example microdata from the 2015 Residential Energy
-Consumption Survey (see `?recs` for details). For real-world use cases,
-the donor and recipient data are typically independent and vary in
-sample size. For illustrative purposes, we will randomly split the
-`recs` microdata into separate “donor” and “recipient” datasets with an
-equal number of observations.
+The package includes example microdata from the [2015 Residential Energy
+Consumption
+Survey](https://www.eia.gov/consumption/residential/data/2015/) (see
+`?recs` for details). For real-world use cases, the donor and recipient
+data are typically independent and vary in sample size. For illustrative
+purposes, we will randomly split the `recs` microdata into separate
+“donor” and “recipient” datasets with an equal number of observations.
 
 ``` r
-# Random rows to use for donor dataset
-d <- sample.int(nrow(recs), nrow(recs) / 2)
+# Rows to use for donor dataset
+d <- seq(1, nrow(recs), by = 2)
 
 # Create donor and recipient datasets
 donor <- select(recs[d, ], 2:13, square_feet, electricity, natural_gas, insulation, aircon)
@@ -357,12 +360,12 @@ Notice that the status messages for the final two fusion variables –
 “insulation” and “aircon” – do not include the nearest neighbors step.
 This is because they are categorical variables being fused on their own.
 In this case, fusionModel uses the LightGBM model’s predicted class
-probabilities to simulate the fused value, rather than kNN (as is done
-for the continuous variables).
+probabilities to simulate the fused value, rather than *k*-nearest
+neighbors (as is done for the continuous variables).
 
 Let’s look at the the recipient dataset’s fused/simulated variables.
 Note that your results will look different, because each call to
-`fuse()` generates a new, probabilistic set of outcomes.
+`fuse()` generates a unique, probabilistic set of outcomes.
 
 ``` r
 head(sim)
@@ -476,7 +479,7 @@ head(sim10)
     5:          Central air conditioning system
     6:          Central air conditioning system
 
-# Advanced example
+# Advanced fusion
 
 The fusionModel package allow for variables to be fused individually
 and/or in blocks. When variables are fused in a block, the fused values
@@ -509,24 +512,6 @@ fchain <- blockchain(data = donor,
                      delta = 0.01,
                      criterion = "min")
 ```
-
-    ℹ Preparing data
-
-    ✔ Preparing data [270ms]
-
-    ℹ Constructing cross-validation folds
-
-    ✔ Constructing cross-validation folds [26ms]
-
-    ℹ Fitting complete models
-
-    ✔ Fitting complete models [1.7s]
-
-    Determining order and blocks ■■■■■■■■■■■■■■■■■■■               60% | ETA:  2s
-
-    Determining order and blocks ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% | ETA:  0s
-
-    ✔ Determining order and blocks
 
 ``` r
 fchain
@@ -607,6 +592,95 @@ head(sim10)
     5:         880         378
     6:        4761        1210
 
-# Analysis
+# Analyzing fused data
 
-# Validation
+The `analyze()` function provides a convenient way to calculate point
+estimates and associated standard errors and confidence intervals when
+using multiple implicates. It can return means, proportions, and linear
+regression coefficients (see `?analyze` for details). The standard
+errors are “pooled” ([Rubin
+1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696))
+and account for variation both within and across implicates. In general,
+more implicates give more reliable point estimates and standard errors.
+
+For example, to calculate the mean value of the “electricity” variable
+for the recipient dataset using the multiple implicates in `sim10`, we
+can do the following.
+
+``` r
+analyze(electricity ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor))
+```
+
+    # A tibble: 1 × 10
+      response    metric estimate std_error lower_ci upper_ci statistic pvalue  degf
+      <chr>       <chr>     <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
+    1 electricity mean     11096.      147.   10806.   11387.      75.6      0   137
+    # … with 1 more variable: nobs <int>
+
+When the response variable is categorical, `analyze()` automatically
+returns the proportions associated with each factor level.
+
+``` r
+analyze(aircon ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor))
+```
+
+    # A tibble: 4 × 10
+      response level     estimate std_error lower_ci upper_ci statistic pvalue  degf
+      <chr>    <fct>        <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
+    1 aircon   Central …   0.652    0.0105    0.631    0.673      62.1       0   109
+    2 aircon   Individu…   0.196    0.00917   0.178    0.215      21.4       0    64
+    3 aircon   Both a c…   0.0343   0.00454   0.0249   0.0436      7.54      0    25
+    4 aircon   No air c…   0.118    0.00724   0.103    0.132      16.2       0    68
+    # … with 1 more variable: nobs <int>
+
+If we want to perform an analysis across subsets of the recipient
+population – for example, calculate the mean of “electricity” by
+household “income” – we can use the `by` and `static` arguments.
+
+``` r
+analyze(aircon ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor),
+        static = recipient,
+        by = "income")
+```
+
+    # A tibble: 32 × 11
+       income   response level estimate std_error lower_ci upper_ci statistic pvalue
+       <ord>    <chr>    <fct>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl>
+     1 Less th… aircon   Cent…   0.636    0.0247   0.587     0.685      25.8  0     
+     2 Less th… aircon   Indi…   0.200    0.0251   0.148     0.252       7.99 0     
+     3 Less th… aircon   Both…   0.0329   0.0116   0.00443   0.0614      2.84 0.0302
+     4 Less th… aircon   No a…   0.131    0.0206   0.0877    0.173       6.35 0     
+     5 $20,000… aircon   Cent…   0.641    0.0213   0.599     0.683      30.1  0     
+     6 $20,000… aircon   Indi…   0.207    0.0195   0.168     0.247      10.6  0     
+     7 $20,000… aircon   Both…   0.0326   0.00976  0.00997   0.0551      3.34 0.0106
+     8 $20,000… aircon   No a…   0.119    0.0163   0.0856    0.153       7.30 0     
+     9 $40,000… aircon   Cent…   0.65     0.0255   0.599     0.701      25.5  0     
+    10 $40,000… aircon   Indi…   0.202    0.0228   0.155     0.248       8.84 0     
+    # … with 22 more rows, and 2 more variables: degf <int>, nobs <int>
+
+Finally, any linear regression model can be specified using the formula
+interface – just as in
+[lm()](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/lm).
+
+``` r
+analyze(electricity ~ square_feet + hh_size,
+        implicates = sim10, 
+        donor.N = nrow(donor),
+        static = recipient)
+```
+
+    # A tibble: 3 × 11
+      response    metric term  estimate std_error lower_ci upper_ci statistic pvalue
+      <chr>       <chr>  <chr>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl>
+    1 electricity coef   (Int…  6519.     359.     5808.    7229.      18.2    0    
+    2 electricity coef   hh_s…   -35.7    106.     -248.     177.      -0.336  0.738
+    3 electricity coef   squa…     2.23     0.119     1.99     2.47    18.7    0    
+    # … with 2 more variables: degf <int>, nobs <int>
+
+Happy fusing!

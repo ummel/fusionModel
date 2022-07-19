@@ -7,7 +7,6 @@ output:
     toc: true
     toc_depth: 2
     html_preview: true
-#output: html_document  # Useful for testing/editing; turned off for final production
 ---
 
 ```{r setup, include=FALSE}
@@ -65,11 +64,11 @@ The fusionModel package was designed with the general needs of the fusionACS pro
 
 In an effort to meet requirements (1-6), fusionModel combines gradient boosting machine learning with approximate nearest neighbor matching. This falls under the heading  of “mixed methods” in statistical matching; see Section 3.1.3 in [Lewaa et al. (2021)](https://content.iospress.com/articles/statistical-journal-of-the-iaos/sji210835) for a review. Mixed methods, including that employed by fusionModel, generally have the following structure:
 
-1. A statistical model is fit to donor data to predict fusion variable $Y$ conditional on shared variables $X$.
-1. A prediction of $Y|X$ is made for each record in the donor ($\hat{Y}_{d}$) and recipient ($\hat{Y}_{r}$).
+1. A statistical model is fit to donor data to predict fusion variables $Y$ conditional on shared variables $X$.
+1. A prediction (possibly stochastic) of $Y|X$ is made for each record in the donor ($\hat{Y}_{d}$) and recipient ($\hat{Y}_{r}$).
 1. A “real” donor value from $Y$ is selected for each recipient record, based on the similarity of $\hat{Y}_{d}$ and $\hat{Y}_{r}$.
 
-fusionModel’s approach can be viewed as a logical extension of existing mixed statistical matching techniques that utilize either stochastic or predictive mean matching in the modeling step. It builds upon them in the following ways:
+fusionModel’s approach can be viewed as a logical extension of existing mixed statistical matching techniques that utilize conditional mean models in Step 1. It builds upon them in the following ways:
 
 * Microsoft’s [LightGBM](https://lightgbm.readthedocs.io/en/latest/) gradient boosting framework is used for Step 1. This allows the extensive and flexible modeling requirements specified in (6) to be met.
 * When $Y$ is continuous, the conditional mean is modeled as well as conditional quantiles, providing a non-parametric description of the conditional distribution. Step 3 then pairs records with similar conditional distributions.
@@ -79,11 +78,11 @@ fusionModel’s approach can be viewed as a logical extension of existing mixed 
 
 In short, the novel aspects of fusionModel are its use of state-of-the-art gradient boosting techniques within a statistical matching framework and its use of predicted quantiles in the continuous case to describe each record’s conditional distribution for the purposes of record matching. Together, they obviate the need for parametric assumptions, while automating selection of variables and detection of non-linear and interaction effects.
 
-The training of LightGBM models in Step 1 uses k-fold cross-validation to help select a suitable set of hyperparameters to “tune” the model for out-of-sample prediction (i.e. reduce overfitting). Since LightGBM uses OpenMP multithreading “under the hood”, this key piece of the processing chain can easily make use of multiple computing cores. Similarly, data manipulation tasks (via data.table) and input-output operations (via fst) are also OpenMP-enabled for speed.
+The training of LightGBM models in Step 1 uses *k*-fold cross-validation to help select a suitable set of hyperparameters to “tune” the model for out-of-sample prediction (i.e. reduce overfitting). Since LightGBM uses [OpenMP](https://en.wikipedia.org/wiki/OpenMP) multithreading “under the hood”, this key piece of the processing chain easily makes use of multiple computing cores. Similarly, data manipulation tasks (via [data.table](https://github.com/Rdatatable/data.table)) and input-output operations (via [fst](https://github.com/fstpackage/fst)) are also OpenMP-enabled for speed.
 
-fusionModel uses the ANN library (implemented via RANN) for an approximate nearest neighbor hot deck in Step 3. This includes the ability to sample donor records from a fixed k nearest matches or, alternatively, to sample all records within a specified distance. Euclidean distance is calculated using all of the variables from Step 2 describing the conditional distributions, after applying a scaling procedure to ensure all variables are of similar magnitude.
+fusionModel uses the [ANN](https://www.cs.umd.edu/~mount/ANN/) library (implemented via [RANN](https://github.com/jefferislab/RANN)) for an approximate nearest neighbor hot deck in Step 3. This includes the ability to sample donor records from a fixed *k* nearest matches or, alternatively, to sample all records within a specified distance. Euclidean distance is calculated using all of the variables from Step 2 describing the conditional distributions, after applying a scaling procedure to ensure all variables are of similar magnitude.
 
-The package includes an experimental blockchain() function to determine a pseudo-optimal sequencing (or “chaining”) of fusion variables. Since fusion variables early in the sequence become available as predictors for those later on, the sequence clearly matters to the quality of the output. But there is no consensus in the literature on how to go about it. The nascent chain() function uses fast-fitting, linear LASSO models to first fit a model for each Y where all other Y’s are available as predictors. It then fits a model for each Y using only X predictors. The cross-validated skill of the latter is compared to the former, and the variable with the highest ratio is selected as the initial fusion variable. This process proceeds greedily until the full sequence is constructed.
+The package includes an experimental blockchain() function to determine a pseudo-optimal sequencing (or “chaining”) of fusion variables. Since fusion variables early in the sequence become available as predictors for those later on, the sequence clearly matters to the quality of the output. But there is no consensus in the literature on how to go about it. The blockchain() function uses linear LASSO models (via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html)) to first fit a model for each Y where X and all other Y’s are available as predictors. It then fits a model for each Y using only X predictors. The cross-validated skill of the latter is compared to the former, and the variable with the highest ratio is selected as the initial fusion variable. This process proceeds greedily until all fusion variables are assigned a place in the "chain".
 
 # Installation
 
@@ -97,14 +96,14 @@ suppressMessages(suppressWarnings(library(fusionModel)))
 suppressMessages(suppressWarnings(library(ggplot2)))
 ```
 
-# Quick start example
+# Simple fusion
 
-The package includes example microdata from the 2015 Residential Energy Consumption Survey (see `?recs` for details). For real-world use cases, the donor and recipient data are typically independent and vary in sample size. For illustrative purposes, we will randomly split the `recs` microdata into separate "donor" and "recipient" datasets with an equal number of observations.
+The package includes example microdata from the [2015 Residential Energy Consumption Survey](https://www.eia.gov/consumption/residential/data/2015/) (see `?recs` for details). For real-world use cases, the donor and recipient data are typically independent and vary in sample size. For illustrative purposes, we will randomly split the `recs` microdata into separate "donor" and "recipient" datasets with an equal number of observations.
 
 ```{r, echo = TRUE}
 
-# Random rows to use for donor dataset
-d <- sample.int(nrow(recs), nrow(recs) / 2)
+# Rows to use for donor dataset
+d <- seq(1, nrow(recs), by = 2)
 
 # Create donor and recipient datasets
 donor <- select(recs[d, ], 2:13, square_feet, electricity, natural_gas, insulation, aircon)
@@ -146,9 +145,9 @@ sim <- fuse(data = recipient,
             k = 5)
 ```
 
-Notice that the status messages for the final two fusion variables -- "insulation" and "aircon" -- do not include the nearest neighbors step. This is because they are categorical variables being fused on their own. In this case, fusionModel uses the LightGBM model's predicted class probabilities to simulate the fused value, rather than kNN (as is done for the continuous variables).
+Notice that the status messages for the final two fusion variables -- "insulation" and "aircon" -- do not include the nearest neighbors step. This is because they are categorical variables being fused on their own. In this case, fusionModel uses the LightGBM model's predicted class probabilities to simulate the fused value, rather than *k*-nearest neighbors (as is done for the continuous variables).
 
-Let's look at the the recipient dataset's fused/simulated variables. Note that your results will look different, because each call to `fuse()` generates a new, probabilistic set of outcomes.
+Let's look at the the recipient dataset's fused/simulated variables. Note that your results will look different, because each call to `fuse()` generates a unique, probabilistic set of outcomes.
 
 ```{r, echo = TRUE}
 head(sim)
@@ -175,9 +174,9 @@ And we can look at kernel density plots of the non-zero values for the continuou
 # Compare density plots for select continuous variables
 
 # Create 'pdata' data frame for subsequent plots
-r <- mutate(cbind(recipient, sim), dataset = "fused")
-d <- mutate(donor[names(r)[-ncol(r)]], dataset = "donor")
-pdata <- bind_rows(d, r)
+rec <- mutate(cbind(recipient, sim), dataset = "fused")
+don <- mutate(donor[names(rec)[-ncol(rec)]], dataset = "donor")
+pdata <- bind_rows(don, rec)
 
 # The "natural" continuous variables (SPECIFY MANUALLY)
 ncont <- c("square_feet", "electricity", "natural_gas")
@@ -211,7 +210,7 @@ table(sim10$M)
 head(sim10)
 ```
 
-# Advanced example
+# Advanced fusion
 
 The fusionModel package allow for variables to be fused individually and/or in blocks. When variables are fused in a block, the fused values always consist of records drawn directly from the donor. This means that fused results for "blocked" variables will always consist of a "real" joint observation. If *all* of the fusion variables are in a single block, then the operation is equivalent to sampling "complete" records from the donor (in terms of the fusion variables). This is generally only advisable when the donor sample size is at least as large as the recipient.
 
@@ -219,16 +218,25 @@ There may be obvious reasons (usually having to do with the structure or definit
 
 The experimental `blockchain()` function attempts to provide a plausible fusion sequence (i.e. chain) and, optionally, a strategy for assigning variables to blocks. See `?blockchain` for options and methodological details. Let's use it to get some guidance on how/whether to sequence and block the `fusion.vars` from the previous example.
 
-```{r, echo = TRUE, results = 'hide'}
+```r
 fchain <- blockchain(data = donor,
                      y = fusion.vars,
                      x = predictor.vars,
                      delta = 0.01,
                      criterion = "min")
 ```
+```{r, echo = FALSE, results = 'hide'}
+suppressMessages(fchain <- blockchain(data = donor,
+                     y = fusion.vars,
+                     x = predictor.vars,
+                     delta = 0.01,
+                     criterion = "min"))
+```
+
 ```{r, echo = TRUE}
 fchain
 ```
+
 The resulting `fchain` list suggests that "aircon" and "insulation" should should be fused jointly in the initial block followed by the remaining fusion variables in a preferred order. You may get slightly different results, since `blockchain()` relies on random cross-validation. We can then pass the suggested blocking and chaining strategy to `train()`, whose `y` argument accepts a list for the purposes of specifying variable blocks.
 
 For this call to `train()`, we will also specify a set of hyperparameters to search over when training each LightGBM gradient boosting model (see `?train` for details). Since this requires additional computation, the `cores` argument is used to enable parallel processing.
@@ -256,7 +264,43 @@ sim10 <- fuseM(data = recipient,
 ```{r, echo = TRUE}
 head(sim10)
 ```
+# Analyzing fused data
 
-# Analysis
+The `analyze()` function provides a convenient way to calculate point estimates and associated standard errors and confidence intervals when using multiple implicates. It can return means, proportions, and linear regression coefficients (see `?analyze` for details). The standard errors are "pooled" ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)) and account for variation both within and across implicates. In general, more implicates give more reliable point estimates and standard errors.
 
-# Validation
+For example, to calculate the mean value of the "electricity" variable for the recipient dataset using the multiple implicates in `sim10`, we can do the following.
+
+```{r, echo = TRUE}
+analyze(electricity ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor))
+```
+
+When the response variable is categorical, `analyze()` automatically returns the proportions associated with each factor level.
+
+```{r, echo = TRUE}
+analyze(aircon ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor))
+```
+
+If we want to perform an analysis across subsets of the recipient population -- for example, calculate the mean of "electricity" by household "income" -- we can use the `by` and `static` arguments.
+
+```{r, echo = TRUE}
+analyze(aircon ~ 1,
+        implicates = sim10, 
+        donor.N = nrow(donor),
+        static = recipient,
+        by = "income")
+```
+
+Finally, any linear regression model can be specified using the formula interface -- just as in [lm()](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/lm).
+
+```{r, echo = TRUE}
+analyze(electricity ~ square_feet + hh_size,
+        implicates = sim10, 
+        donor.N = nrow(donor),
+        static = recipient)
+```
+
+Happy fusing!
