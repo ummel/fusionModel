@@ -22,11 +22,12 @@ Depends:
     Matrix
 Imports:
     lightgbm,
-    glmnet,
     RANN,
     fst,
     rpart,
-    cli
+    cli,
+    pbapply
 Suggests:
-    pbapply,
-    biglm
+    glmnet,
+    biglm,
+    rpart
