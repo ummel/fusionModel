@@ -1,10 +1,9 @@
 
-fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, threads = 1, hyper.grid, params.obj) {
+fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, cores = 1, hyper.grid, params.obj) {
 
   perf <- if (is.null(dvalid)) {
 
     # If full cross-validation is requested...
-    # In this case, LightGBM's own parallel processing is used via 'num_threads' parameter
     lapply(hyper.grid, FUN = function(x) {
       sink <- capture.output({
         mod <- lightgbm::lgb.cv(
@@ -35,7 +34,7 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, threads
         )
       })
       c(mod$best_score, mod$best_iter)
-    }, mc.cores = threads)
+    }, mc.cores = cores)
 
   }
 
