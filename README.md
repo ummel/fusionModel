@@ -230,7 +230,7 @@ when or why or which variables to fuse as blocks. Even in the absence of
 blocks (i.e. one-by-one fusion), the literature provides little guidance
 on how best to sequence the fusion process. `blockchain()` attempts to
 provide a data-driven answer to these question. See the [Advanced
-fusion](#advanced-fusion) section for more information.
+fusion](#advanced-fusion) section below for more information.
 
 # Installation
 
