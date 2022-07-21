@@ -1,5 +1,5 @@
 
-fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, cores = 1, hyper.grid, params.obj) {
+fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.grid, params.obj) {
 
   perf <- if (is.null(dvalid)) {
 
@@ -20,8 +20,8 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, cores =
   } else {
 
     # If single training/test-set validation is requested...
-    # In this case, we can use mclapply() to loop over hyper.grid parameter sets and lgb.train() is forced to serial
-    parallel::mclapply(hyper.grid, FUN = function(x) {
+    #parallel::mclapply(hyper.grid, FUN = function(x) {
+    lapply(hyper.grid, FUN = function(x) {
       p <- c(as.list(x), params.obj)
       p$num_threads <- 1
       sink <- capture.output({
@@ -34,7 +34,8 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, cores =
         )
       })
       c(mod$best_score, mod$best_iter)
-    }, mc.cores = cores)
+    })
+    #}, mc.cores = cores)  # If parallel; requires 'cores' argument
 
   }
 

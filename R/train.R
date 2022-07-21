@@ -112,7 +112,7 @@ train <- function(data,
     nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
-    cores > 0 & cores %% 1 == 0
+    cores >= 0 & cores %% 1 == 0
   })
 
   if (is.null(hyper)) hyper <- list()
@@ -232,8 +232,7 @@ train <- function(data,
     learning_rate = 0.1,
     max_depth = -1,
     max_bin = 255,
-    min_data_in_bin = 3,
-    num_threads = cores  # 0 means default number of threads in OpenMP
+    min_data_in_bin = 3
   )
 
   # Use default hyperparameters, if not specified by user
@@ -242,6 +241,10 @@ train <- function(data,
       hyper[[v]] <- hyper.default[[v]]
     }
   }
+
+  # Set the number of LightGBM threads
+  # 0 means default number of threads in OpenMP
+  hyper$num_threads <- cores
 
   # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (the are not eligible to be varied within the CV routine)
   # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
@@ -368,8 +371,7 @@ train <- function(data,
                        dvalid = dvalid,
                        hyper.grid = hyper.grid,
                        params.obj = params.obj,
-                       cv.folds = cv.folds,
-                       cores = cores)
+                       cv.folds = cv.folds)
 
         # Save LightGBM mean model (m.txt) to disk
         lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
@@ -438,8 +440,7 @@ train <- function(data,
                      dvalid = dvalid,
                      hyper.grid = hyper.grid,
                      params.obj = params.obj,
-                     cv.folds = cv.folds,
-                     cores = cores)
+                     cv.folds = cv.folds)
 
       # Save LightGBM mean model (m.txt) to disk
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
@@ -468,8 +469,7 @@ train <- function(data,
                                dvalid = dvalid,
                                hyper.grid = hyper.grid,
                                params.obj = list(objective = "quantile", metric = "quantile", alpha = ptiles[k]),
-                               cv.folds = cv.folds,
-                               cores = cores)
+                               cv.folds = cv.folds)
         }
 
         # Predict conditional quantiles for full dataset
