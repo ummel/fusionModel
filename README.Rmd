@@ -82,7 +82,7 @@ The training of LightGBM models in Step 1 uses *k*-fold cross-validation to help
 
 fusionModel uses the [ANN](https://www.cs.umd.edu/~mount/ANN/) library (implemented via [RANN](https://github.com/jefferislab/RANN)) for an approximate nearest neighbor hot deck in Step 3. This includes the ability to sample donor records from a fixed *k* nearest matches or, alternatively, to sample all records within a specified distance. Euclidean distance is calculated using all of the variables from Step 2 describing the conditional distributions, after applying a scaling procedure to ensure all variables are of similar magnitude.
 
-The package includes an experimental `blockchain()` function to determine a plausible fusion sequence (i.e. chain) and, optionally, a strategy for assigning variables to blocks. It is not always obvious when or why or which variables to fuse as blocks. Even in the absence of blocks (i.e. one-by-one fusion), the literature provides little guidance on how best to sequence the fusion process. `blockchain()` attempts to provide a data-driven answer to these question. See the [Advanced fusion](https://github.com/ummel/fusionModel#advanced-fusion) section for more information.
+The package includes an experimental `blockchain()` function to determine a plausible fusion sequence (i.e. chain) and, optionally, a strategy for assigning variables to blocks. It is not always obvious when or why or which variables to fuse as blocks. Even in the absence of blocks (i.e. one-by-one fusion), the literature provides little guidance on how best to sequence the fusion process. `blockchain()` attempts to provide a data-driven answer to these question. See the **Advanced fusion** section below for more information.
 
 # Installation
 
