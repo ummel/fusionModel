@@ -293,18 +293,16 @@ blockchain <- function(data,
     # Select the input for highest 'rel'
     b <- which.max(rel)  # best
 
-    check <-
-
-      # Check if variable should be added to block
-      if (i > 1) {
-        bsize <- length(ord[[i - 1]]) + length(input[[b]])  # Subsequent block size if best input variables are added to current block (cannot exceed 'maxsize')
-        if (bsize <= maxsize) {
-          if (pmax(0, rel[b] - rel0[b]) < delta) {
-            i <- i - 1
-            rel[-b] <- rel0[-b]
-          }
+    # Check if variable should be added to block
+    if (i > 1) {
+      bsize <- length(ord[[i - 1]]) + length(input[[b]])  # Subsequent block size if best input variables are added to current block (cannot exceed 'maxsize')
+      if (bsize <= maxsize) {
+        if (pmax(0, rel[b] - rel0[b]) < delta) {
+          i <- i - 1
+          rel[-b] <- rel0[-b]
         }
       }
+    }
 
     ratio[[i]] <- c(ratio[[i]], rel[b])  # Could print or return this result?
     ord[[i]] <- c(ord[[i]], input[[b]])
