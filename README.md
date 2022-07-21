@@ -223,19 +223,14 @@ Euclidean distance is calculated using all of the variables from Step 2
 describing the conditional distributions, after applying a scaling
 procedure to ensure all variables are of similar magnitude.
 
-The package includes an experimental blockchain() function to determine
-a pseudo-optimal sequencing (or “chaining”) of fusion variables. Since
-fusion variables early in the sequence become available as predictors
-for those later on, the sequence clearly matters to the quality of the
-output. But there is no consensus in the literature on how to go about
-it. The blockchain() function uses linear LASSO models (via
-[glmnet](https://cran.r-project.org/web/packages/glmnet/index.html)) to
-first fit a model for each Y where X and all other Y’s are available as
-predictors. It then fits a model for each Y using only X predictors. The
-cross-validated skill of the latter is compared to the former, and the
-variable with the highest ratio is selected as the initial fusion
-variable. This process proceeds greedily until all fusion variables are
-assigned a place in the “chain”.
+The package includes an experimental `blockchain()` function to
+determine a plausible fusion sequence (i.e. chain) and, optionally, a
+strategy for assigning variables to blocks. It is not always obvious
+when or why or which variables to fuse as blocks. Even in the absence of
+blocks (i.e. one-by-one fusion), the literature provides little guidance
+on how best to sequence the fusion process. `blockchain()` attempts to
+provide a data-driven answer to these question. See the [Advanced
+fusion](#advanced-fusion) section for more information.
 
 # Installation
 
@@ -501,8 +496,28 @@ little to say about this question.
 
 The experimental `blockchain()` function attempts to provide a plausible
 fusion sequence (i.e. chain) and, optionally, a strategy for assigning
-variables to blocks. See `?blockchain` for options and methodological
-details. Let’s use it to get some guidance on how/whether to sequence
+variables to blocks. The algorithm uses cross-validated LASSO models fit
+via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html).
+It first builds a “complete” model for each *y* (fusion) variable using
+*all* other variables as predictors; the cross-validated model skill is
+the maximum possible. Next, a “minimal” model is fit using only the *x*
+predictors; the model skill is divided by the maximum to create a
+“score” metric. The *y* with the maximum score is assigned to the first
+position in the fusion chain and included as a predictor in all
+subsequent models. The remaining *y* are assigned to the chain in the
+same, greedy fashion.
+
+When a fusion variable (*y1*) is selected for inclusion in the chain,
+its score is compared to that of the previous iteration; i.e. its score
+prior to including the preceding fusion variable (*y0*) as a predictor.
+If the score does not improve significantly, then *y1* is grouped into a
+block with *y0*. The general logic here is that chaining makes sense
+if/when it adds substantial explanatory power (i.e. when *y0* helps
+predict *y1*). If chaining does not appear to do this, then the default
+preference is to fuse the variables jointly as a block. See
+`?blockchain` for options and additional details.
+
+Let’s use `blockchain()` to get some guidance on how/whether to sequence
 and block the `fusion.vars` from the previous example.
 
 ``` r
@@ -530,12 +545,12 @@ fchain
     [1] "natural_gas"
 
 The resulting `fchain` list suggests that “aircon” and “insulation”
-should should be fused jointly in the initial block followed by the
-remaining fusion variables in a preferred order. You may get slightly
-different results, since `blockchain()` relies on random
-cross-validation. We can then pass the suggested blocking and chaining
-strategy to `train()`, whose `y` argument accepts a list for the
-purposes of specifying variable blocks.
+should be fused jointly in the initial block followed by the remaining
+fusion variables in a preferred order. You may get slightly different
+results, since `blockchain()` relies on random cross-validation. We can
+then pass the suggested blocking and chaining strategy to `train()`,
+whose `y` argument accepts a list for the purposes of specifying
+variable blocks.
 
 For this call to `train()`, we will also specify a set of
 hyperparameters to search over when training each LightGBM gradient
