@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Tools for data fusion and analysis of synthetic data in R
-Version: 2.0.1
+Version: 2.0.2
 Authors@R: 
     person(given = "Kevin",
            family = "Ummel",
@@ -24,10 +24,9 @@ Imports:
     lightgbm,
     RANN,
     fst,
-    rpart,
     cli,
-    pbapply
+    pbapply,
+    glmnet
 Suggests:
-    glmnet,
     biglm,
     rpart
