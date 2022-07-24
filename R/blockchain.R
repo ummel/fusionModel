@@ -10,11 +10,15 @@
 #' @param maxsize Integer. Maximum number of variables allowed in a block (excluding pre-specified blocks).
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
 #' @param nfolds Integer > 3. Number of cross-validation folds used to fit LASSO models.
+#' @param fraction Numeric. Fraction of observations in \code{data} to randomly sample. For larger datasets, sampling often has minimal effect on results but speeds up computation.
 #' @param criterion Character. Either \code{"min"} or \code{"1se"}. Determines what level of cross-validated model complexity is returned by \code{\link[glmnet]{cv.glmnet}}. All else equal, \code{criterion = "1se"} will lead to more aggressive blocking.
 #' @param cores Integer. Number of cores used. Only applicable on Unix systems.
 #'
 #' @details The algorithm uses cross-validated LASSO models fit via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html). It first builds a "complete" model for each *y* (fusion) variable using *all* other variables as predictors; the cross-validated model skill is the maximum possible. Next, a "minimal" model is fit using only the *x* predictors; the model skill is divided by the maximum to create a "score" metric. The *y* with the maximum score is assigned to the first position in the fusion chain and included as a predictor in all subsequent models. The remaining *y* are assigned to the chain in the same, greedy fashion.
 #' @details When a fusion variable (*y1*) is selected for inclusion in the chain, its score is compared to that of the previous iteration; i.e. its score prior to including the preceding fusion variable (*y0*) as a predictor. If the score does not improve by at least \code{delta}, then *y1* is grouped into a block with *y0*. The general logic here is that chaining makes sense if/when it adds substantial explanatory power (i.e. when *y0* helps predict *y1*). If chaining does not appear to do this, then the default preference is to fuse the variables jointly as a block.
+#'
+#' @return Character vector or list giving the preferred chaining and (possibly) blocking strategy of the \code{y} variables.
+#'
 #' @examples
 #' ?recs
 #' fusion.vars <- names(recs)[13:18]
@@ -58,6 +62,7 @@ blockchain <- function(data,
                        maxsize = 4,
                        weight = NULL,
                        nfolds = 10,
+                       fraction = 1,
                        criterion = c("1se", "min"),
                        cores = 1) {
 
@@ -70,6 +75,7 @@ blockchain <- function(data,
     maxsize >= 1 & maxsize %% 1 == 0
     is.null(weight) | weight %in% names(data)
     nfolds > 3 & nfolds %% 1 == 0  # glmnet requires nfolds by > 3 (recommends 10)
+    fraction > 0 & fraction <= 1
     is.character(criterion) & all(criterion %in% c("min", "1se"))
     cores >= 1 & cores %% 1 == 0
   })
@@ -85,35 +91,38 @@ blockchain <- function(data,
     input <- as.list(y)
   }
 
+  # Check for character-type variables; stop with error if any detected
+  # Check for no-variance (constant) variables
+  # Detect and impute any missing values in 'x' variables
+  data <- checkData(data, y, x)
+  x <- intersect(x, names(data))
+
+  # Which 'y' variables are continuous?
+  ycont <- names(which(sapply(data[y], is.numeric)))
+
+  #-----
+
+  cli::cli_progress_step("Preparing data")
+
   W <- if (is.null(weight)) {
     rep(1L, nrow(data))
   } else {
     data[[weight]] / mean(data[[weight]])
   }
 
-  # Check for character-type variables; stop with error if any detected
-  xc <- sapply(data[c(x, y)], is.character)
-  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
-
-  # Detect and impute any missing values in 'x' variables
-  na.cols <- names(which(sapply(data[x], anyNA)))
-  if (length(na.cols) > 0) {
-    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
-    for (j in na.cols) {
-      xj <- data[[j]]
-      ind <- is.na(xj)
-      data[ind, j] <-  imputationValue(xj, ind)
-    }
+  # Sample 'data', if requested
+  if (fraction < 1) {
+    samp <- sample.int(n = nrow(data), size = round(nrow(data) * fraction))
+    data <- data[samp, ]
+    W <- W[samp]
   }
 
-  # Which 'y' variable are continuous?
-  ycont <- names(which(sapply(data[y], is.numeric)))
+  d <- data[c(x, y)] %>%
+    mutate_if(is.ordered, as.integer) %>%
+    mutate_if(is.numeric, data.table::frank) %>%   # Rank numeric variables
+    mutate_if(is.logical, as.integer) %>%
+    mutate_if(is.factor, ~ factor(.x, levels = intersect(levels(.x), unique(.x))))  # This is necessary to ensure that the levels are actually present in the data
 
-  cli::cli_progress_step("Preparing data")
-  d <- data[c(x, y)]
-  d <- mutate_if(d, is.ordered, as.integer)
-  d <- mutate_if(d, is.logical, as.integer)
-  d <- mutate_if(d, is.factor, ~ factor(.x, levels = intersect(levels(.x), unique(.x))))  # This is necessary to ensure that the levels are actually present in the data
   lev <- lapply(d, levels)
   rm(data)
 

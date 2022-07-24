@@ -12,6 +12,7 @@ blockchain(
   maxsize = 4,
   weight = NULL,
   nfolds = 10,
+  fraction = 1,
   criterion = c("1se", "min"),
   cores = 1
 )
@@ -31,9 +32,14 @@ blockchain(
 
 \item{nfolds}{Integer > 3. Number of cross-validation folds used to fit LASSO models.}
 
+\item{fraction}{Numeric. Fraction of observations in \code{data} to randomly sample. For larger datasets, sampling often has minimal effect on results but speeds up computation.}
+
 \item{criterion}{Character. Either \code{"min"} or \code{"1se"}. Determines what level of cross-validated model complexity is returned by \code{\link[glmnet]{cv.glmnet}}. All else equal, \code{criterion = "1se"} will lead to more aggressive blocking.}
 
 \item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
+}
+\value{
+Character vector or list giving the preferred chaining and (possibly) blocking strategy of the \code{y} variables.
 }
 \description{
 Given a set of prospective fusion variables, \code{blockchain()} derives a pseudo-optimal "chain" (fusion sequence/order) for the variables and (optionally) groups them into "blocks" for joint fusion of multiple variables at once. The output can be passed directly to the \code{y} argument of \code{\link{train}}.
