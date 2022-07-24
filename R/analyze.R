@@ -200,14 +200,22 @@ analyze <- function(formula,
   tb <- table(implicates$M)
   stopifnot(all(names(tb) %in% seq_len(mcnt)))
   stopifnot(all(tb == N))
-  if (is.null(sample_weights)) sample_weights = rep(1L, N)
-  if (length(sample_weights) != N) ("'sample_weights' is incorrect length")
-  if (!is.null(replicate_weights) & any(nrow(replicate_weights) != N)) ("'replicate_weights' has incorrect number of rows")
-  if (!is.null(static) & any(nrow(static) != N)) ("'static' has incorrect number of rows")
+  if (is.null(sample_weights)) {
+    sample_weights = rep(1L, N)
+    cat("Assuming uniform 'sample_weights`\n")
+  }
+  if (length(sample_weights) != N) stop("'sample_weights' is incorrect length")
+  if (!is.null(replicate_weights) & any(nrow(replicate_weights) != N)) stop("'replicate_weights' has incorrect number of rows")
+  if (!is.null(static) & any(nrow(static) != N)) stop("'static' has incorrect number of rows")
 
-  # If only a single implicate is provided and no replicate weights, issue appropriate warning
-  if (mcnt == 1 & is.null(replicate_weights)) warning("Single implicate and no replicate weights provided.")
-  # if (mcnt < 5) warning("Only ", mcnt, " implicates provided. Reliability of results increases with the number of implicates.")
+  # If only a single implicate is provided, issue appropriate warning
+  if (mcnt == 1) {
+    if (is.null(replicate_weights)) {
+      cat("Single implicate without replicate weights")
+    } else {
+      warning("Single implicate with replicate weights")
+    }
+  }
 
   # Determine variables used within 'formula'
   # Will throw error if all required variables cannot be located
