@@ -42,7 +42,7 @@ signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 
 # Function to convert a numeric vector to integer, if possible
 convertInteger <- function(x) {
-  if (all(x[!is.na(x)] %% 1 == 0) & max(x, na.rm = TRUE) < 2*10^9) {
+  if (all(x[!is.na(x)] %% 1 == 0) & max(x, na.rm = TRUE) <= .Machine$integer.max) {
     return(as.integer(round(x)))
   } else {
     return(x)
@@ -112,29 +112,30 @@ inflated <- function(x, threshold = 0.9) {
   }
 }
 
-#------------------
+#-------------------
 
 # Function to integerize real (non-integer) positive weights
 # 'mincor' refers to the minimum allowable Pearson correlation between 'x' and the integerized version of 'x'
 # Function will also handle 'x' that is constant or already integer
-# integerize <- function(x, mincor = 0.999) {
-#   stopifnot(all(x > 0))
-#   if (sd(x) == 0) {
-#     return(rep(1L, length(x)))
-#   } else {
-#     p <- 0
-#     i <- 0
-#     r <- max(x) / min(x)
-#     while (p < mincor) {
-#       i <- i + 1
-#       mx <- ifelse(is.integer(x), r, max(r, 10 ^ i))
-#       z <- 1 + mx * ((x - min(x)) / r)
-#       z <- as.integer(round(z))
-#       p <- cor(x, z)
-#     }
-#     return(z)
-#   }
-# }
+
+integerize <- function(x, mincor = 0.999) {
+  stopifnot(all(x > 0))
+  if (sd(x) == 0) {
+    return(rep(1L, length(x)))
+  } else {
+    p <- 0
+    i <- 0
+    r <- max(x) / min(x)
+    while (p < mincor) {
+      i <- i + 1
+      mx <- ifelse(is.integer(x), r, max(r, 10 ^ i))
+      z <- 1 + mx * ((x - min(x)) / r)
+      z <- as.integer(round(z))
+      p <- cor(x, z)
+    }
+    return(z)
+  }
+}
 
 # Examples
 # x <- rlnorm(1e3)
@@ -186,7 +187,7 @@ normalize <- function(x, center, scale, eps = 0.001) {
 # dropUnusedLevels = TRUE -- Remove columns of all zeros
 # naCols = FALSE
 
-one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = TRUE, ord_to_int = FALSE) {
+one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = TRUE, ord_to_int = FALSE, sep = "..") {
 
   if (!is.data.table(dt)) dt <- as.data.table(dt)
 
@@ -196,35 +197,38 @@ one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = TRUE, ord_to_int = F
 
   OHEID <- NULL
   cols <- colnames(dt)[which(sapply(dt, function(x) is.factor(x)))]
-  if (length(cols) == 0) return(dt)
-  tempDT <- dt[, cols, with = FALSE]
-  tempDT[, `:=`(OHEID, .I)]
-  for (col in cols) set(tempDT, j = col, value = factor(paste(col, tempDT[[col]], sep = ".."), levels = paste(col, levels(tempDT[[col]]), sep = "..")))
-  melted <- data.table::melt(tempDT, id = "OHEID", value.factor = T, na.rm = TRUE)
-  newCols <- data.table::dcast(melted, OHEID ~ value, drop = T, fun.aggregate = length)
-  newCols <- newCols[tempDT[, list(OHEID)]]
-  newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)), "OHEID"), 0L)]
-  if (!sparsifyNAs) {
-    na_cols <- character(0)
-    for (col in cols) if (any(is.na(tempDT[[col]]))) na_cols <- c(na_cols, col)
-    if (!sparsifyNAs) for (col in na_cols) newCols[is.na(tempDT[[col]]), `:=`(intersect(levels(tempDT[[col]]), colnames(newCols)), NA_integer_)]
-  }
-  result <- cbind(dt, newCols[, !"OHEID"])
-  possible_colnames <- character(0)
-  for (col in colnames(dt)) {
-    possible_colnames <- c(possible_colnames, col)
-    if (col %in% cols) {
-      possible_colnames <- c(possible_colnames, paste0(col, "_NA"))
-      possible_colnames <- c(possible_colnames, paste(levels(tempDT[[col]])))
+
+  out <- if (length(cols) > 0) {
+    tempDT <- dt[, cols, with = FALSE]
+    tempDT[, `:=`(OHEID, .I)]
+    for (col in cols) set(tempDT, j = col, value = factor(paste(col, tempDT[[col]], sep = sep), levels = paste(col, levels(tempDT[[col]]), sep = sep)))
+    melted <- data.table::melt(tempDT, id = "OHEID", value.factor = T, na.rm = TRUE)
+    newCols <- data.table::dcast(melted, OHEID ~ value, drop = T, fun.aggregate = length)
+    newCols <- newCols[tempDT[, list(OHEID)]]
+    newCols[is.na(newCols[[2]]), `:=`(setdiff(paste(colnames(newCols)), "OHEID"), 0L)]
+    if (!sparsifyNAs) {
+      na_cols <- character(0)
+      for (col in cols) if (any(is.na(tempDT[[col]]))) na_cols <- c(na_cols, col)
+      if (!sparsifyNAs) for (col in na_cols) newCols[is.na(tempDT[[col]]), `:=`(intersect(levels(tempDT[[col]]), colnames(newCols)), NA_integer_)]
     }
+    result <- cbind(dt, newCols[, !"OHEID"])
+    possible_colnames <- character(0)
+    for (col in colnames(dt)) {
+      possible_colnames <- c(possible_colnames, col)
+      if (col %in% cols) {
+        possible_colnames <- c(possible_colnames, paste0(col, "_NA"))
+        possible_colnames <- c(possible_colnames, paste(levels(tempDT[[col]])))
+      }
+    }
+    sorted_colnames <- intersect(possible_colnames, colnames(result))
+    setcolorder(result, sorted_colnames)
+    result[, !cols, with = FALSE]
+  } else{
+    dt
   }
-  sorted_colnames <- intersect(possible_colnames, colnames(result))
-  setcolorder(result, sorted_colnames)
-  result <- result[, !cols, with = FALSE]
 
-  if (sparse_matrix) result <- as(as.matrix(result), "dgCMatrix")
-
-  return(result)
+  if (sparse_matrix) out <- as(as.matrix(out), "dgCMatrix")
+  return(out)
 }
 
 #------------------
@@ -258,4 +262,42 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
     }
   }
   return(out)
+}
+
+#------------------
+
+# Function to check a 'data' object against inputs 'y' and 'x'
+# Detects character columns, no-variance columns, and missing data columns (imputes as needed)
+# This simply wraps a code chunk that was present in train(), blockchain(), and prescreen()
+
+checkData <- function(data, y, x) {
+
+  # Check for character-type variables; stop with error if any detected
+  xc <- sapply(data[c(x, y)], is.character)
+  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
+
+  # Check for no-variance (constant) variables
+  # Stop with error if any 'y' are constant; remove constant 'x' with message
+  constant <- names(which(sapply(data[y], novary)))
+  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "))
+  constant <- names(which(sapply(data[x], novary)))
+  if (length(constant)) {
+    x <- setdiff(x, constant)
+    data <- select(data, -all_of(constant))
+    cat("Removed zero-variance 'x' variable(s):\n", paste(constant, collapse = ", "), "\n")
+  }
+
+  # Detect and impute any missing values in 'x' variables
+  na.cols <- names(which(sapply(data[x], anyNA)))
+  if (length(na.cols) > 0) {
+    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
+    for (j in na.cols) {
+      xj <- data[[j]]
+      ind <- is.na(xj)
+      data[ind, j] <-  imputationValue(xj, ind)
+    }
+  }
+
+  return(data)
+
 }
