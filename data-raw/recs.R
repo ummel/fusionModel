@@ -60,8 +60,8 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     propane_expend = dollarlp
   ) |>
   dplyr::mutate(
-    heating_share = totalbtusph / totalbtu,
-    cooling_share = (btuelahucol + btuelcol) / totalbtu,
+    heating_share = round(totalbtusph / totalbtu, 3),
+    cooling_share = round((btuelahucol + btuelcol) / totalbtu, 3),
     other_share = 1 - heating_share - cooling_share,
     urban_rural = factor(ifelse(urban_rural == "U", "Urban", "Rural")),
     renter = renter != "Owned or being bought by someone in your household",
