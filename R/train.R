@@ -143,40 +143,27 @@ train <- function(data,
     data[[weight]] / mean(data[[weight]]) # Scaled weights to avoid numerical issues
   }
 
+  # Integerized version of the observation weights
+  W.int <- integerize(W.lgb, mincor = 0.999)
+
   #-----
 
   # Check data and variable name validity
   if (anyNA(data[y])) stop("Missing (NA) values are not allowed in 'y'")
 
-  # Check for character-type variables; stop with error if any detected
-  xc <- sapply(data[c(x, y)], is.character)
-  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
-
   # Check that the 'xvars' and 'yvars' contain only syntactically valid names
   bad <- setdiff(c(x, y), make.names(c(x, y)))
   if (length(bad)) stop("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
 
-  # Check for no-variance (constant) variables
-  # Stop with error if any 'y' are constant; remove constant 'x' with message
-  constant <- names(which(sapply(data[y], novary)))
-  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "))
-  constant <- names(which(sapply(data[x], novary)))
-  if (length(constant)) {
-    x <- setdiff(x, constant)
-    data <- select(data, -all_of(constant))
-    cat("Removed zero-variance 'x' variable(s):\n", paste(constant, collapse = ", "), "\n")
-  }
+  # Check for character-type variables; stop with error if any detected
+  xc <- sapply(data[c(x, y)], is.character)
+  if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
+  # Check for character-type variables; stop with error if any detected
+  # Check for no-variance (constant) variables
   # Detect and impute any missing values in 'x' variables
-  na.cols <- names(which(sapply(data[x], anyNA)))
-  if (length(na.cols) > 0) {
-    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
-    for (j in na.cols) {
-      xj <- data[[j]]
-      ind <- is.na(xj)
-      data[ind, j] <-  imputationValue(xj, ind)
-    }
-  }
+  data <- checkData(data, y, x)
+  x <- intersect(x, names(data))
 
   #-----
 
@@ -310,18 +297,16 @@ train <- function(data,
       Y <- dmat[, y]
       type <- ytype[[y]]
 
-      zc <- NULL
-      mc <- NULL
-      qc <- NULL
-      ti <- rep(TRUE, length(Y))
-      pi <- ti
-      dtrain <- NULL
-      dvalid <- NULL
+      # Placeholders
+      zc <- mc <- qc <- dtrain <- dvalid <- NULL
+      ti <- pi <- rep(TRUE, length(Y))
 
       #-----
 
+      # Build zero model, if necessary
       if (type == "continuous" & inflated(Y)) {
 
+        # Indices to identify which observations to use for subsequent training (ti) and prediction (pi)
         ti <- Y != 0
         if (!block) pi <- ti
 
@@ -445,11 +430,16 @@ train <- function(data,
       # Save LightGBM mean model (m.txt) to disk
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
 
-      # Conditional mean/probabilities for the training observations
+      # Predict conditional mean/probabilities for the training observations
       if (block | type == "continuous") {
+
         mc <- predict(object = mmod, data = dmat[pi, xv], reshape = TRUE)
         if (!is.matrix(mc)) mc <- matrix(mc)
         colnames(mc) <- paste0(y, "_m", 1:ncol(mc))
+
+        # If 'y' is multiclass (not binary) drop the least common response value (not needed for kNN)
+        if (type == "multiclass") mc <- mc[, -which.min(Matrix::colMeans(mc))]
+
       }
 
       rm(mmod)
@@ -485,10 +475,17 @@ train <- function(data,
 
       #----
 
-      # Assemble the conditional predictions data.table
+      # Assemble the conditional predictions data.table ('cdata')
       # and normalize columns if 'y' is continuous
       if (block | type == "continuous") {
+
         d <- data.table(zc, mc, qc)
+
+        # #---TEST----
+        # # How well do different 'k' capture the implied conditional distribution?
+        # p0 <- copy(d)
+        # #---END TEST----
+
         if (type == "continuous") {
           cnorm <- c(colnames(mc), colnames(qc))
           ncenter <- sapply(d[, cnorm, with = FALSE], median)
@@ -505,7 +502,7 @@ train <- function(data,
 
         # Add column weights to be kept in metadata
         # Use square root of the raw weights
-        wtemp <- rep((1 / length(v)) / ncol(d), ncol(d))
+        wtemp <- rep((1 / length(v)) / ncol(d), ncol(d))  # Raw weights
         wtemp <- sqrt(wtemp)
         names(wtemp) <- names(d)
         colweight[[i]] <- c(colweight[[i]], wtemp)
@@ -513,26 +510,79 @@ train <- function(data,
         # Apply the column weights to 'd'
         for (j in names(d)) set(d, i = NULL, j = j, value = d[[j]] * wtemp[[j]])
 
+        # #---TEST----
+        # # How well do different 'k' capture the implied conditional distribution?
+        # dd <- unique(d)
+        # test <- RANN::nn2(dd, dd, k = 200 + 1)
+        # test <- test$nn.idx[, -1]  # Remove the exact match NN
+        #
+        # res <- 20  # Number of k-values to check
+        # kseq <- unique(ceiling(seq(from = ncol(test) / res, to = ncol(test), length.out = res)))
+        # #o <- 2  # Obs to check (manual)
+        # out <- lapply(1:500, function(o) {
+        #   check <- sapply(kseq, function(K) {
+        #     # Check first 'K' neighbors
+        #     j <- test[o, 1:K]
+        #     jv <- dmat[j, y]  # The neighbors' response value (numeric, in this case)
+        #
+        #     # Scaled
+        #     cnt <- as.numeric(p0[o, 1]) # The mean
+        #     scl <- diff(range(p0[o, -1]))  # Inter-ptile range (?)
+        #     #scl <- scl / (qnorm(max(ptiles)) - qnorm(min(ptiles)))  # NO DIFFERENT that above for opt K; Estimated sd assumed N(), using min/max quantile values
+        #     pv <- (p0[o, ] - cnt) / scl
+        #     jv <- (jv - cnt) / scl
+        #     kv <- c(weighted.mean(jv, W.lgb[j]), weightedQuantile(jv, w = W.lgb[j], p = ptiles))
+        #     score <- rowMeans(abs(kv - pv))
+        #
+        #     # Not scaled
+        #     # pv <- p0[o, ]  # NOT scaled
+        #     # kv <- c(weighted.mean(jv, W.lgb[j]), weightedQuantile(jv, w = W.lgb[j], p = ptiles))
+        #     # score <- rowMeans(abs((kv - pv) / pv))
+        #
+        #     pv; kv # Manual compare
+        #     score
+        #   })
+        #   #plot(kseq, check, type = "b")
+        #   check
+        # })
+        #
+        # # Extract the optimal 'k' for each observation
+        # out <- sapply(out, function(x) kseq[which.min(x)])
+        # #---END TEST----
+
         cdata <- cbind(cdata, d)
         rm(d)
       }
 
-    }
+    } # Done processing 'y'; loop repeats with remaining 'v' (if any)
 
-    # Once 'y' is processed, write the 'donor' data frame to disk, if necessary
+    #-----
+
+    # Once all of the 'y' are processed, write the 'donor' data frame to disk, if necessary
     if (!is.null(cdata)) {
 
       # Calculate and retain the median distance between all donor observations
       # This is used to scale the search distance used by nn2() within fuse()
       # Take a random sample to prevent excessive compute time with large datasets
-      ind <- sample.int(nrow(cdata), min(nrow(cdata), 10e3))
+      ind <- sample.int(nrow(cdata), min(nrow(cdata), 5e3))
       cdist <- as.numeric(dist(cdata[ind, ]))
       meddist[i] <- median(cdist)
 
-      # Clean final donor data, add the observed response variable values, and write to disk
-      for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cleanNumeric(cdata[[j]], tol = 0.001))
-      for (j in v) set(cdata, i = NULL, j = j, value = dmat[pi, j])
-      #cdata <- cbind(cdata, as.matrix(dmat[pi, v]))  # Drops column names
+      # Reduce precision of donor conditional values for better on-disk compression
+      for (j in names(cdata)) set(cdata, i = NULL, j = j, value = signif(round(cdata[[j]], 3), 3))
+      #for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cleanNumeric(cdata[[j]], tol = 0.001))
+
+      # Add the original/observed response values; converted to integer whenever possible
+      for (j in v) set(cdata, i = NULL, j = j, value = if ("numeric" %in% yclass[[j]]) dmat[pi, j] else as.integer(dmat[pi, j]))
+
+      # Add integerized weight for each observation
+      setkey(cdata)
+      set(cdata, i = NULL, j = "W..", value = W.int[pi])
+
+      # Collapse 'cdata' to unique observations, summing the weight ("W..") column
+      cdata <- cdata[, .(W.. = sum(W..)), by = key(cdata)]
+
+      # Write to disk (donor.fst)
       fst::write_fst(x = cdata, path = file.path(path, "donor.fst"), compress = 100)
       rm(cdata)
 
