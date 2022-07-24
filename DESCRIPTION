@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Tools for data fusion and analysis of synthetic data in R
-Version: 2.0.2
+Version: 2.0.3
 Authors@R: 
     person(given = "Kevin",
            family = "Ummel",
@@ -19,11 +19,11 @@ Depends:
     purrr,
     tibble,
     tidyr,
-    Matrix
+    Matrix,
+    fst
 Imports:
     lightgbm,
     RANN,
-    fst,
     cli,
     pbapply,
     glmnet
