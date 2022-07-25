@@ -139,7 +139,7 @@ fuse <- function(data,
 
     v <- meta$yorder[[i]]
 
-    cat("Fusion ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
+    cat("Fusion step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
 
     block <- length(v) > 1
 
