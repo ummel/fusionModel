@@ -11,7 +11,7 @@ train(
   file = "fusion_model.fsn",
   weight = NULL,
   nfolds = 5,
-  ptiles = c(0.25, 0.75),
+  ptiles = c(0.165, 0.835),
   hyper = NULL,
   cores = 1
 )
