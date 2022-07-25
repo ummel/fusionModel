@@ -98,7 +98,7 @@ train <- function(data,
                   file = "fusion_model.fsn",
                   weight = NULL,
                   nfolds = 5,
-                  ptiles = c(0.25, 0.75),
+                  ptiles = c(0.165, 0.835),
                   hyper = NULL,
                   cores = 1) {
 
@@ -270,13 +270,14 @@ train <- function(data,
   #-----
 
   # Sequentially build LightGBM prediction models
-  cat("Building LightGBM models...\n")
 
   for (i in 1:length(yord)) {
 
     v <- yord[[i]]
-
     block <- length(v) > 1
+
+    # Print message to console
+    cat("Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
 
     # 'y' variables from prior clusters to be included as predictors
     yv <- if (i == 1) NULL else unlist(yord[1:(i - 1)])
