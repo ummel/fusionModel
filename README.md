@@ -229,7 +229,7 @@ strategy for assigning variables to blocks. It is not always obvious
 when or why or which variables to fuse as blocks. Even in the absence of
 blocks (i.e. one-by-one fusion), the literature provides little guidance
 on how best to sequence the fusion process. `blockchain()` attempts to
-provide a data-driven answer to these question. See the [Advanced
+provide a data-driven answer to these questions. See the [Advanced
 fusion](#advanced-fusion) section below for more information.
 
 # Installation
@@ -657,8 +657,9 @@ analyze(aircon ~ 1,
     # … with 1 more variable: nobs <int>
 
 If we want to perform an analysis across subsets of the recipient
-population – for example, calculate the mean of “electricity” by
-household “income” – we can use the `by` and `static` arguments.
+population – for example, calculate the distribution of “aircon”
+outcomes by household “income” – we can use the `by` and `static`
+arguments.
 
 ``` r
 analyze(aircon ~ 1,
