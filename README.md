@@ -315,7 +315,11 @@ fsn.model <- train(data = donor,
     5 fusion variables
     12 initial predictor variables
     2843 observations
-    Building LightGBM models...
+    Training step 1 of 5: square_feet
+    Training step 2 of 5: electricity
+    Training step 3 of 5: natural_gas
+    Training step 4 of 5: insulation
+    Training step 5 of 5: aircon
     Fusion model saved to: /home/kevin/Documents/Projects/fusionModel/test_model.fsn 
 
 To fuse variables to `recipient`, we simply pass the recipient data and
@@ -332,22 +336,22 @@ sim <- fuse(data = recipient,
             k = 5)
 ```
 
-    Fusion 1 of 5: square_feet
+    Fusion step 1 of 5: square_feet
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion 2 of 5: electricity
+    Fusion step 2 of 5: electricity
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion 3 of 5: natural_gas
+    Fusion step 3 of 5: natural_gas
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion 4 of 5: insulation
+    Fusion step 4 of 5: insulation
     -- Predicting LightGBM models
     -- Simulating fused values
-    Fusion 5 of 5: aircon
+    Fusion step 5 of 5: aircon
     -- Predicting LightGBM models
     -- Simulating fused values
 
@@ -367,19 +371,19 @@ head(sim)
 ```
 
        square_feet electricity natural_gas           insulation
-    1:        2904       21940           0       Well insulated
-    2:        2721       14270           0       Well insulated
-    3:        4100        3560         914     Poorly insulated
-    4:        4100       14060         976       Well insulated
-    5:         853        2040         427 Adequately insulated
-    6:        3288       13700        1016       Well insulated
-                                           aircon
-    1: Both a central system and individual units
-    2:            Central air conditioning system
-    3:   Individual window/wall or portable units
-    4: Both a central system and individual units
-    5:   Individual window/wall or portable units
-    6:            Central air conditioning system
+    1:        1702        9080           0       Well insulated
+    2:        1378        6100         590       Well insulated
+    3:         755        5520           0       Well insulated
+    4:        1774       11630           0     Poorly insulated
+    5:        1224       11500         275       Well insulated
+    6:        1584        2460         700 Adequately insulated
+                                         aircon
+    1:          Central air conditioning system
+    2:          Central air conditioning system
+    3:                      No air conditioning
+    4: Individual window/wall or portable units
+    5:          Central air conditioning system
+    6: Individual window/wall or portable units
 
 We can do some quick sanity checks to compare the distribution of the
 fusion variables in `donor` with those in `sim`. This, at least,
@@ -392,10 +396,10 @@ sim <- data.frame(sim)
 cbind(donor = colMeans(donor[fusion.vars[1:3]]), sim = colMeans(sim[fusion.vars[1:3]]))
 ```
 
-                     donor        sim
-    square_feet  2088.2807  2077.5202
-    electricity 11104.1047 11153.1611
-    natural_gas   335.0414   331.7955
+                    donor        sim
+    square_feet  2070.784  2088.4147
+    electricity 10994.517 11043.8593
+    natural_gas   338.154   345.0524
 
 ``` r
 # Compare frequencies of categorical variable classes
@@ -403,20 +407,20 @@ cbind(donor = table(donor$insulation), sim = table(sim$insulation))
 ```
 
                          donor  sim
-    Not insulated           41   32
-    Poorly insulated       474  471
-    Adequately insulated  1366 1347
-    Well insulated         962  993
+    Not insulated           40   37
+    Poorly insulated       459  498
+    Adequately insulated  1401 1373
+    Well insulated         943  935
 
 ``` r
 cbind(donor = table(donor$aircon), sim = table(sim$aircon))
 ```
 
                                                donor  sim
-    Central air conditioning system             1772 1826
-    Individual window/wall or portable units     576  502
-    Both a central system and individual units   128  130
-    No air conditioning                          367  385
+    Central air conditioning system             1788 1801
+    Individual window/wall or portable units     545  545
+    Both a central system and individual units   125  115
+    No air conditioning                          385  382
 
 And we can look at kernel density plots of the non-zero values for the
 continuous variables to see if the univariate distributions in `donor`
@@ -460,46 +464,45 @@ head(sim10)
 ```
 
        M square_feet electricity natural_gas           insulation
-    1: 1        1240       23270           0       Well insulated
-    2: 1        2560       10230         358       Well insulated
-    3: 1        2078        5310        1054 Adequately insulated
-    4: 1        1124        7940         911 Adequately insulated
-    5: 1         841        4120         279       Well insulated
-    6: 1        4304       18100        1247       Well insulated
-                                         aircon
-    1:          Central air conditioning system
-    2: Individual window/wall or portable units
-    3:          Central air conditioning system
-    4:          Central air conditioning system
-    5:          Central air conditioning system
-    6:          Central air conditioning system
+    1: 1        1702       10140           0     Poorly insulated
+    2: 1        2970        8700         877 Adequately insulated
+    3: 1         538        4145           0     Poorly insulated
+    4: 1        3255       10530           0       Well insulated
+    5: 1         749       18900         462        Not insulated
+    6: 1        1647        6420         467 Adequately insulated
+                                           aircon
+    1:            Central air conditioning system
+    2:            Central air conditioning system
+    3:                        No air conditioning
+    4:            Central air conditioning system
+    5: Both a central system and individual units
+    6:            Central air conditioning system
 
 # Advanced fusion
 
-The fusionModel package allow for variables to be fused individually
-and/or in blocks. When variables are fused in a block, the fused values
-always consist of records drawn directly from the donor. This means that
-fused results for “blocked” variables will always consist of a “real”
-joint observation. If *all* of the fusion variables are in a single
-block, then the operation is equivalent to sampling “complete” records
-from the donor (in terms of the fusion variables). This is generally
-only advisable when the donor sample size is at least as large as the
-recipient.
+The fusionModel package allows variables to be fused individually and/or
+in blocks. When variables are fused in a block, the fused values always
+consist of records drawn directly from the donor. This means that fused
+results for “blocked” variables will always consist of a “real” joint
+observation. If all of the fusion variables are in a single block, then
+the operation is equivalent to sampling complete records from the donor
+(in terms of the fusion variables). This is generally only advisable
+when the donor sample size is at least as large as the recipient.
 
 There may be obvious reasons (usually having to do with the structure or
 definition of certain variables) to fuse some variables as a block. But,
 in general, it is not obvious when or why or which variables to block.
 Even in the absence of blocks (i.e. one-by-one fusion), it is usually
-unclear how to *sequence* the fusion process. Presumably, it makes sense
-to fuse some variables ahead of others, but the literature has very
-little to say about this question.
+unclear how to *chain* (sequence) the fusion process. Presumably, it
+makes sense to fuse some variables ahead of others, but the literature
+has very little to say about this question.
 
 The experimental `blockchain()` function attempts to provide a plausible
 fusion sequence (i.e. chain) and, optionally, a strategy for assigning
 variables to blocks. The algorithm uses cross-validated LASSO models fit
 via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html).
 It first builds a “complete” model for each *y* (fusion) variable using
-*all* other variables as predictors; the cross-validated model skill is
+all other variables as predictors; the cross-validated model skill is
 the maximum possible. Next, a “minimal” model is fit using only the *x*
 predictors; the model skill is divided by the maximum to create a
 “score” metric. The *y* with the maximum score is assigned to the first
@@ -523,9 +526,7 @@ and block the `fusion.vars` from the previous example.
 ``` r
 fchain <- blockchain(data = donor,
                      y = fusion.vars,
-                     x = predictor.vars,
-                     delta = 0.01,
-                     criterion = "min")
+                     x = predictor.vars)
 ```
 
 ``` r
@@ -533,24 +534,21 @@ fchain
 ```
 
     [[1]]
-    [1] "aircon"     "insulation"
+    [1] "insulation"  "aircon"      "square_feet"
 
     [[2]]
     [1] "electricity"
 
     [[3]]
-    [1] "square_feet"
-
-    [[4]]
     [1] "natural_gas"
 
-The resulting `fchain` list suggests that “aircon” and “insulation”
-should be fused jointly in the initial block followed by the remaining
-fusion variables in a preferred order. You may get slightly different
-results, since `blockchain()` relies on random cross-validation. We can
-then pass the suggested blocking and chaining strategy to `train()`,
-whose `y` argument accepts a list for the purposes of specifying
-variable blocks.
+The resulting `fchain` list suggests that “aircon”, “insulation”, and
+“square_feet” should be fused jointly in the initial block followed by
+the remaining fusion variables in a preferred order. You may get
+slightly different results, since `blockchain()` relies on random
+cross-validation. We can then pass the suggested blocking and chaining
+strategy to `train()`, whose `y` argument accepts a list for the
+purposes of specifying variable blocks.
 
 For this call to `train()`, we will also specify a set of
 hyperparameters to search over when training each LightGBM gradient
@@ -573,7 +571,9 @@ fsn.model <- train(data = donor,
     5 fusion variables
     12 initial predictor variables
     2843 observations
-    Building LightGBM models...
+    Training step 1 of 3: insulation, aircon, square_feet
+    Training step 2 of 3: electricity
+    Training step 3 of 3: natural_gas
     Fusion model saved to: /home/kevin/Documents/Projects/fusionModel/test_model.fsn 
 
 And then fuse multiple implicates, per usual. Note that the order of the
@@ -592,20 +592,20 @@ sim10 <- fuseM(data = recipient,
 head(sim10)
 ```
 
-       M                          aircon           insulation electricity
-    1: 1 Central air conditioning system       Well insulated       31730
-    2: 1 Central air conditioning system       Well insulated        9290
-    3: 1 Central air conditioning system Adequately insulated        9350
-    4: 1 Central air conditioning system Adequately insulated        8410
-    5: 1 Central air conditioning system     Poorly insulated        6180
-    6: 1 Central air conditioning system       Well insulated        7690
-       square_feet natural_gas
-    1:        2118         644
-    2:        1550         856
-    3:        1008         572
-    4:        3468        1020
-    5:         880         378
-    6:        4761        1210
+       M           insulation                                     aircon
+    1: 1       Well insulated   Individual window/wall or portable units
+    2: 1     Poorly insulated Both a central system and individual units
+    3: 1 Adequately insulated                        No air conditioning
+    4: 1 Adequately insulated            Central air conditioning system
+    5: 1 Adequately insulated            Central air conditioning system
+    6: 1        Not insulated            Central air conditioning system
+       square_feet electricity natural_gas
+    1:        2562        8260         306
+    2:        1240        9320         720
+    3:         950        2860         198
+    4:        4297       28100         914
+    5:        2046       15980         443
+    6:        1739        6740           0
 
 # Analyzing fused data
 
@@ -628,10 +628,12 @@ analyze(electricity ~ 1,
         donor.N = nrow(donor))
 ```
 
+    Assuming uniform 'sample_weights`
+
     # A tibble: 1 × 10
       response    metric estimate std_error lower_ci upper_ci statistic pvalue  degf
       <chr>       <chr>     <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
-    1 electricity mean     11096.      147.   10806.   11387.      75.6      0   137
+    1 electricity mean     10950.      144.   10665.   11235.      76.1      0   126
     # … with 1 more variable: nobs <int>
 
 When the response variable is categorical, `analyze()` automatically
@@ -643,13 +645,15 @@ analyze(aircon ~ 1,
         donor.N = nrow(donor))
 ```
 
+    Assuming uniform 'sample_weights`
+
     # A tibble: 4 × 10
       response level     estimate std_error lower_ci upper_ci statistic pvalue  degf
       <chr>    <fct>        <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
-    1 aircon   Central …   0.652    0.0105    0.631    0.673      62.1       0   109
-    2 aircon   Individu…   0.196    0.00917   0.178    0.215      21.4       0    64
-    3 aircon   Both a c…   0.0343   0.00454   0.0249   0.0436      7.54      0    25
-    4 aircon   No air c…   0.118    0.00724   0.103    0.132      16.2       0    68
+    1 aircon   Central …   0.644    0.0101    0.625    0.664      64.1       0   191
+    2 aircon   Individu…   0.188    0.00896   0.171    0.206      21.0       0    67
+    3 aircon   Both a c…   0.0355   0.00477   0.0256   0.0453      7.43      0    23
+    4 aircon   No air c…   0.132    0.00707   0.118    0.146      18.6       0   131
     # … with 1 more variable: nobs <int>
 
 If we want to perform an analysis across subsets of the recipient
@@ -664,19 +668,21 @@ analyze(aircon ~ 1,
         by = "income")
 ```
 
+    Assuming uniform 'sample_weights`
+
     # A tibble: 32 × 11
-       income   response level estimate std_error lower_ci upper_ci statistic pvalue
-       <ord>    <chr>    <fct>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl>
-     1 Less th… aircon   Cent…   0.636    0.0247   0.587     0.685      25.8  0     
-     2 Less th… aircon   Indi…   0.200    0.0251   0.148     0.252       7.99 0     
-     3 Less th… aircon   Both…   0.0329   0.0116   0.00443   0.0614      2.84 0.0302
-     4 Less th… aircon   No a…   0.131    0.0206   0.0877    0.173       6.35 0     
-     5 $20,000… aircon   Cent…   0.641    0.0213   0.599     0.683      30.1  0     
-     6 $20,000… aircon   Indi…   0.207    0.0195   0.168     0.247      10.6  0     
-     7 $20,000… aircon   Both…   0.0326   0.00976  0.00997   0.0551      3.34 0.0106
-     8 $20,000… aircon   No a…   0.119    0.0163   0.0856    0.153       7.30 0     
-     9 $40,000… aircon   Cent…   0.65     0.0255   0.599     0.701      25.5  0     
-    10 $40,000… aircon   Indi…   0.202    0.0228   0.155     0.248       8.84 0     
+       income  response level estimate std_error lower_ci upper_ci statistic  pvalue
+       <ord>   <chr>    <fct>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>   <dbl>
+     1 Less t… aircon   Cent…   0.437    0.0255    0.386    0.487      17.1  0      
+     2 Less t… aircon   Indi…   0.339    0.0256    0.288    0.391      13.2  0      
+     3 Less t… aircon   Both…   0.0217   0.00900   0        0.0459      2.41 0.0690 
+     4 Less t… aircon   No a…   0.202    0.0210    0.160    0.244       9.62 0      
+     5 $20,00… aircon   Cent…   0.611    0.0234    0.564    0.658      26.1  0      
+     6 $20,00… aircon   Indi…   0.209    0.0206    0.168    0.251      10.2  0      
+     7 $20,00… aircon   Both…   0.0346   0.00914   0.0144   0.0548      3.78 0.00325
+     8 $20,00… aircon   No a…   0.145    0.0158    0.113    0.176       9.14 0      
+     9 $40,00… aircon   Cent…   0.639    0.0250    0.590    0.689      25.6  0      
+    10 $40,00… aircon   Indi…   0.195    0.0212    0.152    0.238       9.18 0      
     # … with 22 more rows, and 2 more variables: degf <int>, nobs <int>
 
 Finally, any linear regression model can be specified using the formula
@@ -690,12 +696,14 @@ analyze(electricity ~ square_feet + hh_size,
         static = recipient)
 ```
 
+    Assuming uniform 'sample_weights`
+
     # A tibble: 3 × 11
       response    metric term  estimate std_error lower_ci upper_ci statistic pvalue
       <chr>       <chr>  <chr>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl>
-    1 electricity coef   (Int…  6519.     359.     5808.    7229.      18.2    0    
-    2 electricity coef   hh_s…   -35.7    106.     -248.     177.      -0.336  0.738
-    3 electricity coef   squa…     2.23     0.119     1.99     2.47    18.7    0    
+    1 electricity coef   (Int…  3977.     307.     3371.    4584.        13.0      0
+    2 electricity coef   hh_s…  1151.      89.0     975.    1327.        12.9      0
+    3 electricity coef   squa…     1.93     0.126     1.67     2.18      15.3      0
     # … with 2 more variables: degf <int>, nobs <int>
 
 Happy fusing!

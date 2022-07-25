@@ -212,11 +212,11 @@ head(sim10)
 
 # Advanced fusion
 
-The fusionModel package allow for variables to be fused individually and/or in blocks. When variables are fused in a block, the fused values always consist of records drawn directly from the donor. This means that fused results for "blocked" variables will always consist of a "real" joint observation. If *all* of the fusion variables are in a single block, then the operation is equivalent to sampling "complete" records from the donor (in terms of the fusion variables). This is generally only advisable when the donor sample size is at least as large as the recipient.
+The fusionModel package allows variables to be fused individually and/or in blocks. When variables are fused in a block, the fused values always consist of records drawn directly from the donor. This means that fused results for "blocked" variables will always consist of a "real" joint observation. If all of the fusion variables are in a single block, then the operation is equivalent to sampling complete records from the donor (in terms of the fusion variables). This is generally only advisable when the donor sample size is at least as large as the recipient.
 
-There may be obvious reasons (usually having to do with the structure or definition of certain variables) to fuse some variables as a block. But, in general, it is not obvious when or why or which variables to block. Even in the absence of blocks (i.e. one-by-one fusion), it is usually unclear how to *sequence* the fusion process. Presumably, it makes sense to fuse some variables ahead of others, but the literature has very little to say about this question.
+There may be obvious reasons (usually having to do with the structure or definition of certain variables) to fuse some variables as a block. But, in general, it is not obvious when or why or which variables to block. Even in the absence of blocks (i.e. one-by-one fusion), it is usually unclear how to *chain* (sequence) the fusion process. Presumably, it makes sense to fuse some variables ahead of others, but the literature has very little to say about this question.
 
-The experimental `blockchain()` function attempts to provide a plausible fusion sequence (i.e. chain) and, optionally, a strategy for assigning variables to blocks. The algorithm uses cross-validated LASSO models fit via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html). It first builds a "complete" model for each *y* (fusion) variable using *all* other variables as predictors; the cross-validated model skill is the maximum possible. Next, a "minimal" model is fit using only the *x* predictors; the model skill is divided by the maximum to create a "score" metric. The *y* with the maximum score is assigned to the first position in the fusion chain and included as a predictor in all subsequent models. The remaining *y* are assigned to the chain in the same, greedy fashion.
+The experimental `blockchain()` function attempts to provide a plausible fusion sequence (i.e. chain) and, optionally, a strategy for assigning variables to blocks. The algorithm uses cross-validated LASSO models fit via [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html). It first builds a "complete" model for each *y* (fusion) variable using all other variables as predictors; the cross-validated model skill is the maximum possible. Next, a "minimal" model is fit using only the *x* predictors; the model skill is divided by the maximum to create a "score" metric. The *y* with the maximum score is assigned to the first position in the fusion chain and included as a predictor in all subsequent models. The remaining *y* are assigned to the chain in the same, greedy fashion.
 
 When a fusion variable (*y1*) is selected for inclusion in the chain, its score is compared to that of the previous iteration; i.e. its score prior to including the preceding fusion variable (*y0*) as a predictor. If the score does not improve significantly, then *y1* is grouped into a block with *y0*. The general logic here is that chaining makes sense if/when it adds substantial explanatory power (i.e. when *y0* helps predict *y1*). If chaining does not appear to do this, then the default preference is to fuse the variables jointly as a block. See `?blockchain` for options and additional details.
 
@@ -225,23 +225,19 @@ Let's use `blockchain()` to get some guidance on how/whether to sequence and blo
 ```r
 fchain <- blockchain(data = donor,
                      y = fusion.vars,
-                     x = predictor.vars,
-                     delta = 0.01,
-                     criterion = "min")
+                     x = predictor.vars)
 ```
 ```{r, echo = FALSE, results = 'hide'}
 suppressMessages(fchain <- blockchain(data = donor,
-                     y = fusion.vars,
-                     x = predictor.vars,
-                     delta = 0.01,
-                     criterion = "min"))
+                                      y = fusion.vars,
+                                      x = predictor.vars))
 ```
 
 ```{r, echo = TRUE}
 fchain
 ```
 
-The resulting `fchain` list suggests that "aircon" and "insulation" should be fused jointly in the initial block followed by the remaining fusion variables in a preferred order. You may get slightly different results, since `blockchain()` relies on random cross-validation. We can then pass the suggested blocking and chaining strategy to `train()`, whose `y` argument accepts a list for the purposes of specifying variable blocks.
+The resulting `fchain` list suggests that "aircon", "insulation", and "square_feet" should be fused jointly in the initial block followed by the remaining fusion variables in a preferred order. You may get slightly different results, since `blockchain()` relies on random cross-validation. We can then pass the suggested blocking and chaining strategy to `train()`, whose `y` argument accepts a list for the purposes of specifying variable blocks.
 
 For this call to `train()`, we will also specify a set of hyperparameters to search over when training each LightGBM gradient boosting model (see `?train` for details). Since this requires additional computation, the `cores` argument is used to enable parallel processing.
 
