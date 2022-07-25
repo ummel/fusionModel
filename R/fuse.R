@@ -171,7 +171,7 @@ fuse <- function(data,
 
     #---
 
-    # Load and make predictions for each model
+    # Load and make predictions for each model ('pred' object)
     cat("-- Predicting LightGBM models\n")
     pred <- data.table()
     for (m in mods) {
@@ -224,9 +224,10 @@ fuse <- function(data,
       # Get the donor conditional prediction and response variables
       x <- paste0(pfixes[i], "/donor.fst")
       zip::unzip(zipfile = file, files = x, exdir = td)
-      dpred <- fst::read_fst(file.path(td, x), as.data.table = TRUE, columns = colnames(pred))
-      dresp <- fst::read_fst(file.path(td, x), as.data.table = TRUE, columns = v)
-      setcolorder(pred, names(dpred))
+      dtemp <- fst::read_fst(file.path(td, x), as.data.table = TRUE)
+      dresp <- select(dtemp, any_of(v))
+      dpred <- select(dtemp, -any_of(c("W..", v)))
+      pred <- select(pred, all_of(names(dpred)))  # This ensures 'pred' and 'dpred' have identical columns
 
       # Apply the column weights to 'pred'
       for (j in names(pred)) set(pred, i = NULL, j = j, value = pred[[j]] * meta$colweight[[i]][[j]])
