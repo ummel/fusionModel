@@ -12,7 +12,7 @@ fuse(
   max_dist = 0,
   idw = FALSE,
   cores = 1,
-  ignore_nearest = FALSE,
+  ignore_self = FALSE,
   seed = NULL
 )
 
@@ -31,7 +31,7 @@ fuseM(..., M, fun = fusionModel::fuse, seeds = NULL)
 
 \item{cores}{Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).}
 
-\item{ignore_nearest}{Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.}
+\item{ignore_self}{Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.}
 
 \item{seed}{Set random seed if needed.}
 
@@ -71,8 +71,18 @@ sim <- fuse(data = recipient, file = "test_model.fsn")
 head(sim)
 
 # Generate multiple implicates via fuseM()
-# This can be passed to 'implicates' argument in ?analyze()
 sim <- fuseM(data = recipient, file = "test_model.fsn", M = 5)
 head(sim)
 table(sim$M)
+
+# Test to confirm that 'ignore_self' works as intended
+recs2 <- mutate(recs, electricity = jitter(electricity))
+train(data = recs2, y = "electricity", x = predictor.vars, file = "test_model.fsn")
+
+sim1 <- fuse(data = recipient, file = "test_model.fsn", ignore_self = FALSE)
+sim2 <- fuse(data = recipient, file = "test_model.fsn", ignore_self = TRUE)
+
+any(sim1 == recs2$electricity)
+any(sim2 == recs2$electricity)
+
 }

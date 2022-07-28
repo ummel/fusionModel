@@ -555,7 +555,7 @@ train <- function(data,
         rm(d)
       }
 
-    } # Done processing 'y'; loop repeats with remaining 'v' (if any)
+    } # Done processing 'y'; loop repeats with remaining variables in 'v' (if any)
 
     #-----
 
@@ -571,17 +571,22 @@ train <- function(data,
 
       # Reduce precision of donor conditional values for better on-disk compression
       for (j in names(cdata)) set(cdata, i = NULL, j = j, value = signif(round(cdata[[j]], 3), 3))
-      #for (j in names(cdata)) set(cdata, i = NULL, j = j, value = cleanNumeric(cdata[[j]], tol = 0.001))
 
       # Add the original/observed response values; converted to integer whenever possible
       for (j in v) set(cdata, i = NULL, j = j, value = if ("numeric" %in% yclass[[j]]) dmat[pi, j] else as.integer(dmat[pi, j]))
 
-      # Add integerized weight for each observation
-      setkey(cdata)
+      # Add integerized sample weight for each observation
+      #setkey(cdata)  # Only relevant for weight collapse below (not used)
       set(cdata, i = NULL, j = "W..", value = W.int[pi])
 
+      # Add original row number for each observation, if necessary
+      # This is only necessary if 'pi' has any FALSE values; only applicable for single continuous variable that is zero-inflated
+      # Required within 'fuse' when 'ignore_self = TRUE'
+      if (any(!pi)) set(cdata, i = NULL, j = "R..", value = which(pi))
+
       # Collapse 'cdata' to unique observations, summing the weight ("W..") column
-      cdata <- cdata[, .(W.. = sum(W..)), by = key(cdata)]
+      # NOT USED: not compatible with 'ignore_self' option in fuse()
+      #cdata <- cdata[, .(W.. = sum(W..)), by = key(cdata)]
 
       # Write to disk (donor.fst)
       fst::write_fst(x = cdata, path = file.path(path, "donor.fst"), compress = 100)

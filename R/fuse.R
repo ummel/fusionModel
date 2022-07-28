@@ -9,7 +9,7 @@
 #' @param max_dist Numeric. Controls the maximum allowable distance when identifying up to \code{k} nearest neighbors. \code{max_dist = 0} (default) means no distance restriction is applied.
 #' @param idw Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?
 #' @param cores Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).
-#' @param ignore_nearest Logical. If \code{TRUE}, nearest neighbor in KNN search is dropped; useful for validation exercises.
+#' @param ignore_self Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.
 #' @param ... Arguments passed to \code{fuse()}.
 #' @param M Integer. Number of implicates to simulate.
 
@@ -40,21 +40,31 @@
 #' head(sim)
 #'
 #' # Generate multiple implicates via fuseM()
-#' # This can be passed to 'implicates' argument in ?analyze()
 #' sim <- fuseM(data = recipient, file = "test_model.fsn", M = 5)
 #' head(sim)
 #' table(sim$M)
+#'
+#' # Test to confirm that 'ignore_self' works as intended
+#' recs2 <- mutate(recs, electricity = jitter(electricity))
+#' train(data = recs2, y = "electricity", x = predictor.vars, file = "test_model.fsn")
+#'
+#' sim1 <- fuse(data = recipient, file = "test_model.fsn", ignore_self = FALSE)
+#' sim2 <- fuse(data = recipient, file = "test_model.fsn", ignore_self = TRUE)
+#'
+#' any(sim1 == recs2$electricity)
+#' any(sim2 == recs2$electricity)
+#'
 #' @export
 
 #---------------------
 
 # Manual testing
-#
 # library(fusionModel)
 # source("R/utils.R")
 # #Example inputs
+# data <- recs
 # data <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
-# file <- "fusion_model_test.fsn"
+# file <- "test_model.fsn"
 # idw <- TRUE
 # k <- 10
 
@@ -66,7 +76,7 @@ fuse <- function(data,
                  max_dist = 0,
                  idw = FALSE,
                  cores = 1,
-                 ignore_nearest = FALSE,
+                 ignore_self = FALSE,
                  seed = NULL) {
 
   stopifnot(exprs = {
@@ -76,7 +86,7 @@ fuse <- function(data,
     max_dist >= 0
     is.logical(idw)
     cores > 0 & cores %% 1 == 0
-    is.logical(ignore_nearest)
+    is.logical(ignore_self)
   })
 
   if (is.data.table(data)) data <- as.data.frame(data)
@@ -164,7 +174,7 @@ fuse <- function(data,
         p <- predict(object = mod,
                      data = dmat[, xv],
                      reshape = TRUE)
-        zind <- p > runif(n = nrow(dmat)) # Row indices where a zero is randomly simulated (TRUE for a zero)
+        zind <- p > runif(n = nrow(dmat)) # Row indices where a zero has been simulated (TRUE for a zero)
       }
       mods <- setdiff(mods, m)
     }
@@ -226,8 +236,11 @@ fuse <- function(data,
       zip::unzip(zipfile = file, files = x, exdir = td)
       dtemp <- fst::read_fst(file.path(td, x), as.data.table = TRUE)
       dresp <- select(dtemp, any_of(v))
-      dpred <- select(dtemp, -any_of(c("W..", v)))
+      dwgt <- dtemp$W..
+      drow <- dtemp$R..
+      dpred <- select(dtemp, -any_of(c(v, "W..", "R..")))
       pred <- select(pred, all_of(names(dpred)))  # This ensures 'pred' and 'dpred' have identical columns
+      rm(dtemp)
 
       # Apply the column weights to 'pred'
       for (j in names(pred)) set(pred, i = NULL, j = j, value = pred[[j]] * meta$colweight[[i]][[j]])
@@ -246,22 +259,22 @@ fuse <- function(data,
       # NOTE: The 'eps' error bound in nn2() is set dynamically (speed/precision tradeoff)
       #  This appears to be a reasonable setting based on limited testing, but not definitive
 
-      cat("-- Finding nearest neighbors\n")
-
       getNN <- function(x) {
+
         nn <- RANN::nn2(data = dpred,
                         query = x,
-                        k = k + ignore_nearest,
+                        k = k + ignore_self,
                         searchtype = ifelse(max_dist == 0, "standard", "radius"),
                         radius = meta$meddist[i] * max_dist,
                         eps = sqrt(meta$meddist[i]))
-        # Apply potential 'fix up' for cases where there is no nearest neighbor within the search radius
+
+        # Apply potential fix-up for cases where there is no nearest neighbor within the specified search radius
         if (max_dist > 0) {
           fix <- which(nn$nn.idx[, 1] == 0)
           if (length(fix) > 0) {
             nn.fix <- RANN::nn2(data = dpred,
                                 query = x[fix, ],
-                                k = 1 + ignore_nearest,  # Returns single nearest-neighbor
+                                k = 1 + ignore_self,  # Returns single nearest-neighbor
                                 searchtype = "standard",
                                 eps = sqrt(meta$meddist[i]))
             nn$nn.idx[fix, 1] <- nn.fix$nn.idx
@@ -270,6 +283,7 @@ fuse <- function(data,
           }
         }
         return(nn)
+
       }
 
       # Attempt PCA to reduce dimensionality prior to nn2?
@@ -279,6 +293,7 @@ fuse <- function(data,
       # pred2 <- predict(pca.fit, newdata = pred)
 
       # Split 'pred' into chunks and process in parallel
+      cat("-- Finding nearest neighbors\n")
       pred <- split(pred, f = rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)])
       nn <- parallel::mclapply(pred, getNN, mc.cores = cores)
       rm(pred, dpred)
@@ -288,38 +303,48 @@ fuse <- function(data,
       nn[[1]]$nn.dists <- do.call(rbind, map(nn, "nn.dists"))
       nn <- nn[[1]]
 
-      # If requested, remove the nearest match from 'nn'
-      if (ignore_nearest) {
-        nn$nn.idx <- nn$nn.idx[, -1, drop = FALSE]
-        nn$nn.dists <- nn$nn.dists[, -1, drop = FALSE]
+      # If requested, exclude self-matches in 'nn'
+      # Note that 'ignore_self = TRUE' only makes sense if nrow(nn$nn.idx) == nrow(dpred) - CORRECT?
+      # TO DO: Need the original row number in 'dpred'?
+      if (ignore_self) {
+        if (is.null(drow)) drow <- seq_along(dwgt)
+        self.refer <- drow[nn$nn.idx] == which(!zind)
+        nn$nn.idx[which(self.refer)] <- 0
       }
 
-      #----
-
-      # Randomly select a similar observation from the donor
-      # Optionally using inverse-distance probabilities for selection
-      cat("-- Simulating fused values\n")
-      if (max_dist > 0 | idw) {
-        p <- nn$nn.dists
-        p[nn$nn.idx == 0] <- NA
-        if (idw) {
-          p <- 1 / nn$nn.dists
-          p[is.infinite(p)] <- min(p, na.rm = TRUE)  # Prevent infinite inverse distance
-        } else {
-          p[!is.na(p)] <- runif(sum(!is.na(p)))
-        }
-        p <- p / rowSums(p, na.rm = TRUE)
-        for (j in 2:ncol(p)) p[, j] <- p[, j - 1] + p[, j]
-        ptile <- runif(n = nrow(p))
-        S <- rowSums(ptile > p, na.rm = TRUE) + 1L
+      # Create 'p' matrix with selection weights for each nearest neighbor
+      nn$nn.idx[nn$nn.idx == 0] <- NA
+      nn$nn.dists[is.na(nn$nn.idx)] <- NA
+      p <- nn$nn.dists
+      if (idw) {
+        p <- 1 / p
+        p[is.infinite(p)] <- min(p, na.rm = TRUE) # Prevent infinite inverse distance
       } else {
-        # Simple case; randomly select a column
-        S <- sample.int(n = ncol(nn$nn.idx), size = nrow(nn$nn.idx), replace = TRUE)
+        p[] <- dwgt[nn$nn.idx]  # Selection weights given by "W.." (donor original sample weights)
       }
+
+      # Randomly sample a column from 'p', using the provided selection weights
+      # This is convoluted but probably the fastest way to randomly select columns using selecton weights and accomodating excluding/prohibited neighbors (i.e. ignore_self)
+      cat("-- Simulating fused values\n")
+      if (ignore_self) p[!matrixStats::rowAnyNAs(p), ncol(p)] <- NA  # Ignore the extra column, if there is no self-referral in the row
+      na.ind <- is.na(p)
+      p[na.ind] <- 0
+      p <- p / matrixStats::rowSums2(p)
+      p <- matrixStats::rowCumsums(p)
+      p[na.ind] <- NA
+      ptile <- runif(n = nrow(p))
+      S <- matrixStats::rowSums2(ptile > p, na.rm = TRUE) + 1L
+      adj <- which(is.na(matrixStats::rowCollapse(p, S)))
+      S[adj] <- S[adj] + 1L
 
       # Extract simulated values from donor observations
-      ind <- nn$nn.idx[cbind(1:nrow(nn$nn.idx), S)]
+      ind <- matrixStats::rowCollapse(nn$nn.idx, S)
+      stopifnot(!anyNA(ind))  # Safety check
       S <- dresp[ind, ]
+
+      # NOT USED: Simple case; randomly select a column
+      # This only works if there are no selection weights
+      #S <- sample.int(n = ncol(nn$nn.idx), size = nrow(nn$nn.idx), replace = TRUE)
 
       # If zeros are simulated separately, integrate them into 'S'
       if (any(zind)) {
@@ -343,7 +368,7 @@ fuse <- function(data,
   #---
 
   # Convert 'dmat' to desired output
-  dmat <- dmat[, unlist(yord)]
+  dmat <- dmat[, unlist(yord), drop = FALSE]
   dmat <- data.table(as.matrix(dmat))
 
   # Ensure simulated variables are correct data type with appropriate labels/levels
