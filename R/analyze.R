@@ -472,11 +472,15 @@ analyze <- function(formula,
       .groups = "drop"
     ) %>%
     mutate(
-      std_error = sqrt(t),  # !!! Standard error (Reiter)
-      lower_ci = estimate + ifelse(degf == 0, qnorm(0.025), qt(0.025, df = degf)) * std_error, # 95% confidence interval lower bound
-      upper_ci = estimate + ifelse(degf == 0, qnorm(0.975), qt(0.975, df = degf)) * std_error,  # 95% confidence interval upper bound
+      degf = pmax(1, degf, na.rm = TRUE), # Ensure 'degf' is not 0 or NA
+      degf = ifelse(is.null(wrep), degf, length(wrep)),  # If replicate weights are used, assume 'degf' is the number of replicates
+      std_error = sqrt(t),  # Standard error
+      #lower_ci = estimate + ifelse(degf == 0, qnorm(0.025), qt(0.025, df = degf)) * std_error, # 95% confidence interval lower bound
+      #upper_ci = estimate + ifelse(degf == 0, qnorm(0.975), qt(0.975, df = degf)) * std_error,  # 95% confidence interval upper bound
+      lower_ci = estimate + qt(0.025, df = degf) * std_error, # 95% confidence interval lower bound
+      upper_ci = estimate + qt(0.975, df = degf) * std_error,  # 95% confidence interval upper bound
       statistic = estimate / std_error,  # t-statistic (or z-statistic if proportion)
-      pvalue = 2 * ifelse(degf == 0, pnorm(abs(statistic), lower.tail = FALSE), pt(abs(statistic), df = degf, lower.tail = FALSE)), # p-value; Pr(>|t|)
+      pvalue = 2 * ifelse(std_error == 0, 0, pt(abs(statistic), df = degf, lower.tail = FALSE)), # p-value; Pr(>|t|)
       statistic = round(statistic, 5),
       pvalue = round(pvalue, 5),
       degf = as.integer(round(degf)),
