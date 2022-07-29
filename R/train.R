@@ -234,6 +234,7 @@ train <- function(data,
   hyper$num_threads <- cores
 
   # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (the are not eligible to be varied within the CV routine)
+  # Note that 'feature_pre_filter' is set to FALSE to allow multiple 'min_data_in_leaf' values within 'hyper'
   # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
   for (v in c("max_bin", "min_data_in_bin")) {
     if (length(hyper[[v]]) > 1) {
@@ -241,8 +242,11 @@ train <- function(data,
       cat("Only one", v, "value allowed. Using:", hyper[[v]], "\n")
     }
   }
-  dparams <- list(max_bin = hyper$max_bin, min_data_in_bin = hyper$min_data_in_bin)
-  hyper$max_bin <- NULL; hyper$min_data_in_bin <- NULL
+  dparams <- list(max_bin = hyper$max_bin,
+                  min_data_in_bin = hyper$min_data_in_bin,
+                  feature_pre_filter = FALSE)
+  hyper$max_bin <- NULL
+  hyper$min_data_in_bin <- NULL
 
   # Create hyperparameter grid to search
   hyper.grid <- hyper %>%
