@@ -11,7 +11,7 @@
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param cores Integer. Number of cores used for LightGBM parallel operations. \code{cores = 0} will use all threads detected by OpenMP.
+#' @param cores Integer. Number of cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \link[parallel]{mclapply}. On Windows, they are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP (\code{cores = 0} uses all available cores).
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
@@ -69,11 +69,12 @@
 
 # # Inputs for testing - with some modification for harder test cases
 # data <- recs[1:28]
+# data <- bind_rows(data, data, data, data)
 # recipient <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
 # y = setdiff(names(data), names(recipient))
 # weight <- "weight"
 # x <- setdiff(names(recipient), weight)
-# nfolds <- 5L
+# nfolds <- 0.75
 # ptiles <- c(0.25, 0.75)
 # file = "fusion_model_test.fsn"
 # cores = 1
@@ -102,6 +103,9 @@ train <- function(data,
                   hyper = NULL,
                   cores = 1) {
 
+  t0 <- Sys.time()
+  unix = .Platform$OS.type == "unix"
+
   stopifnot(exprs = {
     is.data.frame(data)
     all(unlist(y) %in% names(data))
@@ -112,11 +116,12 @@ train <- function(data,
     nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
-    cores >= 0 & cores %% 1 == 0
+    cores >= 0 & cores %% 1 == 0  # cores = 0 allows LightGBM to use all available threads via OpenMP
   })
 
   if (is.null(hyper)) hyper <- list()
   if (is.data.table(data)) data <- as.data.frame(data)  # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
+  fork <- unix & cores > 1
 
   # Check 'file' path and create parent directories, if necessary
   dir <- normalizePath(dirname(file), mustWork = FALSE)
@@ -230,8 +235,9 @@ train <- function(data,
   }
 
   # Set the number of LightGBM threads
-  # 0 means default number of threads in OpenMP
-  hyper$num_threads <- cores
+  # If forking, LightGBM uses single core internally
+  # 0 means all cores available for OpenMP
+  hyper$num_threads <- ifelse(fork, 1L, cores)
 
   # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (the are not eligible to be varied within the CV routine)
   # Note that 'feature_pre_filter' is set to FALSE to allow multiple 'min_data_in_leaf' values within 'hyper'
@@ -264,8 +270,10 @@ train <- function(data,
   pfixes <- formatC(seq_along(yord), width = nchar(length(yord)), format = "d", flag = "0")
 
   # Placeholder lists for metadata outputs
-  lgbpred <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
-  meddist <- vector(mode = "numeric", length = length(yord))
+  # lgbpred <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
+  # meddist <- vector(mode = "numeric", length = length(yord))
+  lgbpred <- ycenter <- yscale <- colweight <- meddist <- NULL
+  #meddist <- vector(mode = "numeric", length = length(yord))
 
   # Temporary directory to save lightGBM models to
   td <- tempfile()
@@ -273,15 +281,14 @@ train <- function(data,
 
   #-----
 
-  # Sequentially build LightGBM prediction models
-
-  for (i in 1:length(yord)) {
+  # Function to build LightGBM prediction model for step 'i' in 'yord'
+  buildFun <- function(i, verbose = FALSE) {
 
     v <- yord[[i]]
     block <- length(v) > 1
 
     # Print message to console
-    cat("Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
+    if (verbose) cat("Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
 
     # 'y' variables from prior clusters to be included as predictors
     yv <- if (i == 1) NULL else unlist(yord[1:(i - 1)])
@@ -289,7 +296,8 @@ train <- function(data,
     # Full set of predictor variables, including 'y' from clusters earlier in sequence
     # Assign the x predictors to 'lgbpred'
     xv <- as.vector(c(xvars, yv))
-    lgbpred[[i]] <- xv
+    #lgbpred[[i]] <- xv
+    lgbpred <- xv
 
     path <- file.path(td, pfixes[i])
     dir.create(path)
@@ -501,8 +509,10 @@ train <- function(data,
             val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
             set(d, i = NULL, j = j, value = val)
           }
-          ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
-          yscale[[i]] <- c(yscale[[i]], unlist(nscale))
+          #ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
+          #yscale[[i]] <- c(yscale[[i]], unlist(nscale))
+          ycenter <- c(ycenter, unlist(ncenter))
+          yscale <- c(yscale, unlist(nscale))
         }
 
         # Add column weights to be kept in metadata
@@ -510,7 +520,8 @@ train <- function(data,
         wtemp <- rep((1 / length(v)) / ncol(d), ncol(d))  # Raw weights
         wtemp <- sqrt(wtemp)
         names(wtemp) <- names(d)
-        colweight[[i]] <- c(colweight[[i]], wtemp)
+        #colweight[[i]] <- c(colweight[[i]], wtemp)
+        colweight <- c(colweight, wtemp)
 
         # Apply the column weights to 'd'
         for (j in names(d)) set(d, i = NULL, j = j, value = d[[j]] * wtemp[[j]])
@@ -571,7 +582,8 @@ train <- function(data,
       # Take a random sample to prevent excessive compute time with large datasets
       ind <- sample.int(nrow(cdata), min(nrow(cdata), 5e3))
       cdist <- as.numeric(dist(cdata[ind, ]))
-      meddist[i] <- median(cdist)
+      #meddist[i] <- median(cdist)
+      meddist <- median(cdist)
 
       # Reduce precision of donor conditional values for better on-disk compression
       for (j in names(cdata)) set(cdata, i = NULL, j = j, value = signif(round(cdata[[j]], 3), 3))
@@ -598,11 +610,33 @@ train <- function(data,
 
     }
 
+    out <- list(lgbpred = lgbpred, ycenter = ycenter, yscale = yscale, colweight = colweight, meddist = meddist)
+    return(out)
+
   }
 
   #-----
 
-  # Assemble metadata and save to disk
+  # Apply buildFun() to each index in 'yord', using forked parallel processing or serial (depending on 'fork' variable)
+  # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
+
+  if (fork) {
+    ft <- fst::threads_fst()
+    fst::threads_fst(1L)
+    cat("Processing ", length(pfixes), " training steps in parallel (", cores, " cores)...", "\n", sep = "")
+    out <- parallel::mclapply(X = 1:length(yord),
+                              FUN = buildFun,
+                              mc.cores = cores,
+                              mc.preschedule = FALSE,
+                              verbose = FALSE)
+    fst::threads_fst(ft)
+  } else {
+    out <- lapply(X = 1:length(yord), buildFun, verbose = TRUE)
+  }
+
+  #-----
+
+  # Assemble metadata
   metadata <- list(
     xclass = xclass,
     xlevels = xlevels,
@@ -610,15 +644,16 @@ train <- function(data,
     ylevels = ylevels,
     yorder = yord,
     ytype = ytype,
-    lgbpred = lgbpred,
-    ycenter = ycenter,
-    yscale = yscale,
-    colweight = colweight,
-    meddist = meddist,
     ptiles = ptiles,
+    timing = difftime(Sys.time(), t0),
     version = list(fusionModel = packageVersion("fusionModel"), R = getRversion()),
     call = match.call()
   )
+
+  # Add the metadata information returned by buildFun()
+  metadata <- c(metadata, purrr::transpose(out))
+
+  # Save metadata to disk
   saveRDS(metadata, file = file.path(td, "metadata.rds"))
 
   #-----
@@ -630,6 +665,12 @@ train <- function(data,
   file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = file, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
   cat("Fusion model saved to:", file, "\n")
   unlink(td)
+
+  # Report processing time
+  tout <- difftime(Sys.time(), t0)
+  cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
+
+  # Return .fsn file path invisibly
   invisible(file)
 
 }

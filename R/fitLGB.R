@@ -19,11 +19,9 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
 
   } else {
 
-    # If single training/test-set validation is requested...
-    #parallel::mclapply(hyper.grid, FUN = function(x) {
+    # If training/test-set validation is requested...
     lapply(hyper.grid, FUN = function(x) {
       p <- c(as.list(x), params.obj)
-      p$num_threads <- 1
       sink <- capture.output({
         mod <- lightgbm::lgb.train(
           params = p,
@@ -35,7 +33,6 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
       })
       c(mod$best_score, mod$best_iter)
     })
-    #}, mc.cores = cores)  # If parallel; requires 'cores' argument
 
   }
 

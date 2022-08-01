@@ -261,12 +261,14 @@ fuse <- function(data,
 
       getNN <- function(x) {
 
+        mdist <- meta$meddist[[i]]
+
         nn <- RANN::nn2(data = dpred,
                         query = x,
                         k = k + ignore_self,
                         searchtype = ifelse(max_dist == 0, "standard", "radius"),
-                        radius = meta$meddist[i] * max_dist,
-                        eps = sqrt(meta$meddist[i]))
+                        radius = mdist * max_dist,
+                        eps = sqrt(mdist))
 
         # Apply potential fix-up for cases where there is no nearest neighbor within the specified search radius
         if (max_dist > 0) {
@@ -276,7 +278,7 @@ fuse <- function(data,
                                 query = x[fix, ],
                                 k = 1 + ignore_self,  # Returns single nearest-neighbor
                                 searchtype = "standard",
-                                eps = sqrt(meta$meddist[i]))
+                                eps = sqrt(mdist))
             nn$nn.idx[fix, 1] <- nn.fix$nn.idx
             nn$nn.dists[fix, 1] <- nn.fix$nn.dists
             rm(fix, nn.fix)
