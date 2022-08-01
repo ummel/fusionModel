@@ -26,7 +26,8 @@ Imports:
     RANN,
     cli,
     pbapply,
-    glmnet
+    glmnet,
+    matrixStats
 Suggests:
     biglm,
     rpart
