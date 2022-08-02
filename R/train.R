@@ -121,7 +121,6 @@ train <- function(data,
 
   if (is.null(hyper)) hyper <- list()
   if (is.data.table(data)) data <- as.data.frame(data)  # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
-  fork <- unix & cores > 1
 
   # Check 'file' path and create parent directories, if necessary
   dir <- normalizePath(dirname(file), mustWork = FALSE)
@@ -135,6 +134,9 @@ train <- function(data,
   } else {
     yord <- as.list(y)
   }
+
+  # Determine if paralell forking will be used
+  fork <- unix & cores > 1 & length(yord) > 1
 
   #-----
 

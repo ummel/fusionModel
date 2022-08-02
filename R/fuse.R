@@ -61,12 +61,23 @@
 # Manual testing
 # library(fusionModel)
 # source("R/utils.R")
+
 # #Example inputs
 # data <- recs
 # data <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
 # file <- "test_model.fsn"
 # idw <- TRUE
 # k <- 10
+
+# Actual testing with CEI-ACS
+# data <- read_fst("~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_predict.fst")
+# file <- "~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_model.fsn"
+# k <- 10
+# max_dist = 0
+# idw = FALSE
+# cores = 3
+# ignore_self <- FALSE
+# seed <- NULL
 
 #---------------------
 
@@ -78,6 +89,8 @@ fuse <- function(data,
                  cores = 1,
                  ignore_self = FALSE,
                  seed = NULL) {
+
+  t0 <- Sys.time()
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -143,6 +156,11 @@ fuse <- function(data,
   dmat <- tomat(data)
   rm(data)
 
+  # Everything above here is static and need only be run once for multiple implicates
+
+  # NOTE: Same is potentially tru of the unzipped LightGBM models and the 'donor.fst' files
+  # All could be unzipped/loaded once... TO DO
+
   #-----
 
   for (i in 1:length(pfixes)) {
@@ -190,12 +208,20 @@ fuse <- function(data,
       q <- substring(n, 1, 1) == "q"
       z <- substring(n, 1, 1) == "z"
       mod <- lightgbm::lgb.load(filename = file.path(td, m))
-      p <- predict(object = mod, data = dmat[!zind, xv], reshape = TRUE, params = list(num_threads = cores))
+
+      # Trying to speed-up this step
+      # Removing 'xv' column subset to 'dmat' is much faster (something to do with how Matrix handles column subsetting)
+      #p <- predict(object = mod, data = dmat[!zind, xv], reshape = TRUE, params = list(num_threads = cores))
+      p <- predict(object = mod, data = dmat[!zind, ], reshape = TRUE, params = list(num_threads = cores))
+
+      # test.mat <- rbind(dmat, dmat, dmat, dmat)
+      # system.time(p <- predict(object = mod, data = test.mat, reshape = TRUE, params = list(num_threads = cores)))
+
       if (!is.matrix(p)) p <- matrix(p)
       p <- as.data.table(p)
       set(pred, i = NULL, j = paste0(y, "_", n, if (q | z) NULL else 1:ncol(p)), value = p)
-      rm(p)
     }
+    rm(p)
 
     #---
 
@@ -295,9 +321,11 @@ fuse <- function(data,
       # pred2 <- predict(pca.fit, newdata = pred)
 
       # Split 'pred' into chunks and process in parallel
+      # Prevents very small chunks (too much overhead); enforces serial processing on Windows
       cat("-- Finding nearest neighbors\n")
-      pred <- split(pred, f = rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)])
-      nn <- parallel::mclapply(pred, getNN, mc.cores = cores)
+      nn.cores <- ifelse(.Platform$OS.type == "unix", min(cores, ceiling(nrow(pred) / 50e3)), 1L)
+      pred <- split(pred, f = rep(1:nn.cores, each = ceiling(nrow(pred) / nn.cores))[1:nrow(pred)])
+      nn <- parallel::mclapply(pred, getNN, mc.cores = nn.cores)
       rm(pred, dpred)
 
       # Compile the chunked nearest-neighbor results
@@ -383,6 +411,12 @@ fuse <- function(data,
     if ("logical" %in% yclass) set(dmat, i = NULL, j = v, value = as.logical(dmat[[v]]))
     if ("integer" %in% yclass)  set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]))
   }
+
+  #-----
+
+  # Report processing time
+  tout <- difftime(Sys.time(), t0)
+  cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
 
   return(dmat)
 
