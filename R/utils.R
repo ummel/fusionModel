@@ -157,13 +157,14 @@ integerize <- function(x, mincor = 0.999) {
 # Sets minimal categorical integer value to zero
 # Converts to Matrix class 'dgCMatrix'
 # See here: https://www.gormanalysis.com/blog/sparse-matrix-construction-and-use-in-r/
-tomat <- function(data) {
+tomat <- function(data, sparse = TRUE) {
   dmat <- as.data.table(data)
   for (v in names(dmat)) {
     if (is.factor(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]) - 1L)
     if (is.logical(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]))
   }
-  dmat <- as(as.matrix(dmat), "dgCMatrix")
+  dmat <- as.matrix(dmat)
+  if (sparse) dmat <- as(dmat, "dgCMatrix")
   return(dmat)
 }
 
@@ -300,4 +301,23 @@ checkData <- function(data, y, x) {
 
   return(data)
 
+}
+
+#------------------
+
+# Function to return free system memory in Mb
+# Different commands used on Unix vs. Windows
+# https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine
+# https://stackoverflow.com/questions/6457290/how-to-check-the-amount-of-ram
+getFreeMemory <- function() {
+  gc()
+  if (.Platform$OS.type == "unix") {
+    x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)
+  } else {
+    x <- system("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
+    x <- x[grepl("FreePhysicalMemory", x)]
+    x <- gsub("FreePhysicalMemory=", "", x, fixed = TRUE)
+    x <- gsub("\r", "", x, fixed = TRUE)
+  }
+  as.numeric(x) / 1e3
 }
