@@ -1,7 +1,7 @@
 #' Train a fusion model
 #'
 #' @description
-#' Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can used with \link{fuse} to simulate outcomes for a "recipient" dataset.
+#' Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can be used with \code{\link{fuse}} to simulate outcomes for a "recipient" dataset.
 #'
 #' @param data Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.
 #' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.
@@ -11,10 +11,10 @@
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param cores Integer. Number of physical CPU cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP.
+#' @param cores Integer. Number of physical CPU cores used for parallel computation. On a Unix system, if \code{cores > 1} and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. Testing with small-to-moderate size datasets suggests forking is typically faster.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
-#' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
+#' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
 #'
 #' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
 #' @details \itemize{
@@ -633,13 +633,14 @@ train <- function(data,
   # Apply buildFun() to each index in 'yord', using forked parallel processing or serial (depending on 'fork' variable)
   # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
   if (fork) {
-    cat("Processing ", length(pfixes), " training steps in parallel (", cores, " cores)...", "\n", sep = "")
+    cat("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)...", "\n", sep = "")
     out <- parallel::mclapply(X = 1:length(yord),
                               FUN = buildFun,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
   } else {
+    cat("Using OpenMP multithreading within LightGBM (", cores, " cores)...", "\n", sep = "")
     out <- lapply(X = 1:length(yord), buildFun, verbose = TRUE)
   }
 
