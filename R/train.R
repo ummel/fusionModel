@@ -104,7 +104,6 @@ train <- function(data,
                   cores = 1) {
 
   t0 <- Sys.time()
-  unix = .Platform$OS.type == "unix"
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -120,13 +119,8 @@ train <- function(data,
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
   })
 
-  if (is.null(hyper)) hyper <- list()
-  if (is.data.table(data)) data <- as.data.frame(data)  # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
-
-  # Check 'file' path and create parent directories, if necessary
-  dir <- normalizePath(dirname(file), mustWork = FALSE)
-  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
-  file <- file.path(dir, basename(file))
+  # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
+  if (is.data.table(data)) data <- as.data.frame(data)
 
   # Create correct 'y' and 'yord', depending on input type
   if (is.list(y)) {
@@ -136,9 +130,15 @@ train <- function(data,
     yord <- as.list(y)
   }
 
-  # Determine if paralell forking will be used
+  # Determine if parallel forking will be used
   # This forces use of OpenMP if there are more cores than fusion steps
+  unix <- .Platform$OS.type == "unix"
   fork <- unix & cores > 1 & length(yord) > 1 & cores <= length(yord)
+
+  # Check 'file' path and create parent directories, if necessary
+  dir <- normalizePath(dirname(file), mustWork = FALSE)
+  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
+  file <- file.path(dir, basename(file))
 
   #-----
 
@@ -214,6 +214,9 @@ train <- function(data,
 
   #-----
 
+  # Set the 'hyper.default' object
+  if (is.null(hyper)) hyper <- list()
+
   # Default hyperparameter values, per LightGBM documentation
   # Parameters: https://lightgbm.readthedocs.io/en/latest/Parameters.html
   # Parameter tuning: https://lightgbm.readthedocs.io/en/latest/Parameters-Tuning.html
@@ -240,7 +243,6 @@ train <- function(data,
 
   # Set the number of LightGBM threads
   # If forking, LightGBM uses single core internally
-  # 0 means all cores available for OpenMP
   hyper$num_threads <- ifelse(fork, 1L, cores)
 
   # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (the are not eligible to be varied within the CV routine)
@@ -287,6 +289,13 @@ train <- function(data,
 
   # Function to build LightGBM prediction model for step 'i' in 'yord'
   buildFun <- function(i, verbose = FALSE) {
+
+    # Ensure OpenMP is not multithreading if forking
+    # This should be done automatically by the packages, so this is a safety check
+    if (fork) {
+      threads_fst(1L)
+      setDTthreads(1L)
+    }
 
     v <- yord[[i]]
     block <- length(v) > 1
@@ -623,18 +632,14 @@ train <- function(data,
 
   # Apply buildFun() to each index in 'yord', using forked parallel processing or serial (depending on 'fork' variable)
   # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
-
   if (fork) {
-    fst::threads_fst(1L)
     cat("Processing ", length(pfixes), " training steps in parallel (", cores, " cores)...", "\n", sep = "")
     out <- parallel::mclapply(X = 1:length(yord),
                               FUN = buildFun,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
-    fst::threads_fst(cores)
   } else {
-    fst::threads_fst(cores)
     out <- lapply(X = 1:length(yord), buildFun, verbose = TRUE)
   }
 
