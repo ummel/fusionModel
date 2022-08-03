@@ -11,7 +11,7 @@
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param cores Integer. Number of cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \link[parallel]{mclapply}. On Windows, they are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP (\code{cores = 0} uses all available cores).
+#' @param cores Integer. Number of physical CPU cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \link{fuse}.
@@ -109,6 +109,7 @@ train <- function(data,
   stopifnot(exprs = {
     is.data.frame(data)
     all(unlist(y) %in% names(data))
+    !any(c("M", "W..", "R..") %in% unlist(y))  # Reserved variable names
     all(x %in% names(data))
     length(intersect(y, x)) == 0
     is.character(file) & endsWith(file, ".fsn")
@@ -116,7 +117,7 @@ train <- function(data,
     nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
-    cores >= 0 & cores %% 1 == 0  # cores = 0 allows LightGBM to use all available threads via OpenMP
+    cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
   })
 
   if (is.null(hyper)) hyper <- list()
@@ -204,7 +205,7 @@ train <- function(data,
   cat(nrow(data), "observations\n")
 
   # Limit 'data' to the necessary variables
-  data <- data[c(yvars, xvars)]
+  data <- data[c(xvars, yvars)]
 
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
   dmat <- tomat(data)
@@ -647,6 +648,7 @@ train <- function(data,
     yorder = yord,
     ytype = ytype,
     ptiles = ptiles,
+    dnames = colnames(dmat),
     timing = difftime(Sys.time(), t0),
     version = list(fusionModel = packageVersion("fusionModel"), R = getRversion()),
     call = match.call()

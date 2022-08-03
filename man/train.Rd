@@ -33,7 +33,7 @@ train(
 
 \item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
 
-\item{cores}{Integer. Number of cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \link[parallel]{mclapply}. On Windows, they are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP (\code{cores = 0} uses all available cores).}
+\item{cores}{Integer. Number of physical CPU cores used for parallel computation. If \code{cores > 1} on a Unix system, the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP.}
 }
 \value{
 A fusion model object (.fsn) is saved to \code{file}.
