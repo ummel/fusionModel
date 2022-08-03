@@ -137,7 +137,8 @@ train <- function(data,
   }
 
   # Determine if paralell forking will be used
-  fork <- unix & cores > 1 & length(yord) > 1
+  # This forces use of OpenMP if there are more cores than fusion steps
+  fork <- unix & cores > 1 & length(yord) > 1 & cores <= length(yord)
 
   #-----
 
@@ -624,7 +625,6 @@ train <- function(data,
   # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
 
   if (fork) {
-    ft <- fst::threads_fst()
     fst::threads_fst(1L)
     cat("Processing ", length(pfixes), " training steps in parallel (", cores, " cores)...", "\n", sep = "")
     out <- parallel::mclapply(X = 1:length(yord),
@@ -632,8 +632,9 @@ train <- function(data,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
-    fst::threads_fst(ft)
+    fst::threads_fst(cores)
   } else {
+    fst::threads_fst(cores)
     out <- lapply(X = 1:length(yord), buildFun, verbose = TRUE)
   }
 
