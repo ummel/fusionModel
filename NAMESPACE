@@ -2,7 +2,6 @@
 
 export(analyze)
 export(blockchain)
-export(compare)
 export(fuse)
 export(fuseCART)
 export(prescreen)
