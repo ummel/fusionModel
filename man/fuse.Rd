@@ -13,6 +13,7 @@ fuse(
   idw = FALSE,
   cores = 1,
   ignore_self = FALSE,
+  margin = 0.2,
   seed = NULL
 )
 }
@@ -32,6 +33,8 @@ fuse(
 \item{cores}{Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).}
 
 \item{ignore_self}{Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.}
+
+\item{margin}{Numeric (0, 1). Size of safety margin used when estimating how many implicates can be processed in memory at once.}
 
 \item{seed}{Set random seed if needed.}
 }

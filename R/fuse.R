@@ -11,6 +11,7 @@
 #' @param idw Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?
 #' @param cores Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).
 #' @param ignore_self Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.
+#' @param margin Numeric (0, 1). Size of safety margin used when estimating how many implicates can be processed in memory at once.
 #' @param seed Set random seed if needed.
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}; otherwise, the donor sample weights are used.
@@ -85,6 +86,7 @@ fuse <- function(data,
                  idw = FALSE,
                  cores = 1,
                  ignore_self = FALSE,
+                 margin = 0.2,
                  seed = NULL) {
 
   t0 <- Sys.time()
@@ -97,6 +99,7 @@ fuse <- function(data,
     is.logical(idw)
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
     is.logical(ignore_self)
+    margin > 0 & margin < 1
   })
 
   fst::threads_fst(cores)
@@ -134,13 +137,13 @@ fuse <- function(data,
   # Check for appropriate class/type of predictor variables
   xclass <- meta$xclass
   xtest <- lapply(data, class)
-  miss <- !map2_lgl(xclass, xtest, sameClass)
+  miss <- !purrr::map2_lgl(xclass, xtest, sameClass)
   if (any(miss)) stop("Incompatible data type for the following predictor variables:\n", paste(names(miss)[miss], collapse = ", "))
 
   # Check for appropriate levels of factor predictor variables
   xlevels <- meta$xlevels
   xtest <- lapply(subset(data, select = names(xlevels)), levels)
-  miss <- !map2_lgl(xlevels, xtest, identical)
+  miss <- !purrr::map2_lgl(xlevels, xtest, identical)
   if (any(miss)) stop("Incompatible levels for the following predictor variables\n", paste(names(miss)[miss], collapse = ", "))
 
   # Detect and impute any missing values in 'data'
@@ -173,7 +176,7 @@ fuse <- function(data,
 
   # Process multiple implicates at once...
   # Determine how may implicates can be processed at once, given available memory
-  mfree <- getFreeMemory() * 0.9 - fsize * M
+  mfree <- getFreeMemory() * (1 - margin) - fsize * M
   n <- floor(mfree / dsize)
   n <- min(n, M)
   nsteps <- ceiling(M / n)
@@ -379,8 +382,8 @@ fuse <- function(data,
         rm(pred, dpred)
 
         # Compile the chunked nearest-neighbor results
-        nn[[1]]$nn.idx <- do.call(rbind, map(nn, "nn.idx"))
-        nn[[1]]$nn.dists <- do.call(rbind, map(nn, "nn.dists"))
+        nn[[1]]$nn.idx <- do.call(rbind, purrr::map(nn, "nn.idx"))
+        nn[[1]]$nn.dists <- do.call(rbind, purrr::map(nn, "nn.dists"))
         nn <- nn[[1]]
 
         # If requested, exclude self-matches in 'nn'
