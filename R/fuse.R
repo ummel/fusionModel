@@ -178,6 +178,7 @@ fuse <- function(data,
   # Determine how may implicates can be processed at once, given available memory
   mfree <- getFreeMemory() * (1 - margin) - fsize * M
   n <- floor(mfree / dsize)
+  if (n <= 0) stop("Insufficient memory to store ", M, " implicates. 'M' must be smaller.")
   n <- min(n, M)
   nsteps <- ceiling(M / n)
   ind.final <- if (M %% n > 0) rep(seq.int(N0), M %% n) else NULL
