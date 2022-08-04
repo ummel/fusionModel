@@ -177,7 +177,7 @@ fuse <- function(data,
   # Process multiple implicates at once...
   # Determine how may implicates can be processed at once, given available memory
   dsize <- as.numeric(object.size(dmat)) / 1048576  # Check size (Mb)
-  mfree <- availableMemory() * (1 - margin) - fsize * M
+  mfree <- freeMemory() * (1 - margin) - fsize * M
   n <- floor(mfree / dsize)
   if (n <= 0) stop("Insufficient memory to store ", M, " implicates. 'M' must be smaller.")
   n <- min(n, M)
