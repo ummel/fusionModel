@@ -305,14 +305,15 @@ checkData <- function(data, y, x) {
 
 #------------------
 
-# Function to return free system memory in Mb
+# Function to return available system memory in Mb
 # Different commands used on Unix vs. Windows
 # https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine
 # https://stackoverflow.com/questions/6457290/how-to-check-the-amount-of-ram
-getFreeMemory <- function() {
+# On free vs available: https://haydenjames.io/free-vs-available-memory-in-linux/
+availableMemory <- function() {
   gc()
   if (.Platform$OS.type == "unix") {
-    x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)
+    x <- system("awk '/MemAvailable/ {print $2}' /proc/meminfo", intern = TRUE)
   } else {
     x <- system("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
     x <- x[grepl("FreePhysicalMemory", x)]

@@ -164,24 +164,28 @@ fuse <- function(data,
   fmat <- matrix(data = NA_real_, nrow = N0, ncol = length(unlist(yord)), dimnames = list(NULL, unlist(yord)))
   fsize <- as.numeric(object.size(fmat)) / 1048576  # This would be more accurate if it accounted for factor/integer/logical y-variable classes in eventual output
 
-  # Coerce 'data' to numeric matrix for use with LightGBM
+  # Coerce 'data' to matrix compatible with input to LightGBM
   data <- cbind(as.data.table(data), fmat)
   setcolorder(data, meta$dnames)  # This ensures that 'dmat' has columns in correct/original order for purposes of LightGBM prediction
   dmat <- tomat(data, sparse = FALSE)
-  dsize <- as.numeric(object.size(dmat)) / 1048576  # Check size (Mb)
   rm(data, fmat)
 
-  # Allocate the output data.table
-  dout <- data.table()
+  # Ensure that 'dmat' is double precision
+  # LightGBM enforces this internally, so it is more efficient to do it here
+  if (storage.mode(dmat) != "double") storage.mode(dmat) <- "double"
 
   # Process multiple implicates at once...
   # Determine how may implicates can be processed at once, given available memory
-  mfree <- getFreeMemory() * (1 - margin) - fsize * M
+  dsize <- as.numeric(object.size(dmat)) / 1048576  # Check size (Mb)
+  mfree <- availableMemory() * (1 - margin) - fsize * M
   n <- floor(mfree / dsize)
   if (n <= 0) stop("Insufficient memory to store ", M, " implicates. 'M' must be smaller.")
   n <- min(n, M)
   nsteps <- ceiling(M / n)
   ind.final <- if (M %% n > 0) rep(seq.int(N0), M %% n) else NULL
+
+  # Allocate the output data.table
+  dout <- data.table()
 
   cat(M, "implicate(s) requested\n")
   cat("Generating implicates in", nsteps, "chunk(s)\n")
