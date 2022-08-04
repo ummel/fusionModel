@@ -11,11 +11,11 @@
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
 #' @param ptiles Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param cores Integer. Number of physical CPU cores used for parallel computation. On a Unix system, if \code{cores > 1} and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. Testing with small-to-moderate size datasets suggests forking is typically faster.
+#' @param fork Logical. Should parallel processing via forking be used, if possible? See Details.
+#' @param cores Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #' @details The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
-#'
 #' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
 #' @details \itemize{
 #'   \item boosting
@@ -28,6 +28,7 @@
 #'   \item max_bin
 #'   \item min_data_in_bin
 #'  }
+#' @details Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
 #'
 #' @return A fusion model object (.fsn) is saved to \code{file}.
 #'
@@ -101,6 +102,7 @@ train <- function(data,
                   nfolds = 5,
                   ptiles = c(0.165, 0.835),
                   hyper = NULL,
+                  fork = FALSE,
                   cores = 1) {
 
   t0 <- Sys.time()
@@ -116,6 +118,7 @@ train <- function(data,
     nfolds > 0  # Not entirely safe
     is.numeric(ptiles) & all(ptiles > 0 & ptiles < 1)
     is.null(hyper) | is.list(hyper)
+    is.logical(fork)
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
   })
 
@@ -132,8 +135,7 @@ train <- function(data,
 
   # Determine if parallel forking will be used
   # This forces use of OpenMP if there are more cores than fusion steps
-  unix <- .Platform$OS.type == "unix"
-  fork <- unix & cores > 1 & length(yord) > 1 & cores <= length(yord)
+  fork <- fork & .Platform$OS.type == "unix" & cores > 1 & length(yord) > 1 & cores <= length(yord)
 
   # Check 'file' path and create parent directories, if necessary
   dir <- normalizePath(dirname(file), mustWork = FALSE)
@@ -289,13 +291,6 @@ train <- function(data,
 
   # Function to build LightGBM prediction model for step 'i' in 'yord'
   buildFun <- function(i, verbose = FALSE) {
-
-    # Ensure OpenMP is not multithreading if forking
-    # This should be done automatically by the packages, so this is a safety check
-    if (fork) {
-      threads_fst(1L)
-      setDTthreads(1L)
-    }
 
     v <- yord[[i]]
     block <- length(v) > 1
@@ -641,7 +636,9 @@ train <- function(data,
                               verbose = FALSE)
   } else {
     cat("Using OpenMP multithreading within LightGBM (", cores, " cores)...", "\n", sep = "")
-    out <- lapply(X = 1:length(yord), buildFun, verbose = TRUE)
+    out <- lapply(X = 1:length(yord),
+                  FUN = buildFun,
+                  verbose = TRUE)
   }
 
   #-----

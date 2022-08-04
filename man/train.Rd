@@ -13,6 +13,7 @@ train(
   nfolds = 5,
   ptiles = c(0.165, 0.835),
   hyper = NULL,
+  fork = FALSE,
   cores = 1
 )
 }
@@ -33,7 +34,9 @@ train(
 
 \item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
 
-\item{cores}{Integer. Number of physical CPU cores used for parallel computation. On a Unix system, if \code{cores > 1} and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}. On Windows (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. Testing with small-to-moderate size datasets suggests forking is typically faster.}
+\item{fork}{Logical. Should parallel processing via forking be used, if possible? See Details.}
+
+\item{cores}{Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.}
 }
 \value{
 A fusion model object (.fsn) is saved to \code{file}.
@@ -59,6 +62,8 @@ The \code{hyper} argument can be used to specify the LightGBM hyperparameter val
 \item max_bin
 \item min_data_in_bin
 }
+
+Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
 }
 \examples{
 # Build a fusion model using RECS microdata
