@@ -1,8 +1,6 @@
 #' @import dplyr
 #' @rawNamespace import(stats, except = c(filter, lag))
 #' @rawNamespace import(data.table, except = c(first, last, between))
-#' @importFrom utils capture.output glob2rx object.size packageVersion
-#' @importFrom Matrix Matrix
 NULL
 #' Train a fusion model
 #'
@@ -661,7 +659,7 @@ train <- function(data,
     ptiles = ptiles,
     dnames = colnames(dmat),
     timing = difftime(Sys.time(), t0),
-    version = list(fusionModel = packageVersion("fusionModel"), R = getRversion()),
+    version = list(fusionModel = utils::packageVersion("fusionModel"), R = getRversion()),
     call = match.call()
   )
 

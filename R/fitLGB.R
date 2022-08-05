@@ -5,7 +5,7 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
 
     # If full cross-validation is requested...
     lapply(hyper.grid, FUN = function(x) {
-      sink <- capture.output({
+      sink <- utils::capture.output({
         mod <- lightgbm::lgb.cv(
           params = c(as.list(x), params.obj),
           data = dfull,
@@ -22,7 +22,7 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
     # If training/test-set validation is requested...
     lapply(hyper.grid, FUN = function(x) {
       p <- c(as.list(x), params.obj)
-      sink <- capture.output({
+      sink <- utils::capture.output({
         mod <- lightgbm::lgb.train(
           params = p,
           data = dtrain,

@@ -17,6 +17,8 @@ Imports:
     matrixStats,
     purrr,
     RANN,
+    stats,
+    utils,
     zip
 Encoding: UTF-8
 LazyData: true

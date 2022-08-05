@@ -303,6 +303,11 @@ checkData <- function(data, y, x) {
 
 #------------------
 
+# Function to return in-memory size of object in Mb
+objectSize <- function(x) as.numeric(utils::object.size(x)) / 1048576
+
+#------------------
+
 # Function to return free system memory in Mb
 # Different commands used on Unix vs. Windows
 # https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine

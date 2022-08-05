@@ -121,7 +121,7 @@ fuse <- function(data,
   meta <- readRDS(file.path(td, "metadata.rds"))
 
   # Unzip ALL of the lightGBM model(s) to temp directory
-  mods <- grep(pattern = glob2rx("*.txt"), x = fsn.files$filename, value = TRUE)
+  mods <- grep(pattern = utils::glob2rx("*.txt"), x = fsn.files$filename, value = TRUE)
   zip::unzip(zipfile = file, files = mods, exdir = td)
 
   # Names, order, and 'blocks' of response variables
@@ -163,7 +163,7 @@ fuse <- function(data,
   # Allocate columns in 'dmat' for the fusion variables
   N0 <- nrow(data)
   fmat <- matrix(data = NA_real_, nrow = N0, ncol = length(unlist(yord)), dimnames = list(NULL, unlist(yord)))
-  fsize <- as.numeric(object.size(fmat)) / 1048576  # This would be more accurate if it accounted for factor/integer/logical y-variable classes in eventual output
+  fsize <- objectSize(fmat) # NOTE: This would be more accurate if it accounted for factor/integer/logical y-variable classes in eventual output
 
   # Coerce 'data' to matrix compatible with input to LightGBM
   data <- cbind(as.data.table(data), fmat)
@@ -180,7 +180,7 @@ fuse <- function(data,
   # Determine how may implicates can be processed at once, given available memory
   # fsize * M: the maximum size of the output/results matrix
   # dsize: initial size of the prediction data prior to expansion
-  dsize <- as.numeric(object.size(dmat)) / 1048576  # Check size (Mb)
+  dsize <- objectSize(dmat)
   mfree <- freeMemory() + dsize
   n <- floor(mfree / (fsize + dsize * margin))
   if (n <= 0) stop("Insufficient memory to store ", M, " implicates. 'M' must be smaller.")
@@ -214,7 +214,7 @@ fuse <- function(data,
       #xv <- meta$lgbpred[[i]]
 
       # Unzip the lightGBM model(s) to temp directory
-      mods <- grep(pattern = glob2rx(paste0(pfixes[i], "*.txt")), x = fsn.files$filename, value = TRUE)
+      mods <- grep(pattern = utils::glob2rx(paste0(pfixes[i], "*.txt")), x = fsn.files$filename, value = TRUE)
 
       # Row indices where to generate predictions
       # Modified, if necessary, in next code chunk when single continuous variables has a zero model
