@@ -642,7 +642,7 @@ train <- function(data,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
   } else {
-    cat("Using OpenMP multithreading within LightGBM (", cores, " cores)...", "\n", sep = "")
+    if (cores > 1) cat("Using OpenMP multithreading within LightGBM (", cores, " cores)...", "\n", sep = "")
     out <- lapply(X = 1:length(yord),
                   FUN = buildFun,
                   verbose = TRUE)
