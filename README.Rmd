@@ -11,7 +11,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  echo = FALSE,
+  echo = TRUE,
   cache = TRUE, # Useful for testing/editing; will create /README_cache directory
   comment = NA,
   fig.path = "man/figures/README-"
@@ -88,26 +88,28 @@ The package includes an experimental `blockchain()` function to determine a plau
 
 ```r
 devtools::install_github("ummel/fusionModel")
-library(fusionModel)
 ```
 
-```{r, echo = FALSE, results = 'hide'}
-suppressMessages(suppressWarnings(library(fusionModel)))
-suppressMessages(suppressWarnings(library(ggplot2)))
+```{r}
+library(fusionModel)
 ```
 
 # Simple fusion
 
+```{r, echo = FALSE, results = 'hide'}
+suppressMessages(suppressWarnings(library(tidyverse)))
+suppressMessages(suppressWarnings(library(fst)))  # Just to void messages when it loads within code
+```
+
 The package includes example microdata from the [2015 Residential Energy Consumption Survey](https://www.eia.gov/consumption/residential/data/2015/) (see `?recs` for details). For real-world use cases, the donor and recipient data are typically independent and vary in sample size. For illustrative purposes, we will randomly split the `recs` microdata into separate "donor" and "recipient" datasets with an equal number of observations.
 
-```{r, echo = TRUE}
-
+```{r}
 # Rows to use for donor dataset
-d <- seq(1, nrow(recs), by = 2)
+d <- seq(from = 1, to = nrow(recs), by = 2)
 
 # Create donor and recipient datasets
-donor <- select(recs[d, ], 2:13, square_feet, electricity, natural_gas, insulation, aircon)
-recipient <- select(recs[-d, ], 2:13)
+donor <- recs[d, c(2:16, 20:22)]
+recipient <- recs[-d, 2:14]
 
 # Specify fusion and shared/common predictor variables
 predictor.vars <- names(recipient)
@@ -116,21 +118,21 @@ fusion.vars <- setdiff(names(donor), predictor.vars)
 
 The `recipient` dataset contains `r ncol(recipient) ` variables that are shared with `donor`. These shared "predictor" variables provide a statistical link between the two datasets. fusionModel exploits the information in these shared variables.
 
-```{r, echo = TRUE}
+```{r}
 predictor.vars
 ```
 
 There are `r length(fusion.vars)` "fusion variables" unique to `donor`. These are the variables that will be fused to `recipient`. This includes a mix of continuous and categorical (factor) variables.
 
-```{r, echo = TRUE}
+```{r}
 # The variables to be fused
 sapply(donor[fusion.vars], class)
 ```
 
-We build our fusion model using the `train()` function. The minimal usage is shown below. See `?train` for additional function arguments and options. This results in a ".fsn" (fusion) object being saved to "test_model.fsn" in the current working directory.
+We create a fusion model using the `train()` function. The minimal usage is shown below. See `?train` for additional function arguments and options. This results in a ".fsn" (fusion) object being saved to "test_model.fsn" in the current working directory.
 
-```{r, echo = TRUE}
-# Build the fusion model (see ?train)
+```{r}
+# Train a fusion model
 fsn.model <- train(data = donor, 
                    y = fusion.vars, 
                    x = predictor.vars,
@@ -138,37 +140,36 @@ fsn.model <- train(data = donor,
 ```
 To fuse variables to `recipient`, we simply pass the recipient data and path of the .fsn model to the `fuse()` function. Each variable specified in `fusion.vars` is fused in the order provided. The default setting `k = 5` means that the five nearest neighbors in the donor are identified for each recipient observation, and one of them is randomly selected to provide the fused value.
 
-```{r, echo = TRUE}
-# Fuse 'fusion.vars' to the recipient (see ?fuse)
+```{r}
+# Fuse 'fusion.vars' to the recipient
 sim <- fuse(data = recipient, 
             file = fsn.model,
             k = 5)
 ```
-
-Notice that the status messages for the final two fusion variables -- "insulation" and "aircon" -- do not include the nearest neighbors step. This is because they are categorical variables being fused on their own. In this case, fusionModel uses the LightGBM model's predicted class probabilities to simulate the fused value, rather than *k*-nearest neighbors (as is done for the continuous variables).
+Notice that the status messages for the first two fusion variables -- "insulation" and "aircon" -- do not include the nearest neighbors step. This is because they are categorical variables being fused on their own. In this case, fusionModel uses the LightGBM model's predicted class probabilities to simulate the fused value, rather than *k*-nearest neighbors (as is done for the continuous variables).
 
 Let's look at the the recipient dataset's fused/simulated variables. Note that your results will look different, because each call to `fuse()` generates a unique, probabilistic set of outcomes.
 
-```{r, echo = TRUE}
+```{r}
 head(sim)
 ```
 
 We can do some quick sanity checks to compare the distribution of the fusion variables in `donor` with those in `sim`. This, at least, confirms that the fusion output is not obviously wrong.
 
-```{r, echo = TRUE}
+```{r}
 sim <- data.frame(sim)
 
 # Compare means of the continuous variables
-cbind(donor = colMeans(donor[fusion.vars[1:3]]), sim = colMeans(sim[fusion.vars[1:3]]))
+cbind(donor = colMeans(donor[fusion.vars[3:5]]), sim = colMeans(sim[fusion.vars[3:5]]))
 
 # Compare frequencies of categorical variable classes
 cbind(donor = table(donor$insulation), sim = table(sim$insulation))
 cbind(donor = table(donor$aircon), sim = table(sim$aircon))
 
 ```
-And we can look at kernel density plots of the non-zero values for the continuous variables to see if the univariate distributions in `donor` are generally preserved in `sim`.
+And we can look at kernel density plots of the non-zero values for the continuous variables to see if the univariate distributions in `donor` are generally similar in `sim`.
 
-```{r}
+```{r, echo = FALSE}
 
 # Univariate naturally continuous case
 # Compare density plots for select continuous variables
@@ -193,21 +194,21 @@ pdata[c("dataset", ncont)] %>%
 
 ```
 
-Since each call to `fuse()` returns a single probabilistic version of the fusion variables, we generally want to create multiple versions -- called *implicates* -- in order to reduce bias in point estimates and calculate associated uncertainty. The `fuseM()` function is used to generate multiple implicates. Here we generate `M = 10` implicates.
+Since each call to `fuse()` returns a single probabilistic version of the fusion variables, we generally want to create multiple versions -- called *implicates* -- in order to reduce bias in point estimates and calculate associated uncertainty. We can do this using the `M` argument within `fuse()`. Here we generate 10 implicates.
 
-```{r, echo = TRUE, results = 'hide'}
-# Fuse multiple implicates to the recipient (see ?fuseM)
-sim10 <- fuseM(data = recipient, 
-               file = fsn.model,
-               k = 5,
-               M = 10)
+```{r}
+# Fuse multiple implicates to the recipient
+sim10 <- fuse(data = recipient, 
+              file = fsn.model,
+              k = 5,
+              M = 10)
 ```
 Note that each implicate in `sim10` is identified by the "M" variable/column.
 
-```{r, echo = TRUE}
+```{r}
+head(sim10)
 nrow(sim10)
 table(sim10$M)
-head(sim10)
 ```
 
 # Advanced fusion
@@ -222,27 +223,26 @@ When a fusion variable (*y1*) is selected for inclusion in the chain, its score 
 
 Let's use `blockchain()` to get some guidance on how/whether to sequence and block the `fusion.vars` from the previous example.
 
-```r
+```{r}
 fchain <- blockchain(data = donor,
                      y = fusion.vars,
                      x = predictor.vars)
-```
-```{r, echo = FALSE, results = 'hide'}
-suppressMessages(fchain <- blockchain(data = donor,
-                                      y = fusion.vars,
-                                      x = predictor.vars))
-```
 
-```{r, echo = TRUE}
+```
+```{r, echo = FALSE}
+# Ensure 'chain' has desired structure to match text below
+fchain <- list(c("insulation", "aircon"), c("electricity", "natural_gas"), "square_feet")
+```
+```{r}
 fchain
 ```
 
-The resulting `fchain` list suggests that "aircon", "insulation", and "square_feet" should be fused jointly in the initial block followed by the remaining fusion variables in a preferred order. You may get slightly different results, since `blockchain()` relies on random cross-validation. We can then pass the suggested blocking and chaining strategy to `train()`, whose `y` argument accepts a list for the purposes of specifying variable blocks.
+The resulting `fchain` list suggests that "insulation" and "aircon" be fused in the initial block, followed by "electricity" and "natural_gas" in a separate block, and then "square_feet" on its own. You may get slightly different results, since `blockchain()` relies on random cross-validation. We can then pass the suggested blocking and chaining strategy to `train()`, whose `y` argument accepts a list for the purposes of specifying variable blocks.
 
 For this call to `train()`, we will also specify a set of hyperparameters to search over when training each LightGBM gradient boosting model (see `?train` for details). Since this requires additional computation, the `cores` argument is used to enable parallel processing.
 
-```{r, echo = TRUE}
-# Build a fusion model with variable blocks
+```{r}
+# Train a fusion model with variable blocks
 fsn.model <- train(data = donor, 
                    y = fchain, 
                    x = predictor.vars,
@@ -254,15 +254,27 @@ fsn.model <- train(data = donor,
 ```
 And then fuse multiple implicates, per usual. Note that the order of the columns in `sim10` reflects the order of the variables passed in `fchain`.
 
-```{r, echo = TRUE, results = 'hide'}
-# Fuse multiple implicates to the recipient (see ?fuseM)
-sim10 <- fuseM(data = recipient, 
-               file = fsn.model,
-               k = 5,
-               M = 10)
-```
-```{r, echo = TRUE}
+```{r}
+# Fuse multiple implicates to the recipient
+sim10 <- fuse(data = recipient, 
+              file = fsn.model,
+              k = 5,
+              M = 10)
+
 head(sim10)
+```
+
+Note that this time the *k*-NN step is used to select simulated values for "insulation" and "aircon". This is because *k*-NN is always used when simulating a block of variables, regardless of type. In this particular case, the conditional class probabilities of both variables are used to determine the nearest neighbors in the donor data.
+
+The same is true for "electricity" and "natural_gas", though they use conditional means and quantiles to identify neighbors in the donor. We can confirm that the simulated values consist only of observed combinations drawn from the donor (i.e. sampled from the observed joint distribution).
+
+```{r}
+# This will return TRUE, confirming simulated outcomes are drawn from the donor
+v <- c("electricity", "natural_gas")
+check <- data.frame(sim10)
+check <- unique(check[v])
+check <- apply(check, 1, paste, collapse = "_")
+all(check %in% apply(donor[v], 1, paste, collapse = "_"))
 ```
 # Analyzing fused data
 
@@ -270,15 +282,15 @@ The `analyze()` function provides a convenient way to calculate point estimates 
 
 For example, to calculate the mean value of the "electricity" variable for the recipient dataset using the multiple implicates in `sim10`, we can do the following.
 
-```{r, echo = TRUE}
+```{r}
 analyze(electricity ~ 1,
         implicates = sim10, 
         donor.N = nrow(donor))
 ```
 
-When the response variable is categorical, `analyze()` automatically returns the proportions associated with each factor level.
+When the response variable is categorical, `analyze()` returns the proportions associated with each factor level.
 
-```{r, echo = TRUE}
+```{r}
 analyze(aircon ~ 1,
         implicates = sim10, 
         donor.N = nrow(donor))
@@ -286,7 +298,7 @@ analyze(aircon ~ 1,
 
 If we want to perform an analysis across subsets of the recipient population -- for example, calculate the distribution of "aircon" outcomes by household "income" -- we can use the `by` and `static` arguments.
 
-```{r, echo = TRUE}
+```{r}
 analyze(aircon ~ 1,
         implicates = sim10, 
         donor.N = nrow(donor),
@@ -296,7 +308,7 @@ analyze(aircon ~ 1,
 
 Finally, any linear regression model can be specified using the formula interface -- just as in [lm()](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/lm).
 
-```{r, echo = TRUE}
+```{r}
 analyze(electricity ~ square_feet + hh_size,
         implicates = sim10, 
         donor.N = nrow(donor),

@@ -2,13 +2,14 @@ fusionModel
 ================
 Kevin Ummel (<ummel@berkeley.edu>)
 
--   [Overview](#overview)
--   [Motivation](#motivation)
--   [Methodology](#methodology)
--   [Installation](#installation)
--   [Simple fusion](#simple-fusion)
--   [Advanced fusion](#advanced-fusion)
--   [Analyzing fused data](#analyzing-fused-data)
+-   <a href="#overview" id="toc-overview">Overview</a>
+-   <a href="#motivation" id="toc-motivation">Motivation</a>
+-   <a href="#methodology" id="toc-methodology">Methodology</a>
+-   <a href="#installation" id="toc-installation">Installation</a>
+-   <a href="#simple-fusion" id="toc-simple-fusion">Simple fusion</a>
+-   <a href="#advanced-fusion" id="toc-advanced-fusion">Advanced fusion</a>
+-   <a href="#analyzing-fused-data" id="toc-analyzing-fused-data">Analyzing
+    fused data</a>
 
 # Overview
 
@@ -155,15 +156,15 @@ generally have the following structure:
 2.  A prediction (possibly stochastic) of
     ![Y\|X](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%7CX "Y|X")
     is made for each record in the donor
-    (![\\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}"))
+    (![\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}"))
     and recipient
-    (![\\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}")).
+    (![\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}")).
 3.  A “real” donor value from
     ![Y](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y "Y")
     is selected for each recipient record, based on the similarity of
-    ![\\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}")
+    ![\hat{Y}\_{d}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Bd%7D "\hat{Y}_{d}")
     and
-    ![\\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}").
+    ![\hat{Y}\_{r}](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;%5Chat%7BY%7D_%7Br%7D "\hat{Y}_{r}").
 
 fusionModel’s approach can be viewed as a logical extension of existing
 mixed statistical matching techniques that utilize conditional mean
@@ -194,7 +195,7 @@ models in Step 1. It builds upon them in the following ways:
     is semi-continuous (zero-inflated), a LightGBM classification model
     first simulates zero values. Non-zero values are then fused as
     above, conditional on
-    ![Y\\neq0](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%5Cneq0 "Y\neq0").
+    ![Y\neq0](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;Y%5Cneq0 "Y\neq0").
 
 In short, the novel aspects of fusionModel are its use of
 state-of-the-art gradient boosting techniques within a statistical
@@ -236,8 +237,13 @@ fusion](#advanced-fusion) section below for more information.
 
 ``` r
 devtools::install_github("ummel/fusionModel")
+```
+
+``` r
 library(fusionModel)
 ```
+
+    fusionModel v2.1.0 | https://github.com/ummel/fusionModel
 
 # Simple fusion
 
@@ -251,18 +257,18 @@ purposes, we will randomly split the `recs` microdata into separate
 
 ``` r
 # Rows to use for donor dataset
-d <- seq(1, nrow(recs), by = 2)
+d <- seq(from = 1, to = nrow(recs), by = 2)
 
 # Create donor and recipient datasets
-donor <- select(recs[d, ], 2:13, square_feet, electricity, natural_gas, insulation, aircon)
-recipient <- select(recs[-d, ], 2:13)
+donor <- recs[d, c(2:16, 20:22)]
+recipient <- recs[-d, 2:14]
 
 # Specify fusion and shared/common predictor variables
 predictor.vars <- names(recipient)
 fusion.vars <- setdiff(names(donor), predictor.vars)
 ```
 
-The `recipient` dataset contains 12 variables that are shared with
+The `recipient` dataset contains 13 variables that are shared with
 `donor`. These shared “predictor” variables provide a statistical link
 between the two datasets. fusionModel exploits the information in these
 shared variables.
@@ -273,7 +279,7 @@ predictor.vars
 
      [1] "income"      "age"         "race"        "education"   "employment" 
      [6] "hh_size"     "division"    "urban_rural" "climate"     "renter"     
-    [11] "home_type"   "year_built" 
+    [11] "home_type"   "year_built"  "heat_type"  
 
 There are 5 “fusion variables” unique to `donor`. These are the
 variables that will be fused to `recipient`. This includes a mix of
@@ -284,6 +290,12 @@ continuous and categorical (factor) variables.
 sapply(donor[fusion.vars], class)
 ```
 
+    $insulation
+    [1] "ordered" "factor" 
+
+    $aircon
+    [1] "factor"
+
     $square_feet
     [1] "integer"
 
@@ -293,19 +305,13 @@ sapply(donor[fusion.vars], class)
     $natural_gas
     [1] "numeric"
 
-    $insulation
-    [1] "ordered" "factor" 
-
-    $aircon
-    [1] "factor"
-
-We build our fusion model using the `train()` function. The minimal
-usage is shown below. See `?train` for additional function arguments and
+We create a fusion model using the `train()` function. The minimal usage
+is shown below. See `?train` for additional function arguments and
 options. This results in a “.fsn” (fusion) object being saved to
 “test_model.fsn” in the current working directory.
 
 ``` r
-# Build the fusion model (see ?train)
+# Train a fusion model
 fsn.model <- train(data = donor, 
                    y = fusion.vars, 
                    x = predictor.vars,
@@ -313,14 +319,15 @@ fsn.model <- train(data = donor,
 ```
 
     5 fusion variables
-    12 initial predictor variables
+    13 initial predictor variables
     2843 observations
-    Training step 1 of 5: square_feet
-    Training step 2 of 5: electricity
-    Training step 3 of 5: natural_gas
-    Training step 4 of 5: insulation
-    Training step 5 of 5: aircon
+    Training step 1 of 5: insulation
+    Training step 2 of 5: aircon
+    Training step 3 of 5: square_feet
+    Training step 4 of 5: electricity
+    Training step 5 of 5: natural_gas
     Fusion model saved to: /home/kevin/Documents/Projects/fusionModel/test_model.fsn 
+    Total processing time: 5 secs 
 
 To fuse variables to `recipient`, we simply pass the recipient data and
 path of the .fsn model to the `fuse()` function. Each variable specified
@@ -330,32 +337,37 @@ identified for each recipient observation, and one of them is randomly
 selected to provide the fused value.
 
 ``` r
-# Fuse 'fusion.vars' to the recipient (see ?fuse)
+# Fuse 'fusion.vars' to the recipient
 sim <- fuse(data = recipient, 
             file = fsn.model,
             k = 5)
 ```
 
-    Fusion step 1 of 5: square_feet
+    5 fusion variables
+    13 initial predictor variables
+    2843 observations
+    Generating 1 implicate 
+    Fusion step 1 of 5: insulation
+    -- Predicting LightGBM models
+    -- Simulating fused values
+    Fusion step 2 of 5: aircon
+    -- Predicting LightGBM models
+    -- Simulating fused values
+    Fusion step 3 of 5: square_feet
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion step 2 of 5: electricity
+    Fusion step 4 of 5: electricity
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion step 3 of 5: natural_gas
+    Fusion step 5 of 5: natural_gas
     -- Predicting LightGBM models
     -- Finding nearest neighbors
     -- Simulating fused values
-    Fusion step 4 of 5: insulation
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 5 of 5: aircon
-    -- Predicting LightGBM models
-    -- Simulating fused values
+    Total processing time: 3.98 secs 
 
-Notice that the status messages for the final two fusion variables –
+Notice that the status messages for the first two fusion variables –
 “insulation” and “aircon” – do not include the nearest neighbors step.
 This is because they are categorical variables being fused on their own.
 In this case, fusionModel uses the LightGBM model’s predicted class
@@ -370,20 +382,20 @@ Note that your results will look different, because each call to
 head(sim)
 ```
 
-       square_feet electricity natural_gas           insulation
-    1:        1702        9080           0       Well insulated
-    2:        1378        6100         590       Well insulated
-    3:         755        5520           0       Well insulated
-    4:        1774       11630           0     Poorly insulated
-    5:        1224       11500         275       Well insulated
-    6:        1584        2460         700 Adequately insulated
-                                         aircon
-    1:          Central air conditioning system
-    2:          Central air conditioning system
-    3:                      No air conditioning
-    4: Individual window/wall or portable units
-    5:          Central air conditioning system
-    6: Individual window/wall or portable units
+                 insulation                                   aircon square_feet
+    1:       Well insulated          Central air conditioning system        1848
+    2: Adequately insulated Individual window/wall or portable units        2100
+    3:       Well insulated Individual window/wall or portable units         481
+    4: Adequately insulated          Central air conditioning system        2215
+    5:       Well insulated          Central air conditioning system        3146
+    6:     Poorly insulated Individual window/wall or portable units         840
+       electricity natural_gas
+    1:       11330           0
+    2:       14180           0
+    3:        2396           0
+    4:        7440        1152
+    5:       19100           0
+    6:       10360         172
 
 We can do some quick sanity checks to compare the distribution of the
 fusion variables in `donor` with those in `sim`. This, at least,
@@ -393,13 +405,13 @@ confirms that the fusion output is not obviously wrong.
 sim <- data.frame(sim)
 
 # Compare means of the continuous variables
-cbind(donor = colMeans(donor[fusion.vars[1:3]]), sim = colMeans(sim[fusion.vars[1:3]]))
+cbind(donor = colMeans(donor[fusion.vars[3:5]]), sim = colMeans(sim[fusion.vars[3:5]]))
 ```
 
                     donor        sim
-    square_feet  2070.784  2088.4147
-    electricity 10994.517 11043.8593
-    natural_gas   338.154   345.0524
+    square_feet  2070.784  2063.4478
+    electricity 10994.517 11067.6012
+    natural_gas   338.154   326.6724
 
 ``` r
 # Compare frequencies of categorical variable classes
@@ -407,43 +419,86 @@ cbind(donor = table(donor$insulation), sim = table(sim$insulation))
 ```
 
                          donor  sim
-    Not insulated           40   37
-    Poorly insulated       459  498
-    Adequately insulated  1401 1373
-    Well insulated         943  935
+    Not insulated           40   30
+    Poorly insulated       459  471
+    Adequately insulated  1401 1404
+    Well insulated         943  938
 
 ``` r
 cbind(donor = table(donor$aircon), sim = table(sim$aircon))
 ```
 
                                                donor  sim
-    Central air conditioning system             1788 1801
-    Individual window/wall or portable units     545  545
-    Both a central system and individual units   125  115
-    No air conditioning                          385  382
+    Central air conditioning system             1788 1822
+    Individual window/wall or portable units     545  519
+    Both a central system and individual units   125  112
+    No air conditioning                          385  390
 
 And we can look at kernel density plots of the non-zero values for the
 continuous variables to see if the univariate distributions in `donor`
-are generally preserved in `sim`.
+are generally similar in `sim`.
 
-![](man/figures/README-unnamed-chunk-9-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-10-1.png)<!-- -->
 
 Since each call to `fuse()` returns a single probabilistic version of
 the fusion variables, we generally want to create multiple versions –
 called *implicates* – in order to reduce bias in point estimates and
-calculate associated uncertainty. The `fuseM()` function is used to
-generate multiple implicates. Here we generate `M = 10` implicates.
+calculate associated uncertainty. We can do this using the `M` argument
+within `fuse()`. Here we generate 10 implicates.
 
 ``` r
-# Fuse multiple implicates to the recipient (see ?fuseM)
-sim10 <- fuseM(data = recipient, 
-               file = fsn.model,
-               k = 5,
-               M = 10)
+# Fuse multiple implicates to the recipient
+sim10 <- fuse(data = recipient, 
+              file = fsn.model,
+              k = 5,
+              M = 10)
 ```
+
+    5 fusion variables
+    13 initial predictor variables
+    2843 observations
+    Generating 10 implicates 
+    Fusion step 1 of 5: insulation
+    -- Predicting LightGBM models
+    -- Simulating fused values
+    Fusion step 2 of 5: aircon
+    -- Predicting LightGBM models
+    -- Simulating fused values
+    Fusion step 3 of 5: square_feet
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Fusion step 4 of 5: electricity
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Fusion step 5 of 5: natural_gas
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Total processing time: 5.59 secs 
 
 Note that each implicate in `sim10` is identified by the “M”
 variable/column.
+
+``` r
+head(sim10)
+```
+
+       M           insulation                                   aircon square_feet
+    1: 1       Well insulated          Central air conditioning system        1848
+    2: 1 Adequately insulated          Central air conditioning system        2697
+    3: 1     Poorly insulated Individual window/wall or portable units         552
+    4: 1     Poorly insulated          Central air conditioning system        3300
+    5: 1       Well insulated          Central air conditioning system        1202
+    6: 1     Poorly insulated          Central air conditioning system        1066
+       electricity natural_gas
+    1:       15330           0
+    2:        6920           0
+    3:        2396           0
+    4:        5940         778
+    5:       19060         201
+    6:        7780           0
 
 ``` r
 nrow(sim10)
@@ -458,25 +513,6 @@ table(sim10$M)
 
        1    2    3    4    5    6    7    8    9   10 
     2843 2843 2843 2843 2843 2843 2843 2843 2843 2843 
-
-``` r
-head(sim10)
-```
-
-       M square_feet electricity natural_gas           insulation
-    1: 1        1702       10140           0     Poorly insulated
-    2: 1        2970        8700         877 Adequately insulated
-    3: 1         538        4145           0     Poorly insulated
-    4: 1        3255       10530           0       Well insulated
-    5: 1         749       18900         462        Not insulated
-    6: 1        1647        6420         467 Adequately insulated
-                                           aircon
-    1:            Central air conditioning system
-    2:            Central air conditioning system
-    3:                        No air conditioning
-    4:            Central air conditioning system
-    5: Both a central system and individual units
-    6:            Central air conditioning system
 
 # Advanced fusion
 
@@ -529,22 +565,27 @@ fchain <- blockchain(data = donor,
                      x = predictor.vars)
 ```
 
+    Preparing data
+    Constructing cross-validation folds
+    Fitting complete models
+    Determining order and blocks
+
 ``` r
 fchain
 ```
 
     [[1]]
-    [1] "insulation"  "aircon"      "square_feet"
+    [1] "insulation" "aircon"    
 
     [[2]]
-    [1] "electricity"
+    [1] "electricity" "natural_gas"
 
     [[3]]
-    [1] "natural_gas"
+    [1] "square_feet"
 
-The resulting `fchain` list suggests that “aircon”, “insulation”, and
-“square_feet” should be fused jointly in the initial block followed by
-the remaining fusion variables in a preferred order. You may get
+The resulting `fchain` list suggests that “insulation” and “aircon” be
+fused in the initial block, followed by “electricity” and “natural_gas”
+in a separate block, and then “square_feet” on its own. You may get
 slightly different results, since `blockchain()` relies on random
 cross-validation. We can then pass the suggested blocking and chaining
 strategy to `train()`, whose `y` argument accepts a list for the
@@ -557,7 +598,7 @@ additional computation, the `cores` argument is used to enable parallel
 processing.
 
 ``` r
-# Build a fusion model with variable blocks
+# Train a fusion model with variable blocks
 fsn.model <- train(data = donor, 
                    y = fchain, 
                    x = predictor.vars,
@@ -569,43 +610,86 @@ fsn.model <- train(data = donor,
 ```
 
     5 fusion variables
-    12 initial predictor variables
+    13 initial predictor variables
     2843 observations
-    Training step 1 of 3: insulation, aircon, square_feet
-    Training step 2 of 3: electricity
-    Training step 3 of 3: natural_gas
+    Using OpenMP multithreading within LightGBM (2 cores)
+    Training step 1 of 3: insulation, aircon
+    Training step 2 of 3: electricity, natural_gas
+    Training step 3 of 3: square_feet
     Fusion model saved to: /home/kevin/Documents/Projects/fusionModel/test_model.fsn 
+    Total processing time: 19.8 secs 
 
 And then fuse multiple implicates, per usual. Note that the order of the
 columns in `sim10` reflects the order of the variables passed in
 `fchain`.
 
 ``` r
-# Fuse multiple implicates to the recipient (see ?fuseM)
-sim10 <- fuseM(data = recipient, 
-               file = fsn.model,
-               k = 5,
-               M = 10)
+# Fuse multiple implicates to the recipient
+sim10 <- fuse(data = recipient, 
+              file = fsn.model,
+              k = 5,
+              M = 10)
 ```
+
+    5 fusion variables
+    13 initial predictor variables
+    2843 observations
+    Generating 10 implicates 
+    Fusion step 1 of 3: insulation, aircon
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Fusion step 2 of 3: electricity, natural_gas
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Fusion step 3 of 3: square_feet
+    -- Predicting LightGBM models
+    -- Finding nearest neighbors
+    -- Simulating fused values
+    Total processing time: 5.58 secs 
 
 ``` r
 head(sim10)
 ```
 
-       M           insulation                                     aircon
-    1: 1       Well insulated   Individual window/wall or portable units
-    2: 1     Poorly insulated Both a central system and individual units
-    3: 1 Adequately insulated                        No air conditioning
-    4: 1 Adequately insulated            Central air conditioning system
-    5: 1 Adequately insulated            Central air conditioning system
-    6: 1        Not insulated            Central air conditioning system
-       square_feet electricity natural_gas
-    1:        2562        8260         306
-    2:        1240        9320         720
-    3:         950        2860         198
-    4:        4297       28100         914
-    5:        2046       15980         443
-    6:        1739        6740           0
+       M           insulation                                   aircon electricity
+    1: 1       Well insulated Individual window/wall or portable units       13920
+    2: 1     Poorly insulated          Central air conditioning system       17400
+    3: 1 Adequately insulated Individual window/wall or portable units        1480
+    4: 1 Adequately insulated          Central air conditioning system        6690
+    5: 1 Adequately insulated          Central air conditioning system       21300
+    6: 1     Poorly insulated Individual window/wall or portable units       16600
+       natural_gas square_feet
+    1:         0.0        1549
+    2:         0.0        1938
+    3:        99.5         413
+    4:       534.0        2081
+    5:         0.0        2605
+    6:         0.0        1872
+
+Note that this time the *k*-NN step is used to select simulated values
+for “insulation” and “aircon”. This is because *k*-NN is always used
+when simulating a block of variables, regardless of type. In this
+particular case, the conditional class probabilities of both variables
+are used to determine the nearest neighbors in the donor data.
+
+The same is true for “electricity” and “natural_gas”, though they use
+conditional means and quantiles to identify neighbors in the donor. We
+can confirm that the simulated values consist only of observed
+combinations drawn from the donor (i.e. sampled from the observed joint
+distribution).
+
+``` r
+# This will return TRUE, confirming simulated outcomes are drawn from the donor
+v <- c("electricity", "natural_gas")
+check <- data.frame(sim10)
+check <- unique(check[v])
+check <- apply(check, 1, paste, collapse = "_")
+all(check %in% apply(donor[v], 1, paste, collapse = "_"))
+```
+
+    [1] TRUE
 
 # Analyzing fused data
 
@@ -631,13 +715,14 @@ analyze(electricity ~ 1,
     Assuming uniform 'sample_weights`
 
     # A tibble: 1 × 10
-      response    metric estimate std_error lower_ci upper_ci statistic pvalue  degf
-      <chr>       <chr>     <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
-    1 electricity mean     10950.      144.   10665.   11235.      76.1      0   126
-    # … with 1 more variable: nobs <int>
+      response    metric estimate std_e…¹ lower…² upper…³ stati…⁴ pvalue  degf  nobs
+      <chr>       <chr>     <dbl>   <dbl>   <dbl>   <dbl>   <dbl>  <dbl> <int> <int>
+    1 electricity mean     11022.    141.  10745.  11300.    78.3      0   231  2843
+    # … with abbreviated variable names ¹​std_error, ²​lower_ci, ³​upper_ci,
+    #   ⁴​statistic
 
-When the response variable is categorical, `analyze()` automatically
-returns the proportions associated with each factor level.
+When the response variable is categorical, `analyze()` returns the
+proportions associated with each factor level.
 
 ``` r
 analyze(aircon ~ 1,
@@ -648,13 +733,14 @@ analyze(aircon ~ 1,
     Assuming uniform 'sample_weights`
 
     # A tibble: 4 × 10
-      response level     estimate std_error lower_ci upper_ci statistic pvalue  degf
-      <chr>    <fct>        <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl> <int>
-    1 aircon   Central …   0.644    0.0101    0.625    0.664      64.1       0   191
-    2 aircon   Individu…   0.188    0.00896   0.171    0.206      21.0       0    67
-    3 aircon   Both a c…   0.0355   0.00477   0.0256   0.0453      7.43      0    23
-    4 aircon   No air c…   0.132    0.00707   0.118    0.146      18.6       0   131
-    # … with 1 more variable: nobs <int>
+      response level      estim…¹ std_e…² lower…³ upper…⁴ stati…⁵ pvalue  degf  nobs
+      <chr>    <fct>        <dbl>   <dbl>   <dbl>   <dbl>   <dbl>  <dbl> <int> <int>
+    1 aircon   Central a…  0.640  0.0105   0.619   0.661    61.0       0   117  1820
+    2 aircon   Individua…  0.193  0.00877  0.175   0.210    22.0       0   117   548
+    3 aircon   Both a ce…  0.0377 0.00457  0.0286  0.0467    8.25      0   117   107
+    4 aircon   No air co…  0.130  0.00743  0.115   0.144    17.4       0   117   368
+    # … with abbreviated variable names ¹​estimate, ²​std_error, ³​lower_ci,
+    #   ⁴​upper_ci, ⁵​statistic
 
 If we want to perform an analysis across subsets of the recipient
 population – for example, calculate the distribution of “aircon”
@@ -672,19 +758,21 @@ analyze(aircon ~ 1,
     Assuming uniform 'sample_weights`
 
     # A tibble: 32 × 11
-       income  response level estimate std_error lower_ci upper_ci statistic  pvalue
-       <ord>   <chr>    <fct>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>   <dbl>
-     1 Less t… aircon   Cent…   0.437    0.0255    0.386    0.487      17.1  0      
-     2 Less t… aircon   Indi…   0.339    0.0256    0.288    0.391      13.2  0      
-     3 Less t… aircon   Both…   0.0217   0.00900   0        0.0459      2.41 0.0690 
-     4 Less t… aircon   No a…   0.202    0.0210    0.160    0.244       9.62 0      
-     5 $20,00… aircon   Cent…   0.611    0.0234    0.564    0.658      26.1  0      
-     6 $20,00… aircon   Indi…   0.209    0.0206    0.168    0.251      10.2  0      
-     7 $20,00… aircon   Both…   0.0346   0.00914   0.0144   0.0548      3.78 0.00325
-     8 $20,00… aircon   No a…   0.145    0.0158    0.113    0.176       9.14 0      
-     9 $40,00… aircon   Cent…   0.639    0.0250    0.590    0.689      25.6  0      
-    10 $40,00… aircon   Indi…   0.195    0.0212    0.152    0.238       9.18 0      
-    # … with 22 more rows, and 2 more variables: degf <int>, nobs <int>
+       income    respo…¹ level estim…² std_e…³ lower…⁴ upper…⁵ stati…⁶  pvalue  degf
+       <ord>     <chr>   <fct>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl> <int>
+     1 Less tha… aircon  Cent…  0.444  0.0251  0.394    0.493    17.7  0         112
+     2 Less tha… aircon  Indi…  0.330  0.0237  0.282    0.377    13.9  0         112
+     3 Less tha… aircon  Both…  0.0285 0.00947 0.00968  0.0472    3.00 0.00329   112
+     4 Less tha… aircon  No a…  0.199  0.0218  0.155    0.242     9.09 0         112
+     5 $20,000 … aircon  Cent…  0.588  0.0240  0.541    0.636    24.6  0         112
+     6 $20,000 … aircon  Indi…  0.227  0.0187  0.190    0.264    12.1  0         112
+     7 $20,000 … aircon  Both…  0.0406 0.0112  0.0185   0.0628    3.64 0.00042   112
+     8 $20,000 … aircon  No a…  0.144  0.0173  0.110    0.178     8.35 0         112
+     9 $40,000 … aircon  Cent…  0.620  0.0278  0.565    0.676    22.3  0         112
+    10 $40,000 … aircon  Indi…  0.208  0.0237  0.161    0.255     8.79 0         112
+    # … with 22 more rows, 1 more variable: nobs <int>, and abbreviated variable
+    #   names ¹​response, ²​estimate, ³​std_error, ⁴​lower_ci, ⁵​upper_ci, ⁶​statistic
+    # ℹ Use `print(n = ...)` to see more rows, and `colnames()` to see all variable names
 
 Finally, any linear regression model can be specified using the formula
 interface – just as in
@@ -700,11 +788,13 @@ analyze(electricity ~ square_feet + hh_size,
     Assuming uniform 'sample_weights`
 
     # A tibble: 3 × 11
-      response    metric term  estimate std_error lower_ci upper_ci statistic pvalue
-      <chr>       <chr>  <chr>    <dbl>     <dbl>    <dbl>    <dbl>     <dbl>  <dbl>
-    1 electricity coef   (Int…  3977.     307.     3371.    4584.        13.0      0
-    2 electricity coef   hh_s…  1151.      89.0     975.    1327.        12.9      0
-    3 electricity coef   squa…     1.93     0.126     1.67     2.18      15.3      0
-    # … with 2 more variables: degf <int>, nobs <int>
+      response    metric term   estim…¹ std_e…² lower…³ upper…⁴ stati…⁵ pvalue  degf
+      <chr>       <chr>  <chr>    <dbl>   <dbl>   <dbl>   <dbl>   <dbl>  <dbl> <int>
+    1 electricity coef   (Inte… 4216.   321.    3580.   4852.      13.1      0   120
+    2 electricity coef   hh_si… 1094.   106.     884.   1304.      10.3      0   120
+    3 electricity coef   squar…    1.90   0.109    1.69    2.12    17.5      0   120
+    # … with 1 more variable: nobs <int>, and abbreviated variable names ¹​estimate,
+    #   ²​std_error, ³​lower_ci, ⁴​upper_ci, ⁵​statistic
+    # ℹ Use `colnames()` to see all variable names
 
 Happy fusing!

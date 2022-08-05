@@ -438,7 +438,7 @@ train <- function(data,
       # See full list of built-in metrics: https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric-parameters
       # And here about Huber: https://stats.stackexchange.com/questions/465937/how-to-choose-delta-parameter-in-huber-loss-function
       params.obj <- switch(type,
-                           #continuous = list(objective = "regression", metric = "huber", alpha = 1.35 * mad(Y)),  # Will throw error if mad(Y) is zero...
+                           #continuous = list(objective = "regression", metric = "huber", alpha = 1.35 * mad(Y)),  # Will throw error if mad(Y) is zero
                            continuous = list(objective = "regression", metric = "l2"),
                            multiclass = list(objective = "multiclass", metric = "multi_logloss", num_class = 1L + max(Y)),
                            binary = list(objective = "binary", metric = "binary_logloss"))
@@ -633,14 +633,14 @@ train <- function(data,
   # Apply buildFun() to each index in 'yord', using forked parallel processing or serial (depending on 'fork' variable)
   # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
   if (fork) {
-    cat("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)...", "\n", sep = "")
+    cat("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)", "\n", sep = "")
     out <- parallel::mclapply(X = 1:length(yord),
                               FUN = buildFun,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
   } else {
-    if (cores > 1) cat("Using OpenMP multithreading within LightGBM (", cores, " cores)...", "\n", sep = "")
+    if (cores > 1) cat("Using OpenMP multithreading within LightGBM (", cores, " cores)", "\n", sep = "")
     out <- lapply(X = 1:length(yord),
                   FUN = buildFun,
                   verbose = TRUE)
