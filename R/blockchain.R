@@ -48,6 +48,7 @@
 # delta <- 0.01
 # criterion <- "min"
 # cores <- 2
+# fraction <- 1
 #
 # y <- as.list(y)
 # y[[15]] <- unlist(y[c(8, 15:17)])
@@ -102,7 +103,7 @@ blockchain <- function(data,
 
   #-----
 
-  cli::cli_progress_step("Preparing data")
+  cat("Preparing data\n")
 
   W <- if (is.null(weight)) {
     rep(1L, nrow(data))
@@ -145,7 +146,7 @@ blockchain <- function(data,
   names(V) <- names(lev)
 
   # One-hot encode unordered factors and convert to sparse matrix
-  d <- one_hot(d)
+  d <- one_hot(d, sparse_matrix = TRUE)
   stopifnot(all(unlist(V) == colnames(d)))
 
   #-----
@@ -157,7 +158,7 @@ blockchain <- function(data,
   Y <- unlist(V[y])
 
   # Create stratified cross-validation fold assignments
-  cli::cli_progress_step("Constructing cross-validation folds")
+  cat("Constructing cross-validation folds\n")
   cv.foldid <- lapply(Y, function(y) {
     stratify(d[, y], ycont = y %in% ycont, tfrac = nfolds, ntiles = 10)
   })
@@ -264,7 +265,7 @@ blockchain <- function(data,
   ratio <- vector(mode = "list", length = N)
 
   # Extract R2 for the "full" model that includes all possible predictors
-  cli::cli_progress_step("Fitting complete models")
+  cat("Fitting complete models\n")
   Y <- unlist(V[y])
   mfull <- parallel::mclapply(input, function(g) {
     sapply(g, function(v) {
@@ -278,7 +279,7 @@ blockchain <- function(data,
   #-----
 
   # Selection sequence
-  cli::cli_progress_bar("Determining order and blocks", total = N, clear = TRUE)
+  cat("Determining order and blocks\n")
   i <- 0
   while (length(input) > 0) {
 
@@ -319,12 +320,7 @@ blockchain <- function(data,
     mfull <- mfull[-b]
     rel0 <- rel[-b]
 
-    cli::cli_progress_update()
-
   }
-
-  cli::cli_progress_done()
-  cli::cli_alert_success("Determining order and blocks")
 
   #-----
 

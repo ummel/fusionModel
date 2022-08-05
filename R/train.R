@@ -1,3 +1,9 @@
+#' @import dplyr
+#' @rawNamespace import(stats, except = c(filter, lag))
+#' @rawNamespace import(data.table, except = c(first, last, between))
+#' @importFrom utils capture.output glob2rx object.size packageVersion
+#' @importFrom Matrix Matrix
+NULL
 #' Train a fusion model
 #'
 #' @description
@@ -71,6 +77,7 @@
 # # Inputs for testing - with some modification for harder test cases
 # data <- recs[1:28]
 # data <- bind_rows(data, data, data, data)
+# data <- bind_rows(data, data, data, data)
 # recipient <- subset(recs, select = c(weight, division, urban_rural, climate, income, age, race, hh_size, televisions))
 # y = setdiff(names(data), names(recipient))
 # weight <- "weight"
@@ -78,7 +85,8 @@
 # nfolds <- 0.75
 # ptiles <- c(0.25, 0.75)
 # file = "fusion_model_test.fsn"
-# cores = 1
+# cores = 3
+# fork = TRUE
 # hyper <- list()
 #
 # # Create clustering of 'y' variables
@@ -211,7 +219,7 @@ train <- function(data,
   data <- data[c(xvars, yvars)]
 
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
-  dmat <- tomat(data)
+  dmat <- to_mat(data)
   rm(data)
 
   #-----
@@ -304,7 +312,6 @@ train <- function(data,
     # Full set of predictor variables, including 'y' from clusters earlier in sequence
     # Assign the x predictors to 'lgbpred'
     xv <- as.vector(c(xvars, yv))
-    #lgbpred[[i]] <- xv
     lgbpred <- xv
 
     path <- file.path(td, pfixes[i])

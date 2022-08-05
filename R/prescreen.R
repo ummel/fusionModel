@@ -82,7 +82,7 @@ prescreen <- function(data,
 
   # Loop using each column in 'Y' as a response variable
   # Output are the 'x' variables used by any one of the LASSO models
-  retain <- pbapply::pblapply(colnames(Y), function(v) {
+  retain <- parallel::mclapply(colnames(Y), function(v) {
 
     # Initial correlation screening, based on absolute correlation value
     p <- abs(cor(Y[, v], as.matrix(X)))
@@ -99,11 +99,11 @@ prescreen <- function(data,
     i <- which(m$dev.ratio / max(m$dev.ratio) >= lasso_thresh)[1]  # Index of preferred lambda, based on arbitrary lasso threshold
     cf <- coef(m, s = m$lambda[i])
     keep <- names(which(cf[-1, 1] != 0))  # Ignore intercept term
-    keep <- map_chr(strsplit(keep, "||", fixed = TRUE), 1)  # Extract the original variable name
+    keep <- purrr::map_chr(strsplit(keep, "||", fixed = TRUE), 1)  # Extract the original variable name
     keep <- unique(keep)
     return(keep)
 
-  }, cl = cores) %>%
+  }, mc.cores = cores) %>%
     unlist() %>%
     unique()
 

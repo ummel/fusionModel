@@ -2,32 +2,23 @@ Package: fusionModel
 Title: Tools for data fusion and analysis of synthetic data in R
 Version: 2.1.0
 Authors@R: 
-    person(given = "Kevin",
-           family = "Ummel",
-           role = c("aut", "cre"),
-           email = "ummel@berkeley.edu")
-Description: fusionModel enables variables unique to a "donor" dataset to be statistically simulated for (i.e. fused to) a "recipient" dataset. The package provides a simple and efficient interface for general data fusion in R, leveraging state-of-the-art machine learning algorithms from Microsoft’s LightGBM framework. It also provides tools for analyzing synthetic/simulated data, calculating uncertainty, and validating fusion output.
+    person("Kevin", "Ummel", , "ummel@berkeley.edu", role = c("aut", "cre"))
+Description: Tools for data fusion and analysis of synthetic data in R.
 License: GPL-3
+Depends: 
+    R (>= 3.5.0)
+Imports:
+    data.table,
+    dplyr,
+    fst,
+    glmnet,
+    lightgbm,
+    Matrix,
+    matrixStats,
+    purrr,
+    RANN,
+    zip
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
-Depends: 
-    R (>= 2.10),
-    data.table,
-    dplyr,
-    purrr,
-    tibble,
-    tidyr,
-    Matrix,
-    fst
-Imports:
-    lightgbm,
-    RANN,
-    cli,
-    pbapply,
-    glmnet,
-    matrixStats
-Suggests:
-    biglm,
-    rpart

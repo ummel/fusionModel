@@ -157,14 +157,13 @@ integerize <- function(x, mincor = 0.999) {
 # Sets minimal categorical integer value to zero
 # Converts to Matrix class 'dgCMatrix'
 # See here: https://www.gormanalysis.com/blog/sparse-matrix-construction-and-use-in-r/
-tomat <- function(data, sparse = TRUE) {
+to_mat <- function(data) {
   dmat <- as.data.table(data)
   for (v in names(dmat)) {
     if (is.factor(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]) - 1L)
     if (is.logical(dmat[[v]])) set(dmat, i = NULL, j = v, value = as.integer(dmat[[v]]))
   }
   dmat <- as.matrix(dmat)
-  if (sparse) dmat <- as(dmat, "dgCMatrix")
   return(dmat)
 }
 
@@ -227,8 +226,7 @@ one_hot <- function(dt, sparse_matrix = TRUE, sparsifyNAs = TRUE, ord_to_int = F
   } else{
     dt
   }
-
-  if (sparse_matrix) out <- as(as.matrix(out), "dgCMatrix")
+  if (sparse_matrix) out <- Matrix::Matrix(as.matrix(out), sparse = TRUE)
   return(out)
 }
 

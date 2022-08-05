@@ -67,7 +67,7 @@
 # M <- 10
 
 # Actual testing with CEI-ACS
-# data <- read_fst("~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_predict.fst")
+# data <- fst::read_fst("~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_predict.fst")
 # file <- "~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_model.fsn"
 # k <- 10
 # max_dist = 0
@@ -167,7 +167,7 @@ fuse <- function(data,
   # Coerce 'data' to matrix compatible with input to LightGBM
   data <- cbind(as.data.table(data), fmat)
   setcolorder(data, meta$dnames)  # This ensures that 'dmat' has columns in correct/original order for purposes of LightGBM prediction
-  dmat <- tomat(data, sparse = FALSE)
+  dmat <- to_mat(data)
   rm(data, fmat)
 
   # Ensure that 'dmat' is double precision
