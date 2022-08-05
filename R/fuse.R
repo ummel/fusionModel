@@ -11,7 +11,7 @@
 #' @param idw Logical. Should inverse distance weighting be used when randomly selecting a donor observation from the \code{k} nearest neighbors?
 #' @param cores Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems, but kNN is only parallel on Unix (at present).
 #' @param ignore_self Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.
-#' @param margin Numeric (0, 1). Size of safety margin used when estimating how many implicates can be processed in memory at once.
+#' @param margin Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall.
 #' @param seed Set random seed if needed.
 #'
 #' @details For each record in \code{data}, the predicted conditional distribution values are used to identify the \code{k} most-similar observations in the original donor data along the same dimensions. One of the \code{k} nearest neighbors is randomly selected to donate its observed/"real" response value for the fusion variable(s) in question. The random selection uses inverse distance weighting if \code{idw = TRUE}; otherwise, the donor sample weights are used.
@@ -69,11 +69,13 @@
 # Actual testing with CEI-ACS
 # data <- fst::read_fst("~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_predict.fst")
 # file <- "~/Documents/Projects/fusionData/fusion/CEI/2015-2019/2019/CEI_2015-2019_2019_model.fsn"
+# M <- 10
 # k <- 10
 # max_dist = 0
 # idw = FALSE
 # cores = 3
 # ignore_self <- FALSE
+# margin = 0.2
 # seed <- NULL
 
 #---------------------
@@ -86,7 +88,7 @@ fuse <- function(data,
                  idw = FALSE,
                  cores = 1,
                  ignore_self = FALSE,
-                 margin = 0.2,
+                 margin = 1.75,
                  seed = NULL) {
 
   t0 <- Sys.time()
@@ -99,10 +101,9 @@ fuse <- function(data,
     is.logical(idw)
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
     is.logical(ignore_self)
-    margin > 0 & margin < 1
+    margin >= 1
   })
 
-  fst::threads_fst(cores)
   if (is.data.table(data)) data <- as.data.frame(data)
   if (!is.null(seed)) set.seed(seed)
 
@@ -168,17 +169,20 @@ fuse <- function(data,
   data <- cbind(as.data.table(data), fmat)
   setcolorder(data, meta$dnames)  # This ensures that 'dmat' has columns in correct/original order for purposes of LightGBM prediction
   dmat <- to_mat(data)
-  rm(data, fmat)
 
   # Ensure that 'dmat' is double precision
   # LightGBM enforces this internally, so it is more efficient to do it here
   if (storage.mode(dmat) != "double") storage.mode(dmat) <- "double"
 
+  rm(data, fmat); gc()
+
   # Process multiple implicates at once...
   # Determine how may implicates can be processed at once, given available memory
+  # fsize * M: the maximum size of the output/results matrix
+  # dsize: initial size of the prediction data prior to expansion
   dsize <- as.numeric(object.size(dmat)) / 1048576  # Check size (Mb)
-  mfree <- freeMemory() * (1 - margin) - fsize * M
-  n <- floor(mfree / dsize)
+  mfree <- freeMemory() + dsize
+  n <- floor(mfree / (fsize + dsize * margin))
   if (n <= 0) stop("Insufficient memory to store ", M, " implicates. 'M' must be smaller.")
   n <- min(n, M)
   nsteps <- ceiling(M / n)
@@ -187,31 +191,16 @@ fuse <- function(data,
   # Allocate the output data.table
   dout <- data.table()
 
-  cat(M, "implicate(s) requested\n")
-  cat("Generating implicates in", nsteps, "chunk(s)\n")
-  dmat <- dmat[rep(seq.int(N0), n), ]
+  # Replicate the prediction matrix, if necessary
+  if (n > 1) dmat <- dmat[rep(seq.int(N0), n), ]
+  if (nsteps > 1) cat("Generating", M, "implicates in", nsteps, "chunk(s)\n")
   gc()
-
-  #-----
-
-  # TEST -- get the predictors actually used in models
-  # # Maybe not so useful if everything is returned?
-  # # TEST: Get the used predictors from the 'mods
-  # xpreds <- lapply(mods, function(m) {
-  #   test <- readLines(file.path(td, m))
-  #   test <- test[(1 + which(test == "feature_importances:")):(which(test == "parameters:") - 2)]
-  #   test <- gsub("=.*$", "", test)
-  #   return(test)
-  # }) %>%
-  #   unlist() %>%
-  #   unique()
-  # xpreds <- intersect(xvars, xpreds)
 
   #-----
 
   for (mstep in 1:nsteps) {
 
-    cat("<< Processing implicate chunk", mstep, "of", nsteps, ">>\n")
+    if (nsteps > 1) cat("<< Processing implicate chunk", mstep, "of", nsteps, ">>\n")
 
     for (i in 1:length(pfixes)) {
 
@@ -226,7 +215,6 @@ fuse <- function(data,
 
       # Unzip the lightGBM model(s) to temp directory
       mods <- grep(pattern = glob2rx(paste0(pfixes[i], "*.txt")), x = fsn.files$filename, value = TRUE)
-      #zip::unzip(zipfile = file, files = mods, exdir = td)  # Not necessary; already unzipped
 
       # Row indices where to generate predictions
       # Modified, if necessary, in next code chunk when single continuous variables has a zero model
@@ -263,22 +251,26 @@ fuse <- function(data,
         #p <- predict(object = mod, data = dmat[!zind, ], reshape = TRUE, params = list(num_threads = cores))
 
         # The row subsetting is slow, so only perform if necessary
-        if (any(zind)) {
-          p <- predict(object = mod, data = dmat[!zind, ], reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
-        } else {
-          p <- predict(object = mod, data = dmat, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
-        }
+        # if (any(zind)) {
+        #   p <- predict(object = mod, data = dmat[!zind, ], reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+        # } else {
+        #   p <- predict(object = mod, data = dmat, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+        # }
+
+        # It is much more memory efficient (and often faster) to simply predict for all observations and then subset for 'zind' afterwards
+        p <- predict(object = mod, data = dmat, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+        if (any(zind)) p <- p[!zind]
 
         # To confirm that prediction is accurate when using 'predict_disable_shape_check = TRUE'
         # xv <- meta$lgbpred[[i]]
-        # p2 <- predict(object = mod, data = dmat[, xv], reshape = TRUE, params = list(num_threads = cores))
+        # p2 <- predict(object = mod, data = dmat[!zind, xv], reshape = TRUE, params = list(num_threads = cores))
         # identical(p, p2)
 
         if (!is.matrix(p)) p <- matrix(p)
-        p <- as.data.table(p)
-        set(pred, i = NULL, j = paste0(y, "_", n, if (q | z) NULL else 1:ncol(p)), value = p)
+        set(pred, i = NULL, j = paste0(y, "_", n, if (q | z) NULL else 1:ncol(p)), value = as.data.table(p))
       }
-      rm(p)
+
+      rm(p); gc()
 
       #---
 
@@ -377,14 +369,13 @@ fuse <- function(data,
         # dpred2 <- pca.fit$x
         # pred2 <- predict(pca.fit, newdata = pred)
 
-        # Split 'pred' into chunks and process in parallel
+        # Split 'pred' into chunks and process in parallel -- could this be more memory efficient?
         # Prevents very small chunks (too much overhead); enforces serial processing on Windows
         cat("-- Finding nearest neighbors\n")
-        #nn.cores <- ifelse(.Platform$OS.type == "unix", min(cores, ceiling(nrow(pred) / 50e3)), 1L)
-        nn.cores <- cores
-        pred <- split(pred, f = rep(1:nn.cores, each = ceiling(nrow(pred) / nn.cores))[1:nrow(pred)])
-        nn <- parallel::mclapply(pred, getNN, mc.cores = nn.cores)
-        rm(pred, dpred)
+        pred <- split(pred, f = rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)])
+        nn <- parallel::mclapply(pred, getNN, mc.cores = cores)
+
+        rm(pred, dpred); gc()
 
         # Compile the chunked nearest-neighbor results
         nn[[1]]$nn.idx <- do.call(rbind, purrr::map(nn, "nn.idx"))
@@ -423,13 +414,13 @@ fuse <- function(data,
         ptile <- runif(n = nrow(p))
         S <- matrixStats::rowSums2(ptile > p, na.rm = TRUE) + 1L
         adj <- which(is.na(matrixStats::rowCollapse(p, S)))
-        rm(p, na.ind, ptile)
+        rm(p, na.ind, ptile); gc()
         S[adj] <- S[adj] + 1L
 
         # Extract simulated values from donor observations
         ind <- matrixStats::rowCollapse(nn$nn.idx, S)
         stopifnot(!anyNA(ind))  # Safety check
-        rm(nn, S)
+        rm(nn, S); gc()
         S <- dresp[ind, ]
 
         # NOT USED: Simple case; randomly select a column
@@ -443,7 +434,7 @@ fuse <- function(data,
           setnames(out, v)
           set(out, i = which(!zind), j = v, value = S)
           S <- out
-          rm(out)
+          rm(out); gc()
         }
 
       }
@@ -451,7 +442,7 @@ fuse <- function(data,
       # Add the simulated values to 'dmat' prior to next iteration
       S <- as.matrix(S)
       dmat[, v] <- S
-      rm(S)
+      rm(S); gc()
 
     }
 
@@ -476,17 +467,16 @@ fuse <- function(data,
 
     # Add the output simulated values to 'dout'
     dout <- rbind(dout, dtemp)
-    rm(dtemp)
+    rm(dtemp); gc()
 
     # Update 'dmat' prior to next iteration
     if (mstep < nsteps) {
       dmat[, unlist(yord)] <- NA_real_
       if (mstep == (nsteps - 1) & !is.null(ind.final)) {
         dmat <- dmat[ind.final, ]
-        gc()
       }
     } else {
-      rm(dmat)
+      rm(dmat); gc()
     }
 
   }
@@ -507,7 +497,6 @@ fuse <- function(data,
   # Report processing time
   tout <- difftime(Sys.time(), t0)
   cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
-  gc()
 
   return(dout)
 

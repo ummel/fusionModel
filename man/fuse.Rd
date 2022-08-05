@@ -13,7 +13,7 @@ fuse(
   idw = FALSE,
   cores = 1,
   ignore_self = FALSE,
-  margin = 0.2,
+  margin = 1.75,
   seed = NULL
 )
 }
@@ -34,7 +34,7 @@ fuse(
 
 \item{ignore_self}{Logical. If \code{TRUE}, the kNN step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.}
 
-\item{margin}{Numeric (0, 1). Size of safety margin used when estimating how many implicates can be processed in memory at once.}
+\item{margin}{Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall.}
 
 \item{seed}{Set random seed if needed.}
 }
