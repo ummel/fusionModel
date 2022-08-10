@@ -318,7 +318,7 @@ freeMemory <- function() {
   if (.Platform$OS.type == "unix") {
     x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)
   } else {
-    x <- system("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
+    x <- system2("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
     x <- x[grepl("FreePhysicalMemory", x)]
     x <- gsub("FreePhysicalMemory=", "", x, fixed = TRUE)
     x <- gsub("\r", "", x, fixed = TRUE)
