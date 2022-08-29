@@ -308,20 +308,34 @@ objectSize <- function(x) as.numeric(utils::object.size(x)) / 1048576
 
 #------------------
 
-# Function to return free system memory in Mb
-# Different commands used on Unix vs. Windows
+# Function to return free (actually, "available") system memory in Mb
+# Different commands used on Linux vs. Mac OS vs. Windows
 # https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine
 # https://stackoverflow.com/questions/6457290/how-to-check-the-amount-of-ram
 # On free vs available: https://haydenjames.io/free-vs-available-memory-in-linux/
 freeMemory <- function() {
-  gc()
-  if (.Platform$OS.type == "unix") {
-    x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)
-  } else {
-    x <- system("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
+  sys <- Sys.info()["sysname"]
+  # Windows
+  if (sys == "Windows") {
+    x <- system2("wmic", args = "OS get FreePhysicalMemory /Value", stdout = TRUE)
     x <- x[grepl("FreePhysicalMemory", x)]
     x <- gsub("FreePhysicalMemory=", "", x, fixed = TRUE)
     x <- gsub("\r", "", x, fixed = TRUE)
+    as.numeric(x) / 1e3
+  } else {
+    # Mac OS
+    if (sys == "Darwin") {
+      x <- system("vm_stat",intern = TRUE)
+      pagesize <- as.numeric(system("pagesize",intern = TRUE)) #Memory is counted in 'pages' in MacOS
+      x <- x[grepl("Pages free: ", x)]
+      x <- gsub("Pages free: ", "", x, fixed = TRUE)
+      x <- gsub(".", "", x, fixed = TRUE)
+      as.numeric(x) * pagesize / (1024 ^ 2)
+    } else {
+      # Linux system assumed as backstop
+      #x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)  # Free memory
+      x <- system("awk '/MemAvailable/ {print $2}' /proc/meminfo", intern = TRUE)  # Available memory (includes cache)
+      as.numeric(x) / 1e3
+    }
   }
-  as.numeric(x) / 1e3
 }
