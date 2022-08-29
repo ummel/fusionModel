@@ -40,7 +40,7 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
   comp <- do.call(rbind, perf)
   opt <- which.min(comp[, 1])
   params.opt <- hyper.grid[[opt]]
-  params.opt$num_iterations <- comp[opt, 2]
+  params.opt$num_iterations <- as.integer(comp[opt, 2])
 
   # Fit final model using full dataset and optimal parameter values
   mod <- lightgbm::lgb.train(
@@ -48,6 +48,11 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
     data = dfull,
     verbose = -1L
   )
+
+  # Add the optimal validation score and number of iterations to the 'mod' object
+  # This are NA and -1, by default, which doesn't provide any useful information
+  mod$best_score <- as.numeric(comp[opt, 1])
+  mod$best_iter <- params.opt$num_iterations
 
   # Plot the evolution of the loss function
   #plot(unlist(mod$record_evals[[2]]))

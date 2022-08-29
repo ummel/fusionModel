@@ -69,6 +69,8 @@ NULL
 
 # Manual testing
 # library(fusionModel)
+# library(data.table)
+# library(dplyr)
 # source("R/utils.R")
 # source("R/fitLGB.R")
 
@@ -97,6 +99,18 @@ NULL
 #
 # # From 'fuse5.r'
 # test <- fuse(data = data, fsn_file = file)
+
+# # ALT
+# data <- readRDS("~/Documents/Projects/fusionData/CEI_train.rds")
+# y = names(data)[2:44]
+# weight <- "weight"
+# x <- setdiff(names(data), c(y, weight))
+# nfolds <- 0.75
+# ptiles <- c(0.165, 0.835)
+# file = "fusion_model_test.fsn"
+# cores = 3
+# fork = TRUE
+# hyper <- list()
 
 #---------------------
 
@@ -285,9 +299,7 @@ train <- function(data,
 
   # Placeholder lists for metadata outputs
   # lgbpred <- ycenter <- yscale <- colweight <- vector(mode = "list", length = length(yord))
-  # meddist <- vector(mode = "numeric", length = length(yord))
-  lgbpred <- ycenter <- yscale <- colweight <- meddist <- NULL
-  #meddist <- vector(mode = "numeric", length = length(yord))
+  ycenter <- yscale <- colweight <- yvalid <- yiters <- meddist <- NULL
 
   # Temporary directory to save lightGBM models to
   td <- tempfile()
@@ -308,9 +320,7 @@ train <- function(data,
     yv <- if (i == 1) NULL else unlist(yord[1:(i - 1)])
 
     # Full set of predictor variables, including 'y' from clusters earlier in sequence
-    # Assign the x predictors to 'lgbpred'
     xv <- as.vector(c(xvars, yv))
-    lgbpred <- xv
 
     path <- file.path(td, pfixes[i])
     dir.create(path)
@@ -454,7 +464,18 @@ train <- function(data,
                      cv.folds = cv.folds)
 
       # Save LightGBM mean model (m.txt) to disk
+      # NOTE: It appears that the mmod$best_iter and mmod$best_score custom attributes are not retained in save
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
+
+      # Print the validation performance for the conditional mean/expectation model
+      #if (verbose) cat(" -- Cond. expectation validation metric: ", signif(mmod$best_score, 3), " (", mmod$best_iter, " iterations)\n", sep = "")
+
+      # Record the conditional mean/expectation results in metadata
+      # This is necessary because lgb.save does not retain them in .txt model object
+      yvalid <- c(yvalid, mmod$best_score)
+      yiters <- c(yiters, mmod$best_iter)
+
+      #-----
 
       # Predict conditional mean/probabilities for the training observations
       if (block | type == "continuous") {
@@ -464,7 +485,7 @@ train <- function(data,
         colnames(mc) <- paste0(y, "_m", 1:ncol(mc))
 
         # If 'y' is multiclass (not binary) drop the least common response value (not needed for kNN)
-        if (type == "multiclass") mc <- mc[, -which.min(Matrix::colMeans(mc))]
+        if (type == "multiclass") mc <- mc[, -which.min(matrixStats::colMeans2(mc))]
 
       }
 
@@ -522,8 +543,6 @@ train <- function(data,
             val <- normalize(d[[j]], center = ncenter[[j]], scale = nscale[[j]])
             set(d, i = NULL, j = j, value = val)
           }
-          #ycenter[[i]] <- c(ycenter[[i]], unlist(ncenter))
-          #yscale[[i]] <- c(yscale[[i]], unlist(nscale))
           ycenter <- c(ycenter, unlist(ncenter))
           yscale <- c(yscale, unlist(nscale))
         }
@@ -595,7 +614,6 @@ train <- function(data,
       # Take a random sample to prevent excessive compute time with large datasets
       ind <- sample.int(nrow(cdata), min(nrow(cdata), 5e3))
       cdist <- as.numeric(dist(cdata[ind, ]))
-      #meddist[i] <- median(cdist)
       meddist <- median(cdist)
 
       # Reduce precision of donor conditional values for better on-disk compression
@@ -623,7 +641,13 @@ train <- function(data,
 
     }
 
-    out <- list(lgbpred = lgbpred, ycenter = ycenter, yscale = yscale, colweight = colweight, meddist = meddist)
+    out <- list(#lgbpred = xv,
+                yvalid = yvalid,
+                yiters = yiters,
+                ycenter = ycenter,
+                yscale = yscale,
+                colweight = colweight,
+                meddist = meddist)
     return(out)
 
   }
