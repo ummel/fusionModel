@@ -309,7 +309,7 @@ objectSize <- function(x) as.numeric(utils::object.size(x)) / 1048576
 #------------------
 
 # Function to return free (actually, "available") system memory in Mb
-# Different commands used on Linux vs. Mac OS vs. Windows
+# Different commands used on Linux vs. MacOS vs. Windows
 # https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine
 # https://stackoverflow.com/questions/6457290/how-to-check-the-amount-of-ram
 # On free vs available: https://haydenjames.io/free-vs-available-memory-in-linux/
