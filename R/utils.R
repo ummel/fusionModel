@@ -325,17 +325,20 @@ freeMemory <- function() {
   } else {
     # Mac OS
     if (sys == "Darwin") {
-      x <- system("vm_stat",intern = TRUE)
-      pagesize <- as.numeric(system("pagesize",intern = TRUE)) #Memory is counted in 'pages' in MacOS
+      x <- system("vm_stat", intern = TRUE)
+      pagesize <- x[grepl("Mach Virtual Memory Statistics",x)]
+      pagesize <- gsub("Mach Virtual Memory Statistics: (page size of", "", pagesize, fixed = TRUE)
+      pagesize <- gsub("bytes)", "", pagesize, fixed = TRUE)
       x <- x[grepl("Pages free: ", x)]
       x <- gsub("Pages free: ", "", x, fixed = TRUE)
       x <- gsub(".", "", x, fixed = TRUE)
-      as.numeric(x) * pagesize / (1024 ^ 2)
+      as.numeric(x) * as.numeric(pagesize) / (1024 ^ 2)
     } else {
       # Linux system assumed as backstop
-      #x <- system("awk '/MemFree/ {print $2}' /proc/meminfo", intern = TRUE)  # Free memory
-      x <- system("awk '/MemAvailable/ {print $2}' /proc/meminfo", intern = TRUE)  # Available memory (includes cache)
-      as.numeric(x) / 1e3
+      # See output of 'cat /proc/meminfo'
+      x <- system('grep MemAvailable /proc/meminfo', intern = TRUE)
+      x <- strsplit(x, "\\s+")[[1]][2]
+      as.numeric(x) / 1024
     }
   }
 }
