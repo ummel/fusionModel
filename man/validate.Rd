@@ -35,9 +35,10 @@ validate(
 \value{
 A list with slots named "estimates" and "correlation". This data does not usually need to be interrogated, since users are more likely to pass the result to \code{\link{plot_valid}} for visualization.
 
-\emph{estimates}: Data frame giving observed (m0, se0) and synthetic (m1, se1) point estimates and standard errors for each fusion variable (y) and population subset (iset). Column 'pvalue' gives the p-value associated with a statistical test where the null hypothesis is that 'm0' and 'm1' are identical.
-
-\emph{correlation}: Data frame summarizing the difference (error) between synthetic and observed data for pairwise correlation coefficients of each fusion variable (y) and all other variables (correlate). Column 'error' gives the mean absolute error; 'error_w' gives the mean absolute error weighted by the square of the observed correlation (i.e. weighted by variance explained). In the case of categorical 'y' or 'correlate', the underlying correlations are calculated using binary vectors and the returned results reflect the mean absolute error across all levels.
+\itemize{
+\item \emph{estimates}: Data frame giving observed (m0, se0) and synthetic (m1, se1) point estimates and standard errors for each fusion variable (y) and population subset (iset). Column 'pvalue' gives the p-value associated with a statistical test where the null hypothesis is that 'm0' and 'm1' are identical.
+\item \emph{correlation}: Data frame summarizing the difference (error) between synthetic and observed data for pairwise correlation coefficients of each fusion variable (y) and all other variables (correlate). Column 'error' gives the mean absolute error; 'error_w' gives the mean absolute error weighted by the square of the observed correlation (i.e. weighted by variance explained). In the case of categorical 'y' or 'correlate', the underlying correlations are calculated using binary vectors and the returned results reflect the mean absolute error across all levels.
+}
 }
 \description{
 Performs specific (non-general) internal validation exercises on fused microdata to estimate how well the simulated data reflect statistical patterns in an analogous observed dataset. This provides a standard approach to validating a fusion model created by \code{\link{train}}. See Examples for recommended usage.
