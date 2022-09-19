@@ -9,7 +9,7 @@ validate(
   simulated,
   sample_weights = NULL,
   replicate_weights = NULL,
-  nsets = 100,
+  nsets = 200,
   var_scale = 4,
   min_size = 20,
   cores = 1
@@ -52,9 +52,9 @@ We assume that users are most likely to analyze a variable across subsets of the
 
 Correlations among the provided variables are used to prioritize subsetting variables with larger absolute correlations with the fusion variables (i.e. subsets of likely real-world relevance). In addition, subsetting variables are selected so as to over-represent smaller subsets. The universe of subsets containing 95\% of observations exhibit comparatively little variation compared to those containing just 5\%; the latter subsets result in noisier validation results. Consequently, the returned analyses are biased toward smaller subsets in order to derive more reliable estimates of small-sample utility.
 
-A total of \code{nsets} subsets are constructed. The mean/proportions of each fusion variable are returned for each of the \code{nsets} subsets, as is the pairwise (bivariate) Pearson correlation coefficient error between each fusion variable and all other variables provided in \code{observed}. See Value for details.
+\code{validate()} attempts to create \code{nsets} total subsets. The mean/proportions of each fusion variable are returned for each of the \code{nsets} subsets, as is the pairwise (bivariate) Pearson correlation coefficient error between each fusion variable and all other variables provided in \code{observed}. See Value for details.
 
-If there is not sufficient data provided to construct \code{nsets} subsets, then random subsets are used to make up the difference. For purposes of subset creation, each continuous variable is converted to five cumulative binary variables on the basis of a univariate \code{\link[stats]{kmeans}} clustering.
+Note that less than \code{nsets} subsets may be returned if the provided variables do not allow for it. For purposes of subset creation, each continuous variable is converted to ten cumulative binary variables on the basis of a univariate \code{\link[stats]{kmeans}} clustering.
 }
 \examples{
 # Build a fusion model using RECS microdata

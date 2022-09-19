@@ -16,8 +16,8 @@
 #' @details In effect, \code{validate()} performs a large number of analyses of the kind that the \code{\link{analyze}} function is designed to do on a one-by-one basis. Being purpose-built for particular kinds of analysis, \code{validate()} does this much more efficiently than repeated calls to \code{\link{analyze}}. It carries out hundreds or thousands of potential analyses separately for both the synthetic and observed data.
 #' @details We assume that users are most likely to analyze a variable across subsets of the population that produce meaningful differences in outcomes. No (sane) analyst is interested in the mean of Y for a random subset, since the expected value within and without the subset is identical. But it does make sense to subset the population into (for example) homeowners and renters, if there is reason to believe that Y varies between the two groups.
 #' @details Correlations among the provided variables are used to prioritize subsetting variables with larger absolute correlations with the fusion variables (i.e. subsets of likely real-world relevance). In addition, subsetting variables are selected so as to over-represent smaller subsets. The universe of subsets containing 95% of observations exhibit comparatively little variation compared to those containing just 5%; the latter subsets result in noisier validation results. Consequently, the returned analyses are biased toward smaller subsets in order to derive more reliable estimates of small-sample utility.
-#' @details A total of \code{nsets} subsets are constructed. The mean/proportions of each fusion variable are returned for each of the \code{nsets} subsets, as is the pairwise (bivariate) Pearson correlation coefficient error between each fusion variable and all other variables provided in \code{observed}. See Value for details.
-#' @details If there is not sufficient data provided to construct \code{nsets} subsets, then random subsets are used to make up the difference. For purposes of subset creation, each continuous variable is converted to five cumulative binary variables on the basis of a univariate \code{\link[stats]{kmeans}} clustering.
+#' @details \code{validate()} attempts to create \code{nsets} total subsets. The mean/proportions of each fusion variable are returned for each of the \code{nsets} subsets, as is the pairwise (bivariate) Pearson correlation coefficient error between each fusion variable and all other variables provided in \code{observed}. See Value for details.
+#' @details Note that less than \code{nsets} subsets may be returned if the provided variables do not allow for it. For purposes of subset creation, each continuous variable is converted to ten cumulative binary variables on the basis of a univariate \code{\link[stats]{kmeans}} clustering.
 #'
 #' @return A list with slots named "estimates" and "correlation". This data does not usually need to be interrogated, since users are more likely to pass the result to \code{\link{plot_valid}} for visualization.
 #' @return \itemize{
@@ -96,7 +96,7 @@ validate <- function(observed,
                      simulated,
                      sample_weights = NULL,
                      replicate_weights = NULL,
-                     nsets = 100,
+                     nsets = 200,
                      var_scale = 4,
                      min_size = 20,
                      cores = 1) {
@@ -207,34 +207,6 @@ validate <- function(observed,
 
   #-----
 
-  # Correlation template...MOVE?
-
-  # Template data.frame used for assigning variable names and other auxiliary info to correlation results
-  template <- expand.grid(v1 = fvars, v2 = c(fvars, ovars), stringsAsFactors = FALSE) %>%
-    mutate(n = 1:n(),
-           uni = purrr::map2_chr(v1, v2, ~ paste(sort(c(.x, .y)), collapse = "--"))) %>%
-    distinct(uni, .keep_all = TRUE) %>%
-    filter(v1 != v2) %>%  # Remove self-correlation (i.e. r = 1)
-    mutate(v1b = purrr::map_chr(strsplit(v1, "..", fixed = TRUE), 1),
-           v2b = purrr::map_chr(strsplit(v2, "..", fixed = TRUE), 1)) %>%
-    group_by(v1b, v2b) %>%
-    mutate(vwgt = 1 / n()) %>%  # This enables equal weighting of each fusion variable, regardless of number of factor levels
-    group_by(v1b) %>%
-    mutate(vwgt = vwgt / sum(vwgt)) %>%  # This enables equal weighting of each fusion variable, regardless of number of factor levels
-    ungroup()
-
-  # Index for subsetting correlation results with replicate expression (below)
-  keep <- template$n
-
-  # Check that total weight is same across all fusion variables (v1b)
-  # template %>%
-  #   group_by(v1b) %>%
-  #   summarize(total_vwgt = sum(vwgt))
-
-  #---
-
-  #-----
-
   # Confirm
   #tapply(X, cl, mean)
   #plot(X, cl)
@@ -262,7 +234,7 @@ validate <- function(observed,
   x2 <- observed %>%
     select(-any_of(colnames(wr))) %>%
     #mutate_at(obs.bin, binFun) %>%  # This is repetitive with creation of 'x'; make cleaner
-    mutate_at(obs.num, uniCluster, k = 5) %>%  # TO DO: Set 'k' automatically
+    mutate_at(obs.num, uniCluster, k = 10) %>%  # TO DO: Set 'k' automatically
     #select(any_of(names(simulated)), everything()) %>%
     one_hot(sparse_matrix = FALSE) %>%
     as.matrix()
@@ -301,9 +273,8 @@ validate <- function(observed,
                      cor = rep(xcor, 2),
                      size = c(ssize, 1 - ssize),
                      id = rep(c(1, 0), each = length(ssize))) %>%
-    mutate(#ventile = findInterval(1 - sqrt(size), seq(0, 1, length.out = 21)),
-      ventile = findInterval(dexp(size, rate = 5) / 5, seq(0, 1, length.out = 21)),
-      ventile = factor(ventile, levels = 1:20)) %>%
+    mutate(ventile = findInterval(1 - size ^ 0.30, seq(0, 1, length.out = 21)),
+           ventile = factor(ventile, levels = 1:20)) %>%
     arrange(-cor) %>%
     group_by(ventile) %>%
     slice(1:min(n(), vint))
@@ -314,24 +285,25 @@ validate <- function(observed,
   # Create logical matrix indicating the subsets to analyze
   #for (i in 1:nrow(temp)) smat[, i] <- x2[, temp$xv[i]] == temp$id[i]]
   smat <- sapply(1:nrow(temp), function(i) x2[, temp$xv[i]] == temp$id[i])
-  cat("Selected", ncol(smat), "empirical subsets\n")
+  #cat("Selected", ncol(smat), "empirical subsets (\n")
+  cat("Selected ", ncol(smat), " empirical subsets (", nsets, " requested)\n", sep = "")
 
-  # Add random subsets if there are too few in 'smat'
-  if (ncol(smat) < nsets) {
-    rfill <- vint - table(temp$ventile)
-    rfill <- rfill[rfill > 0]
-    srnd <- lapply(1:length(rfill), function(i) {
-      j <- rfill[i]
-      k <- as.integer(names(rfill)[i])
-      r <- qexp(seq(0.95, 0, length.out = 20)[k] + runif(j, 0, 0.05), rate = 5)
-      r <- pmax(r, min_size / N)
-      sapply(r, function(x) sample(c(T, F), size = N, prob = c(x, 1 - x), replace = TRUE))
-    })
-    srnd <- do.call(cbind, srnd)
-    smat <- cbind(smat, srnd)
-    cat("Generated", ncol(srnd), "additional random subsets\n")
-    rm(srnd)
-  }
+  # # Add random subsets if there are too few in 'smat'
+  # if (ncol(smat) < nsets) {
+  #   rfill <- vint - table(temp$ventile)
+  #   rfill <- rfill[rfill > 0]
+  #   srnd <- lapply(1:length(rfill), function(i) {
+  #     j <- rfill[i]
+  #     k <- as.integer(names(rfill)[i])
+  #     r <- qexp(seq(0.95, 0, length.out = 20)[k] + runif(j, 0, 0.05), rate = 5)
+  #     r <- pmax(r, min_size / N)
+  #     sapply(r, function(x) sample(c(T, F), size = N, prob = c(x, 1 - x), replace = TRUE))
+  #   })
+  #   srnd <- do.call(cbind, srnd)
+  #   smat <- cbind(smat, srnd)
+  #   cat("Generated", ncol(srnd), "additional random subsets\n")
+  #   rm(srnd)
+  # }
 
   # Probability of selection
   # sub_size = 0.2  # INPUT
@@ -356,11 +328,39 @@ validate <- function(observed,
   #summary(colSums(smat) / nrow(smat))
   #hist(colSums(smat) / nrow(smat))
 
-  stopifnot(ncol(smat) == nsets)
+  # Update 'nsets'
+  nsets <- ncol(smat)
+
+  #stopifnot(ncol(smat) == nsets)
   rm(observed, x2)
 
   #-----
 
+  # Correlation template
+
+  # Template data.frame used for assigning variable names and other auxiliary info to correlation results
+  template <- expand.grid(v1 = fvars, v2 = c(fvars, ovars), stringsAsFactors = FALSE) %>%
+    mutate(n = 1:n(),
+           uni = purrr::map2_chr(v1, v2, ~ paste(sort(c(.x, .y)), collapse = "--"))) %>%
+    distinct(uni, .keep_all = TRUE) %>%
+    filter(v1 != v2) %>%  # Remove self-correlation (i.e. r = 1)
+    mutate(v1b = purrr::map_chr(strsplit(v1, "..", fixed = TRUE), 1),
+           v2b = purrr::map_chr(strsplit(v2, "..", fixed = TRUE), 1)) %>%
+    group_by(v1b, v2b) %>%
+    mutate(vwgt = 1 / n()) %>%  # This enables equal weighting of each fusion variable, regardless of number of factor levels
+    group_by(v1b) %>%
+    mutate(vwgt = vwgt / sum(vwgt)) %>%  # This enables equal weighting of each fusion variable, regardless of number of factor levels
+    ungroup()
+
+  # Index for subsetting correlation results with replicate expression (below)
+  keep <- template$n
+
+  # Check that total weight is same across all fusion variables (v1b)
+  # template %>%
+  #   group_by(v1b) %>%
+  #   summarize(total_vwgt = sum(vwgt))
+
+  #-----
 
   # Standard error of a weighted mean for a continuous variable (SE's for proportions are calculated differently)
   # Code: https://stats.stackexchange.com/questions/25895/computing-standard-error-in-weighted-mean-estimation
@@ -391,7 +391,7 @@ validate <- function(observed,
 
   # Perform calculations over 'nsets' iterations
   cat("Calculating validation results for", nsets, "subsets\n")
-  comp <- parallel::mclapply(1:ncol(smat), function(iset) {
+  comp <- parallel::mclapply(1:nsets, function(iset) {
 
     # Calculate point estimates for training and simulated data for a random subset
     # TO DO: Move this out of function?
@@ -519,7 +519,6 @@ validate <- function(observed,
   # Two-sample t-test
   # https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm
   # https://stats.stackexchange.com/questions/30394/how-to-perform-two-sample-t-tests-in-r-by-inputting-sample-statistics-rather-tha
-
   Ttest <- function(m1, m2, se1, se2, df1, df2) {
     se <- sqrt(se1 ^ 2 + se2 ^ 2)
     df <- ((se1 ^ 2 + se2 ^ 2) ^ 2) / ((se1 ^ 2) ^ 2 / df1 + (se2 ^ 2) ^ 2 / df2)
@@ -600,15 +599,12 @@ validate <- function(observed,
 
   cor.out <- do.call(rbind, purrr::map(comp, "cor")) %>%
     as.data.table() %>%
-    mutate(#v1 = rep(template$v1, nsets),
-      #v2 = rep(template$v2, nsets),
-      y = rep(template$v1b, nsets),
-      correlate = rep(template$v2b, nsets),
-      #vwgt = rep(template$vwgt, nsets),
-      share = rep(purrr::map_dbl(comp, "share"), each = nrow(template)),
-      iset = rep(1:nsets, each = nrow(template)),
-      r0 = ifelse(!is.finite(r0), NA, r0),
-      r1 = ifelse(!is.finite(r1), NA, r1)) %>%
+    mutate(y = rep(template$v1b, nsets),
+           correlate = rep(template$v2b, nsets),
+           share = rep(purrr::map_dbl(comp, "share"), each = nrow(template)),
+           iset = rep(1:nsets, each = nrow(template)),
+           r0 = ifelse(!is.finite(r0), NA, r0),
+           r1 = ifelse(!is.finite(r1), NA, r1)) %>%
     group_by(iset, share, y, correlate) %>%
     summarize(error = mean(abs(r1 - r0), na.rm = TRUE),
               error_w = weighted.mean(abs(r1 - r0), w = r0 ^ 2, na.rm = TRUE),

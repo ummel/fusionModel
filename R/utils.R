@@ -342,3 +342,89 @@ freeMemory <- function() {
     }
   }
 }
+
+#------------------
+
+# Structured downsampling of 2-dimensional (x, y) inputs
+# Compared to random sampling, guarantees a more uniform sampling of the space and oversampling of unusual observations
+# Returns adjusted weights such that total cluster weights are respected in the downsample
+# Will return no less than N observations, but can return significantly more due to oversampling of small/unusual clusters
+
+# Example usage
+# library(fusionModel)
+# x <- recs$electricity
+# y <- recs$square_feet
+# test <- downsample(x = recs$electricity, y = recs$square_feet)
+# dim(test)
+# plot(recs$electricity, recs$square_feet)
+# points(test[1:2], col = 2)
+# summary(test$w)
+
+downsample <- function(x,
+                       y,
+                       w = rep(1, length(x)),
+                       N = 0.1 * length(x),
+                       K = 30,
+                       min_samp = 30) {
+
+  stopifnot({
+    length(x) == length(y)
+    length(x) == length(w)
+    !anyNA(c(x, y, w))
+    N >= 1
+    K >= 1
+    min_samp >= 1
+  })
+
+  N0 <- length(x)
+
+  # NOT USED: Initial brute downsample step, if necessary
+  # Could be useful if the inputs are really big, making kmeans too slow
+  # s0 <- if (N_init < N) sample.int(N, size = N_init) else 1:N
+  # x <- x[s0]
+  # y <- y[s0]
+  # if (!is.null(w)) w <- w[s0] * (sum(w) / sum(w[s0]))  # Preserve the original total sample weight
+
+  # Keep copies of inputs
+  x0 <- x
+  y0 <- y
+
+  # Scale x and y prior to clustering
+  x <- scale(x)
+  y <- scale(y)
+
+  # Average required adjustment factor
+  adj <- N / N0
+
+  # k-means
+  km <- kmeans(cbind(x, y), centers = K, iter.max = K * 5)
+
+  # Measure of the unusual-ness of each cluster (relative distance from all other cluster centers)
+  # Used to calculate 'cadj'; cluster-specific downsampling factor
+
+  # Center of the (scaled) dataset
+  #cnt <- c(weighted.mean(x, w), weighted.mean(y, w))  # Only necessary b/c scale() above is not weighted
+  cnt <- apply(km$centers, 2, weighted.mean, w = km$size)
+
+  # Distance of each cluster center from the dataset center
+  dc <- sqrt((km$centers[, 1] - cnt[1]) ^ 2 + (km$centers[, 2] - cnt[2]) ^ 2)
+  ofct <- dc / weighted.mean(dc, km$size)
+  cadj <- adj * ofct  # Cluster-specific adjustment factor
+
+  # Clustered downsample
+  samp <- sapply(1:nrow(km$centers), function(cl) {
+    i <- which(km$cluster == cl)
+    cnt <- km$centers[cl, ]  # Center of the cluster
+    d <- sqrt((x[i] - cnt[1]) ^ 2 + (y[i] - cnt[2]) ^ 2)
+    j <- seq(from = 1, to = length(d), length.out = max(min_samp, length(d) * cadj[cl]))
+    j <- unique(round(j))
+    k <- i[order(d)][j]
+    #k <- s0[k]
+    wout <- w[k] * (sum(w[i]) / sum(w[k]))
+    cbind(x = x0[k], y = y0[k], w = wout)
+  })
+
+  samp <- do.call(rbind, samp)
+  return(as.data.frame(samp))
+
+}
