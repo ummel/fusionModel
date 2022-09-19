@@ -26,6 +26,7 @@ NULL
 #'   \item num_leaves
 #'   \item bagging_fraction
 #'   \item feature_fraction
+#'   \item max_depth
 #'   \item min_data_in_leaf
 #'   \item num_iterations
 #'   \item learning_rate
@@ -161,6 +162,9 @@ train <- function(data,
   dir <- normalizePath(dirname(file), mustWork = FALSE)
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
   file <- file.path(dir, basename(file))
+
+  # Ensure ptiles is ordered and unique
+  ptiles <- sort(unique(ptiles))
 
   #-----
 
@@ -528,11 +532,6 @@ train <- function(data,
 
         d <- data.table(zc, mc, qc)
 
-        # #---TEST----
-        # # How well do different 'k' capture the implied conditional distribution?
-        # p0 <- copy(d)
-        # #---END TEST----
-
         if (type == "continuous") {
           cnorm <- c(colnames(mc), colnames(qc))
           ncenter <- sapply(d[, cnorm, with = FALSE], median)
@@ -558,11 +557,179 @@ train <- function(data,
         # Apply the column weights to 'd'
         for (j in names(d)) set(d, i = NULL, j = j, value = d[[j]] * wtemp[[j]])
 
-        # #---TEST----
+        # #---START TEST----
         # # How well do different 'k' capture the implied conditional distribution?
-        # dd <- unique(d)
-        # test <- RANN::nn2(dd, dd, k = 200 + 1)
+        #
+        # # Due to replicates (temporary)
+        # temp.ind <- 1:5686
+        #
+        # dd <- d[temp.ind, ]
+        #
+        # # Which kvalues to test?
+        # # HAVE TO SET a max 'k'
+        # ktest <- seq(from = 10, to = 1000, by = 10)
+        #
+        # # NN results using the conditional values
+        # test <- RANN::nn2(dd, dd, k = max(ktest) + 1)
         # test <- test$nn.idx[, -1]  # Remove the exact match NN
+        # #test <- test[, ktest]  # Restrict to test values of 'k'
+        #
+        # # Calculate cumulative (weighted) means for each row
+        # m <- test
+        # m[] <- temp[temp.ind][m]  # Create matrix with the 'Y' values of each neighbor
+        # w <- test
+        # w[] <- W.lgb[temp.ind][w]
+        #
+        # wcum <- rowCumsums(w)
+        # cmean <- rowCumsums(m * w) / wcum
+        # # check <- sapply(1:ncol(m), function(i) weighted.mean(m[2, 1:i], w[2, 1:i]))
+        # # all.equal(cmean[2, ], check)
+        #
+        # # Visualize -- woah, why aren't these close???
+        # chk <- 10
+        # plot(cmean[chk, ], type = "l")
+        # abline(h = mc[chk, ], col = 2)
+        #
+        # # They just aren't aligning...odd...
+        # hist(m[chk,])
+        # abline(v = mc[chk, ], col = 2)
+        #
+        # # NOTE: It looks like the NN step isn't grabbing neighbors with collective mean very close to the conditional mean
+        #
+        #
+        # # Compare the cumulative means to the conditional mean (mc)
+        # #mcomp <- abs((cmean - mc[temp.ind, ]) / mc[temp.ind, ])  # Percent error
+        # #mcomp <- mcomp[, ktest]
+        #
+        # # How far out is the strict minimum in 'mcomp'?
+        # # check <- ktest[max.col(-mcomp)]
+        # # summary(check)
+        #
+        # # Scatter of 'mcomp' and 'k' for single obs
+        # #plot(mcomp[8, ], type = "l")
+        #
+        # # Calculate (UN-weighted) cumulative variance for each 'k'
+        # # Based on idea here: https://stackoverflow.com/questions/52459711/how-to-find-cumulative-variance-or-standard-deviation-in-r
+        # # TO DO: Make use of weights
+        # nm <- rowCumsums(is.finite(m))
+        # m1 <- rowCumsums(m) / nm
+        # m2 <- rowCumsums(m ^ 2) / nm
+        # v <- (m2 - m1 * m1) * (nm / (nm - 1))
+        # #v <- (m2 - m1 * m1)  # 'n' denominator instead of n - 1
+        # v[, 1] <- 0  # no variance in the first column
+        # v[v < 0] <- 0  # Ensure no negative values
+        # v <- sqrt(v)  # Standard deviation
+        #
+        # # Check
+        # v[1, 50]
+        # sd(m[1, 1:50])
+        #
+        # # Estimate standard deviation of the conditional quantiles, assuming Normal distribution
+        # # Use of abs() is kluge for possible quantile crossing
+        # cvar <- abs(qc[temp.ind, ncol(qc)] - qc[temp.ind, 1]) / diff(range(qnorm(ptiles)))
+        #
+        # # Visualize
+        # chk <- 100
+        # plot(v[chk, ], type = "l")
+        # abline(h = cvar[chk], col = 2)
+        #
+        # x <- m[100, ]
+        #
+        # # Overall score
+        # #mcomp <- abs((cmean - mc[temp.ind, ]) / mc[temp.ind, ])  # Percent error
+        #
+        # # ttest
+        # # Two-sample t-test
+        # # https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm
+        # # https://stats.stackexchange.com/questions/30394/how-to-perform-two-sample-t-tests-in-r-by-inputting-sample-statistics-rather-tha
+        # Ttest <- function(m1, m2, se1, se2, df1 = NULL, df2 = NULL) {
+        #   if (is.null(df1)) df1 <- Inf
+        #   if (is.null(df2)) df2 <- Inf
+        #   se <- sqrt(se1 ^ 2 + se2 ^ 2)
+        #   df <- ((se1 ^ 2 + se2 ^ 2) ^ 2) / ((se1 ^ 2) ^ 2 / df1 + (se2 ^ 2) ^ 2 / df2)
+        #   tstat <- (m1 - m2) / se
+        #   pval <- 2 * pt(-abs(tstat), df)
+        #   return(pval)
+        # }
+        #
+        # m1 <- mc[temp.ind, ]
+        # m2 <- cmean
+        # se1 <- cvar
+        # se2 <- v
+        #
+        # test <- Ttest(m1 = mc, m2 = cmean)
+        #
+        #
+        # test <-
+        # #test <- rowMeans(qcand, dims = 2) + mcomp  # Equal weighted of conditional mean and (all) quantiles
+        # #test <- (qcand[, , 1] + qcand[, , 2]) / 2  # Equivalent to: rowMeans(qcand, dims = 2
+        #
+        # # Best option for each row...
+        # best <- max.col(-test)
+        #
+        #
+        # # NOTE: THERE Appears to be very little variation in the nearest neighbor results
+        # # That is, the the neighbors are very similar compared to the conditional quantile(s)
+        # # Not sure what this means...
+        #
+        #
+        # # NOTE: Any reason to check ALL of the k's, since we know some are not close in terms of the conditions mean
+        #
+        # # Approximate quantile of each 'k' candidate value
+        # qcand <- allocArray(dim = c(nrow(m), length(ktest), length(ptiles)))
+        # for (k in seq_along(ktest)) {
+        #   qcand[, k, 1] <- matrixStats::rowOrderStats(m, cols = 1:ktest[k], which = max(1, round(ktest[k] * ptiles[1])))  # First ptile
+        #   qcand[, k, 2] <- matrixStats::rowOrderStats(m, cols = 1:ktest[k], which = max(1, round(ktest[k] * ptiles[2])))  # Second ptile
+        # }
+        #
+        # # Manual check - TESTING
+        # # Estimated/empirical quantile estimates
+        # head(qcand[, 1:10, 1])
+        # head(qcand[, 1:10, 2])
+        # # These are the analogous exact/accurate quantiles
+        # t(apply(head(m), 1, function(x) sapply(ktest[1:10], function(k) as.numeric(quantile(x[1:k], probs = ptiles[1])))))
+        # t(apply(head(m), 1, function(x) sapply(ktest[1:10], function(k) as.numeric(quantile(x[1:k], probs = ptiles[2])))))
+        #
+        # # Percent error?
+        # qcand[, , 1] <- abs((qcand[, , 1] - qc[temp.ind, 1]) / qc[temp.ind, 1])
+        # qcand[, , 2] <- abs((qcand[, , 2] - qc[temp.ind, 2]) / qc[temp.ind, 2])
+        # #qcomp <- abs((qcand - qc[temp.ind, 1]) / qc[temp.ind, 1])  # Percent error
+        #
+        # # Overall score
+        # test <- rowMeans(qcand, dims = 2) + mcomp  # Equal weighted of conditional mean and (all) quantiles
+        # #test <- (qcand[, , 1] + qcand[, , 2]) / 2  # Equivalent to: rowMeans(qcand, dims = 2
+        #
+        # # Best option for each row...
+        # best <- max.col(-test)
+        #
+        # plot(test[2, ])
+        #
+        # # Which columns (k) results in values closest to the conditional mean
+        # #best <- rowMins(comp)
+        # crank <- rowRanks(comp)
+        #
+        # # Best match
+        #
+        # best <- max.col(-comp, ties.method = "first")
+        #
+        #
+        # test <-
+        #
+        #   q1 <- matrixStats::rowOrderStats(m, which = best)  # Approximate quantile
+        #
+        #
+        # test <- rowCumsums(crank != 1)
+        #
+        #
+        # best <- rowOrderStats(comp, which = 1)
+        #
+        # best <- rowMins(cand)
+        #
+        #
+        #
+        # check <- rowOrderStats(comp, which = ceiling(ncol(comp) / 2))  # Approximate quantile
+        # #check2 <- rowMedians(comp)
+        # #check3 <- rowQuantiles(comp, probs = 0.5)  # SLOW
         #
         # res <- 20  # Number of k-values to check
         # kseq <- unique(ceiling(seq(from = ncol(test) / res, to = ncol(test), length.out = res)))
@@ -596,7 +763,7 @@ train <- function(data,
         #
         # # Extract the optimal 'k' for each observation
         # out <- sapply(out, function(x) kseq[which.min(x)])
-        # #---END TEST----
+        #---END TEST----
 
         cdata <- cbind(cdata, d)
         rm(d)
@@ -642,12 +809,12 @@ train <- function(data,
     }
 
     out <- list(#lgbpred = xv,
-                yvalid = yvalid,
-                yiters = yiters,
-                ycenter = ycenter,
-                yscale = yscale,
-                colweight = colweight,
-                meddist = meddist)
+      yvalid = yvalid,
+      yiters = yiters,
+      ycenter = ycenter,
+      yscale = yscale,
+      colweight = colweight,
+      meddist = meddist)
     return(out)
 
   }

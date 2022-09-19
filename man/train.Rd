@@ -56,6 +56,7 @@ The \code{hyper} argument can be used to specify the LightGBM hyperparameter val
 \item num_leaves
 \item bagging_fraction
 \item feature_fraction
+\item max_depth
 \item min_data_in_leaf
 \item num_iterations
 \item learning_rate

@@ -25,13 +25,13 @@ analyze(
 
 \item{sample_weights}{Vector of primary sampling weights. If absent, equal weights are assumed.}
 
-\item{replicate_weights}{Optional data frame where each column is a set of survey replicate weights. \code{nrow(replicate_weights)} should equal \code{length(sample_weights)}. If \code{NULL}, standard errors are calculated without using replicate weights.}
+\item{replicate_weights}{Optional data frame where each column is a vector of survey replicate weights. \code{nrow(replicate_weights)} must equal \code{length(sample_weights)}. If \code{NULL}, standard errors are calculated without using replicate weights.}
 
 \item{static}{Optional data frame containing static (non-synthetic) variables that do not vary across implicates. These are variables either required by \code{formula} or \code{by}.}
 
 \item{by}{Character. Optional column name(s) in \code{implicates} or \code{static} (typically factors) that collectively define the population subgroups across which the analysis will be performed. If \code{NULL}, analysis is performed on the whole sample.}
 
-\item{var.scale}{Scalar by which to scale the standard variance in the presence of replicate weights. This is determined by the survey design. The default (\code{var.scale = 4}) is appropriate for both RECS and ACS.}
+\item{var.scale}{Scalar. Factor by which to scale the standard variance in the presence of replicate weights. This is determined by the survey design. The default (\code{var.scale = 4}) is appropriate for both RECS and ACS.}
 
 \item{cores}{Integer. Number of cores used. Only applicable on Unix systems.}
 }
