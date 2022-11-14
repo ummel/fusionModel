@@ -4,9 +4,9 @@
 \name{fusionModel-package}
 \alias{fusionModel}
 \alias{fusionModel-package}
-\title{fusionModel: Tools for data fusion and analysis of synthetic data in R}
+\title{fusionModel: Data fusion and analysis of synthetic data in R}
 \description{
-Tools for data fusion and analysis of synthetic data in R.
+Data fusion and analysis of synthetic data in R.
 }
 \author{
 \strong{Maintainer}: Kevin Ummel \email{ummel@berkeley.edu}

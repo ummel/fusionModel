@@ -7,7 +7,7 @@
 plot_valid(valid, y = NULL, path = NULL, cores = 1, ...)
 }
 \arguments{
-\item{valid}{List returned by \code{\link{validate}}.}
+\item{valid}{Object returned by \code{\link{validate}}.}
 
 \item{y}{Character. Fusion variables to use for validation graphics. Useful for plotting partial validation results. Default is to use all fusion variables present in \code{valid}.}
 
@@ -18,66 +18,60 @@ plot_valid(valid, y = NULL, path = NULL, cores = 1, ...)
 \item{...}{Arguments passed to \code{\link[ggplot2]{ggsave}} to control .png graphics saved to disk.}
 }
 \value{
-A list with the following named slots, each containing a \code{\link[ggplot2]{ggplot}} object visualizing validation results for all of the fusion variables.
-
+A list with "plots", "smooth", and "data" slots. The "plots" slot contains the following \code{\link[ggplot2]{ggplot}} objects:
 \itemize{
-\item plot1: Validity of point estimates (absolute percent error).
-\item plot2: Validity of pairwise correlation coefficients (absolute error).
-\item plot3: Validity of \emph{t}-test of equality of observed and simulated point estimates (probability of p-value < 0.05).
-\item plot4: Validity of standard errors (ratio of simulated SE to observed SE).
-\item Additional named slots (one for each of the fusion variables) contain the same four plots described above with scatterplot of subset-specific results and a shaded 95\% confidence interval of the smoothed median.
-\item est_smooth: data frame with raw smoothing results for estimates (expert use only)
-\item cor_smooth: data frame with raw smoothing results for correlations (expert use only)
+\item est: Discrepancy (absolute percent error) in point estimates.
+\item moe: Discrepancy (absolute percent error) in 90\% margin of error.
+\item bias: Bias (ratio of simulated-to-observed) in 90\% margin of error.
+\item Additional named slots (one for each of the fusion variables) contain the plots described above with scatterplot results.
 }
+"smooth" is a data frame with the plotting values used to produce the smoothed median plots.
+"data" is a data frame with the complete validation results as returned by the original call to \code{\link{validate}}.
 }
 \description{
-Creates and optionally saves to disk representative plots of validation results returned by \code{\link{validate}}. Requires the \code{\link[qgam]{qgam}}, \code{\link[ggplot2]{ggplot2}}, and \code{\link[scales]{scales}} packages.
+Creates and optionally saves to disk representative plots of validation results returned by \code{\link{validate}}. Requires the suggested \code{\link{ggplot2}} package. This function is (by default) called within \code{\link{validate}}. Can be useful on its own to save graphics to disk or generate plots for a subset of fusion variables.
 }
 \details{
-The validation results are visualized with the goal of conveying expected, typical performance across the fusion variables. That is, how well do the simulated data match the observed data with respect to point estimates, pairwise correlations, and uncertainty/standard errors for both the full sample and population subsets of various size? See \code{\link{validate}} for details and rationale of subset creation.
+Validation results are visualized to convey expected, typical (median) performance of the fusion variables. That is, how well do the simulated data match the observed data with respect to point estimates and confidence intervals for population subsets of various size?
 
-The input validation results are converted to plausible error metrics for plotting. For comparison of point estimates, the error metric is absolute percent error for continuous variables and classification error for categorical (i.e. the proportion of the population that is misclassified in the simulated data compared to the observed). Since these metrics are similar in interpretation, results for continuous and categorical variables are plotted together.
+Plausible error metrics are derived from the input validation data for plotting. For comparison of point estimates, the error metric is absolute percent error for continuous variables; in the categorical case it is absolute error scaled such that the maximum possible error is 1. Since these metrics are not strictly comparable, the all-variable plots denote categorical fusion variables with dotted lines.
 
-The error metric is absolute error when comparing correlation coefficients. Uncertainty estimates are compared using a t-test of equal point estimates and the ratio of simulated-to-observed standard errors. The latter allows the user to detect systematic bias in standard errors.
-
-For a given fusion variable, the error metric will exhibit variation even for subsets of comparable size, due to the fact that each subset looks at a unique partition of the data. In order to convey how expected performance varies with subset size, an additive quantile regression model (see \code{\link[qgam]{qgam}}) is used to calculate a smoothed, robust relationship between subset size and the validation metric. The resulting curve gives the expected, typical (median) performance, conditional on subset size.
-
-A console message indicating "outer Newton did not converge fully" van be produced (via \code{\link[qgam]{qgam}}; it cannot be suppressed). This can generally be ignored, though it is always good practice to check the variable-specific plots to ensure the smoothed fits are plausible.
+For a given fusion variable, the error metric will exhibit variation (often quite skewed) even for subsets of comparable size, due to the fact that each subset looks at a unique partition of the data. In order to convey how expected, typical performance varies with subset size, the smoothed median error conditional on subset size is approximated and plotted.
 }
 \examples{
 # Build a fusion model using RECS microdata
-# Note that "test_model.fsn" will be written to working directory
+# Note that "fusion_model.fsn" will be written to working directory
 fusion.vars <- c("electricity", "natural_gas", "aircon")
 predictor.vars <- names(recs)[2:12]
-train(data = recs,
-      y = fusion.vars,
-      x = predictor.vars,
-      file = "test_model.fsn",
-      weight = "weight")
+fsn.path <- train(data = recs,
+                  y = fusion.vars,
+                  x = predictor.vars,
+                  weight = "weight")
 
-# Generate multiple implicates
+# Fuse back onto the donor data (multiple implicates)
 sim <- fuse(data = recs,
-            file = "test_model.fsn",
-            M = 30,
-            ignore_self = TRUE)
+            file = fsn.path,
+            M = 30)
 
-# Calculate validation results
-valid <- validate(observed = recs[, c(fusion.vars, predictor.vars)],
-                  simulated = sim,
-                  sample_weights = recs$weight,
-                  replicate_weights = subset(recs, select = rep_1:rep_96))
+# Calculate validation results but do not generate plots
+valid <- validate(observed = recs,
+                  implicates = sim,
+                  subset_vars = c("income", "education", "race", "urban_rural"),
+                  weight = "weight",
+                  plot = FALSE)
 
 # Create validation plots
-vplots <- plot_valid(valid)
-names(vplots)
+valid <- plot_valid(valid)
 
 # View some of the plots
-vplots$plot1
-vplots$electricity$plot1
-vplots$aircon$plot2
+valid$plots$est
+valid$plots$moe
+valid$plots$electricity$bias
 
 # Can also save the plots to disk at creation
 # Will save .png files to 'valid_plots' folder in working directory
+# Note that it is fine to pass a 'valid' object with existing $plots slot
+# In that case, the plots are simply re-generated
 vplots <- plot_valid(valid,
                      path = file.path(getwd(), "valid_plots"),
                      width = 8, height = 6)

@@ -8,10 +8,12 @@ train(
   data,
   y,
   x,
-  file = "fusion_model.fsn",
+  fsn = "fusion_model.fsn",
   weight = NULL,
   nfolds = 5,
-  ptiles = c(0.165, 0.835),
+  nquantiles = 3,
+  nclusters = 2000,
+  krange = c(10, 500),
   hyper = NULL,
   fork = FALSE,
   cores = 1
@@ -22,15 +24,19 @@ train(
 
 \item{y}{Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.}
 
-\item{x}{Character. Predictor variables in \code{data} common to donor and eventual recipient.}
+\item{x}{Character or list. Predictor variables in \code{data} common to donor and eventual recipient. If a list, each slot specifies the \code{x} predictors to use for each \code{y}.}
 
-\item{file}{Character. File where fusion model will be saved. Must use \code{.fsn} suffix.}
+\item{fsn}{Character. File path where fusion model will be saved. Must use \code{.fsn} suffix.}
 
 \item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
 
 \item{nfolds}{Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).}
 
-\item{ptiles}{Numeric. One or more percentiles for which quantile models are trained for continuous \code{y} variables (along with the conditional mean).}
+\item{nquantiles}{Numeric. Number of quantile models to train for continuous \code{y} variables (along with the conditional mean). \code{nquantiles} evenly-distributed percentiles are used. The default \code{nquantiles = 3} is usually sufficient and yields quantile models for the 16.6th, 50th, and 83.3rd percentiles.}
+
+\item{nclusters}{Numeric. Maximum number of k-means clusters to use. Higher is better but at computational cost. \code{nclusters = 0} or \code{nclusters = Inf} turn off clustering.}
+
+\item{krange}{Numeric. Minimum and maximum number of nearest neighbors to use for construction of continuous conditional distributions. Higher \code{max(krange)} is better but at computational cost.}
 
 \item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
 
@@ -39,15 +45,15 @@ train(
 \item{cores}{Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.}
 }
 \value{
-A fusion model object (.fsn) is saved to \code{file}.
+A fusion model object (.fsn) is saved to \code{fsn}.
 }
 \description{
-Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the characteristics of conditional distributions. The resulting fusion model (.fsn file) can be used with \code{\link{fuse}} to simulate outcomes for a "recipient" dataset.
+Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the conditional distributions. The resulting fusion model (.fsn file) can be used with \code{\link{fuse}} to simulate outcomes for a "recipient" dataset.
 }
 \details{
 When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 
-The fusion model written to \code{file} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
+The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
 
 The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
 
@@ -68,19 +74,19 @@ Testing with small-to-medium size datasets suggests that forking is typically fa
 }
 \examples{
 # Build a fusion model using RECS microdata
-# Note that "test_model.fsn" will be written to working directory
+# Note that "fusion_model.fsn" will be written to working directory
 ?recs
 fusion.vars <- c("electricity", "natural_gas", "aircon")
 predictor.vars <- names(recs)[2:12]
-train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 
 # When 'y' is a list, it can specify variables to fuse as a block
 fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 fusion.vars
-train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn")
+train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path)
 
 # Specify a single set of LightGBM hyperparameters
-train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
       hyper = list(boosting = "goss",
                    feature_fraction = 0.8,
                    num_iterations = 300
@@ -88,9 +94,9 @@ train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
 
 # Specify a range of LightGBM hyperparameters to search over
 # This takes longer, because there are more models to test
-train(data = recs, y = fusion.vars, x = predictor.vars, file = "test_model.fsn",
+train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
       hyper = list(num_leaves = c(10, 30),
-                   feature_fraction = c(0.8, 0.9, 1),
+                   feature_fraction = c(0.7, 0.9),
                    num_iterations = 50
       ))
 }

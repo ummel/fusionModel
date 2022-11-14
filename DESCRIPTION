@@ -1,9 +1,9 @@
 Package: fusionModel
-Title: Tools for data fusion and analysis of synthetic data in R
-Version: 2.1.0
+Title: Data fusion and analysis of synthetic data in R
+Version: 2.2.0
 Authors@R: 
     person("Kevin", "Ummel", , "ummel@berkeley.edu", role = c("aut", "cre"))
-Description: Tools for data fusion and analysis of synthetic data in R.
+Description: Data fusion and analysis of synthetic data in R.
 License: GPL-3
 Depends: 
     R (>= 3.5.0)
@@ -15,11 +15,14 @@ Imports:
     lightgbm,
     Matrix,
     matrixStats,
+    mgcv,
     purrr,
     RANN,
     stats,
     utils,
     zip
+Suggests:
+    ggplot2
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
