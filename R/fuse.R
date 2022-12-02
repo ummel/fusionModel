@@ -347,7 +347,7 @@ fuse <- function(data,
         ncenter <- meta$ycenter[[i]]
         nscale <- meta$yscale[[i]]
 
-        # Ensure 'pred' and 'kcenters' have consistent column names
+        # Ensure 'pred' and 'ncenter' have consistent column names
         setcolorder(pred, names(ncenter))
 
         # Scale the conditional expectation columns
@@ -372,7 +372,7 @@ fuse <- function(data,
         kbest <- if (block) {
           rep(kblock, nrow(kcenters))  # Fixed number of neighbors in block case
         } else {
-          matrixStats::rowCounts(is.na(kneighbors), value = FALSE)  # Recreates 'kbest' from the nearest neighbor matrix
+          matrixStats::rowCounts(is.na(kneighbors), value = FALSE)  # Column index of best 'k' value
         }
 
         #---
@@ -424,8 +424,7 @@ fuse <- function(data,
       }
 
       # Add the simulated values to 'dmat' prior to next iteration
-      S <- as.matrix(S)
-      dmat[, v] <- S
+      dmat[, v] <- as.matrix(S)
       rm(S)
 
     }
