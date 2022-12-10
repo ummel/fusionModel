@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.2.0
+Version: 2.2.1
 Authors@R: 
     person("Kevin", "Ummel", , "ummel@berkeley.edu", role = c("aut", "cre"))
 Description: Data fusion and analysis of synthetic data in R.

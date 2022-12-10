@@ -74,6 +74,7 @@ head(sim)
 #---------
 
 # Multiple types of analyses can be done at once
+# This call uses the full sample; by = NULL, by default
 result <- analyze(x = list(mean = c("natural_gas", "aircon"),
                            median = "electricity",
                            sum = c("electricity", "aircon")),
@@ -85,12 +86,12 @@ View(result)
 
 #-----
 
-# Mean electricity consumption, by climate zone
+# Mean electricity consumption, by climate zone and urban/rural status
 result1 <- analyze(x = list(mean = "electricity"),
                   implicates = sim,
                   static = recs,
                   weight = "weight",
-                  by = "climate")
+                  by = c("climate", "urban_rural"))
 
 # Same as above but including sample weight uncertainty
 # Note that only the first 30 replicate weights are used internally
@@ -99,7 +100,7 @@ result2 <- analyze(x = list(mean = "electricity"),
                   static = recs,
                   weight = "weight",
                   rep_weights = paste0("rep_", 1:96),
-                  by = "climate")
+                  by = c("climate", "urban_rural"))
 
 # Helper function for comparison plots
 pfun <- function(x, y) {plot(x, y); abline(0, 1, lty = 2)}
@@ -109,9 +110,12 @@ pfun <- function(x, y) {plot(x, y); abline(0, 1, lty = 2)}
 pfun(result1$est, result2$est)
 pfun(result1$moe, result2$moe)
 
+# Notice that relative uncertainty declines with subset size
+plot(result1$N, result1$moe / result1$est)
+
 #-----
 
-# Use custom function to perform more complex analyses
+# Use a custom function to perform more complex analyses
 # Custom function should return a data frame with non-standard target variables
 
 my_fun <- function(data) {
@@ -130,7 +134,7 @@ my_fun <- function(data) {
 }
 
 # Do analysis using variables produced by custom function
-# Can mix in standard target variables as well
+# Can included non-custom target variables as well
 result <- analyze(x = list(mean = c("kwh_per_ft2", "use_natural_gas", "electricity")),
                   implicates = sim,
                   static = recs,

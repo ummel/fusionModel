@@ -20,9 +20,8 @@ plot_valid(valid, y = NULL, path = NULL, cores = 1, ...)
 \value{
 A list with "plots", "smooth", and "data" slots. The "plots" slot contains the following \code{\link[ggplot2]{ggplot}} objects:
 \itemize{
-\item est: Discrepancy (absolute percent error) in point estimates.
-\item moe: Discrepancy (absolute percent error) in 90\% margin of error.
-\item bias: Bias (ratio of simulated-to-observed) in 90\% margin of error.
+\item est: Comparison of point estimates (median absolute percent error).
+\item moe: Comparison of 90\% margin of error (median ratio of simulated-to-observed MOE).
 \item Additional named slots (one for each of the fusion variables) contain the plots described above with scatterplot results.
 }
 "smooth" is a data frame with the plotting values used to produce the smoothed median plots.

@@ -235,7 +235,7 @@ one_hot <- function(data, y = NULL, dt = TRUE, dropOriginal = TRUE, dropUnusedLe
                                       data = dy,
                                       contrasts.arg = lapply(dy, contrasts, contrasts = FALSE),
                                       drop.unused.levels = FALSE)
-                                      #drop.unused.levels = dropUnusedLevels)
+    #drop.unused.levels = dropUnusedLevels)
 
     # Could return sparse matrix, but appending to original data frame by default
     dy <- as.matrix(dy)
@@ -468,11 +468,20 @@ uniCluster <- function(x, k) {
   k <- min(k, data.table::uniqueN(x))
   iter <- 0
   halt <- FALSE
-  while (!halt) {
-    iter <- iter + 1
-    km <- suppressWarnings(kmeans(x, centers = k, nstart = 3 * iter, iter.max = 20))
-    halt <- km$ifault == 0
-  }
+
+  # Ensures the kmeans() results are deterministic by specifying intial centers
+  ind <- round(seq(from = 1, to = data.table::uniqueN(x), length.out = k))
+  initial <- sort(unique(x))[ind]
+  km <- suppressWarnings(kmeans(x, centers = initial, iter.max = 50))
+
+  # iter <- 0
+  # halt <- FALSE
+  # while (!halt) {
+  #   iter <- iter + 1
+  #   km <- suppressWarnings(kmeans(x, centers = k, nstart = 3 * iter, iter.max = 20))
+  #   halt <- km$ifault == 0
+  # }
+
   cl <- data.table::frank(km$centers, ties.method = "dense")[km$cluster]
   cl <- factor(cl, levels = 1:k, ordered = TRUE)
   return(cl)
@@ -542,32 +551,59 @@ smoothQuantile <- function(x,
                            y,
                            qu = 0.5,
                            xout = NULL,
-                           a = 0.3,
-                           b = 0.1) {
+                           a = 0.3) {
+
 
   stopifnot({
-    !anyNA(x)
-    !anyNA(x)
     length(x) == length(y)
     qu == "mad" | all(qu > 1, qu < 1)
     is.null(xout) | length(xout) > 1
     a > 0
-    b > 0
+    #b > 0
   })
 
-  qmad <- qu[1] == "mad"
-  qu <- if (qmad) c(0.25, 0.5, 0.75) else sort(unique(qu))
+  # Remove NA observations
+  na <- is.na(x) | is.na(y)
+  x <- x[!na]
+  y <- y[!na]
+
+  # Order 'x' and create other necessary inputs
   n <- length(x)
   i <- order(x)
   x <- x[i]
   y <- y[i]
   d <- data.table(x, y)
-  mb <- max(5, ceiling(n ^ a))
+  qmad <- qu[1] == "mad"
+  qu <- if (qmad) c(0.25, 0.5, 0.75) else sort(unique(qu))
 
   # Check if 'xout' is outside natural range of 'x'
   if (!is.null(xout)) {
     if (any(xout < min(x) | xout > max(x))) warning("'xout' contains values outside range of 'x' (be careful)")
   }
+
+  # x-values at which to predict smoothed values
+  mout <- if (is.null(xout) | length(xout) == 2) {
+    #rng <- if (is.null(xout)) range(d$m) else range(xout)
+    rng <- if (is.null(xout)) range(x) else range(xout)
+    xx <- if (is.null(xout)) x else x[x >= rng[1] & x <= rng[2]]
+    mn <- diff(rng) / (0.1 * mad(xx, constant = 1))  # Originally b = 0.1; now hard-coded
+    mn <- min(mn, 200)  # Hard max on number of output x-values
+    seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
+  } else {
+    xout
+  }
+
+  #---
+
+  # qgam implementation -- just too slow, even for small samples
+  # If number of observations is low, use qgam() directly
+  # NOTE: the qgam code has not been made safe for multiple 'qu'
+  # if (n < 500 & length(qu) == 1) {
+  #
+  #   temp <- capture.output(fit <- suppressWarnings(qgam(y ~ s(x), data = d, qu = qu)))
+  #   out <- data.frame(x = mout, y = predict(fit, data.frame(x = mout)), q = rep(qu, each = length(mout)))
+  #
+  # }
 
   #---
 
@@ -582,11 +618,21 @@ smoothQuantile <- function(x,
     d
   }
 
-  #---
+  # Minimum number of observations per rpart bin
+  mb <- max(5, ceiling(n ^ a))
+  mbr <- max(5, ceiling(mb * f))  # Adjust for downsampling factor (f)
+
+  # Winsorize y-values in 'df' with obviously extreme values prior to the rpart() call
+  # Extremely large y-values can unduly affect the rpart() call
+  dr <- copy(df)
+  zy <- (dr$y - median(dr$y)) / mad(dr$y)
+  zy[is.na(zy)] <- 0
+  ymax <- 3.5 * mad(dr$y) + median(dr$y)
+  dr$y[zy > 3.5] <- ymax
+  dr$y[zy < -3.5] <- -ymax
 
   # Fit rpart to determine bin breakpoints along 'x'
-  mbr <- max(5, ceiling(mb * f))
-  fit <- rpart::rpart(formula = y ~ x, data = df,
+  fit <- rpart::rpart(formula = y ~ x, data = dr,
                       xval = 0, cp = 0.001,
                       maxcompete = 0, maxsurrogate = 0,
                       minbucket = mbr, minsplit = 2 * mbr)
@@ -595,8 +641,8 @@ smoothQuantile <- function(x,
   rsum <- c(1, cumsum(r$lengths))
 
   # Initial check if there is sufficient number of bins (require at least 10)
-  #k <- 3 * (length(rsum) - 1)
-  #if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
+  # k <- 3 * (length(rsum) - 1)
+  # if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
 
   # Check plot -- useful diagnostic
   # fit.mean <- mgcv::bam(y ~ s(x), data = df, discrete = TRUE)
@@ -622,8 +668,9 @@ smoothQuantile <- function(x,
   }
 
   # This computes the bin-specific outcomes (count, x-mean, and y-quantiles)
+  # quantile 'type = 1' ensures the bin quantiles are observed values; i.e. all(d$q %in% y); generally reduces impact of outliers
   d <- lapply(1:3, function(i) {
-    d[, list(s = .N, m = sum(x), q = quantile(y, probs = qu)), by = eval(paste0("bin", i))]
+    d[, list(s = .N, m = sum(x), q = quantile(y, probs = qu, type = 1)), by = eval(paste0("bin", i))]
   })
   d <- rbindlist(d, use.names = FALSE, idcol = "window")
   d[, m := m / s]  # Mean x-value of each bin
@@ -633,8 +680,8 @@ smoothQuantile <- function(x,
   d <- d[s >= mb, ]
 
   # Final check if there is sufficient number of bins (require at least 10)
-  #k <- nrow(d) / length(qu)
-  #if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
+  # k <- nrow(d) / length(qu)
+  # if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
 
   # If qmad, replace 25th and 75th percentiles with each bin's observed lower and upper MAD, respectively
   # This ensures the GAM smooth output reflects the lower and upper MAD rather than the quantiles themselves
@@ -655,23 +702,24 @@ smoothQuantile <- function(x,
 
   #---
 
-  # x-values at which to predict smoothed values
-  mout <- if (is.null(xout) | length(xout) == 2) {
-    rng <- if (is.null(xout)) range(d$m) else range(xout)
-    xx <- if (is.null(xout)) x else x[x >= rng[1] & x <= rng[2]]
-    mn <- diff(rng) / (b * mad(xx, constant = 1))
-    mn <- min(mn, 200)  # Hard max on number of output x-values
-    seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
-  } else {
-    xout
-  }
+  # # x-values at which to predict smoothed values
+  # mout <- if (is.null(xout) | length(xout) == 2) {
+  #   #rng <- if (is.null(xout)) range(d$m) else range(xout)
+  #   rng <- if (is.null(xout)) range(x) else range(xout)
+  #   xx <- if (is.null(xout)) x else x[x >= rng[1] & x <= rng[2]]
+  #   mn <- diff(rng) / (b * mad(xx, constant = 1))
+  #   mn <- min(mn, 200)  # Hard max on number of output x-values
+  #   seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
+  # } else {
+  #   xout
+  # }
 
   #---
 
   # Fit GAM(s) and return the smoothed quantile values for each 'mout' x-value
   out <- sapply(qu, function(i) {
     df <- d[qu == i, ]
-    fit <- mgcv::gam(formula = q ~ s(m), data = df, weights = sqrt(df$s))  # Weighted by square root of bin sample size
+    fit <- mgcv::gam(formula = q ~ s(m), data = df, weights = d$s)  # Weighted by bin sample size
     predict(fit, newdata = data.table(m = mout))
   })
 
@@ -680,6 +728,13 @@ smoothQuantile <- function(x,
 
   # Final output data frame
   out <- data.frame(x = mout, y = as.vector(out), q = rep(qu, each = length(mout)))
+
+  # Check results
+  # Minimize the quantile loss function
+  # plot(d$m, d$q)
+  # plot(dr$x, dr$y)
+  # lines(out$x, out$y, col = 2)
+
   return(out)
 
 }
@@ -696,128 +751,135 @@ smoothQuantile <- function(x,
 # test <- smoothQuantile(x, y, a= 0.001)
 # test <- smoothMean(x, y, xout = c(0, 200e3))
 
-smoothMean <- function(x, y, xout = NULL,
-                       zmax = 3.5, a = 0.3, b = 0.1,
-                       se = FALSE, verbose = TRUE) {
-
-  n <- length(x)
-  i <- order(x)
-  x <- x[i]
-  y <- y[i]
-
-  #---
-
-  # Eliminate obviously extreme y values?
-  zy <- abs(y - median(y)) / mad(y)
-  iy <- zy > zmax ^ 2
-
-  # Eliminate obviously extreme x values?
-  zx <- abs(x - median(x)) / mad(x)
-  ix <- zx > zmax ^ 2
-
-  # Initial outliers
-  oi <- iy | ix
-  x <- x[!oi]
-  y <- y[!oi]
-
-  #---
-
-  # If 'y' is already monotonic or has no variance, simply return a linear interpolation
-  simple <- sorted(y) | var(y) == 0
-  xout <- if (simple & is.null(xout)) range(x) else xout
-
-  # Data table used below
-  df <- data.table(x, y)
-
-  #---
-
-  # Detect and remove outliers
-  if (!simple) {
-
-    # Return smoothed median and lower and upper MAD
-    d <- smoothQuantile(x, y, qu = "mad", xout = NULL, a = a, b = b)
-    d <- split(d, d$q)
-
-    # Smoothed median for each x value
-    m <- approx(x = d[[2]]$x, y = d[[2]]$y, xout = x)$y
-
-    # Upper MAD
-    i <- d[[3]]$y > 0
-    d1 <- approx(x = d[[3]]$x[i], y = d[[3]]$y[i], xout = x)$y
-    d1[d1 == 0] <- NA
-
-    # Lower MAD
-    i <- d[[1]]$y > 0
-    d2 <- approx(x = d[[1]]$x[i], y = d[[1]]$y[i], xout = x)$y
-    d2[d2 == 0] <- NA
-
-    # See the median and the cutoff lines for upper and lower outliers
-    # Points falling outside the envelope are considered outliers
-    # plot(x, y)
-    # lines(x, m, col = 2)
-    # lines(x, m + zmax * d1, col = 3)
-    # lines(x, m - zmax * d2, col = 4)
-
-    # Detect the y outliers
-    out1 <- y > m + zmax * d1
-    out2 <- y < m - zmax * d2
-    oy <- out1 | out2
-
-    # Report total number of outliers
-    nout <- sum(oi) + sum(oy)
-    #nout <- sum(oy)
-    if (verbose) cat("Removed ", nout, " outliers (", paste0(signif(100 * nout / n, 3), "%"), ")\n", sep = "")
-
-    # Remove the outlier observations
-    df <- df[!oy]
-
-  }
-
-  #---
-
-  # x-values at which to predict smoothed values
-  xout <- if (is.null(xout)) {
-    d[[1]]$x  # Use the x-values returned by quantile smoother
-  } else {
-    if (length(xout) == 2) {
-      xx <- x[x >= min(xout) & x <= max(xout)]
-      rng <- range(xx)
-      mn <- diff(rng) / (b * mad(xx, constant = 1))
-      mn <- min(mn, 200)  # Hard max on number of output x-values
-      seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
-    } else {
-      unique(sort(xout))
-    }
-  }
-
-  #---
-
-  # Final predicted smooth output
-  result <- if (simple) {
-
-    out <- data.frame(x = xout,
-                      y = suppressWarnings(approx(x = df$x, y = df$y, xout = xout)$y),
-                      se = 0)
-    if (!se) out$se <- NULL
-    out
-
-  } else {
-
-    # Fit smoothed mean (gam or bam)
-    big <- nrow(df) > 30e3
-    fun <- ifelse(big, mgcv::bam,  mgcv::gam)
-    if (verbose) cat("Fitting smoothed mean using", ifelse(big, "mgcv::bam()", "mgcv::gam()"), "\n")
-    fit <- fun(y ~ s(x), data = df, discrete = big)
-    data.frame(x = xout, predict(fit, data.table(x = xout), se.fit = se))
-
-  }
-
-  # Clean up and return result
-  names(result) <- c("x", "y", if (se) "se" else NULL)
-  row.names(result) <- NULL
-  return(result)
-
-}
+# smoothMean <- function(x, y, xout = NULL,
+#                        zmax = 3.5, a = 0.3, b = 0.1,
+#                        se = FALSE, verbose = TRUE) {
+#
+#   #n <- length(x)
+#   i <- order(x)
+#   x <- x[i]
+#   y <- y[i]
+#
+#   #---
+#
+#   # Eliminate obviously extreme y values?
+#   zy <- abs(y - median(y)) / mad(y)
+#   zy[is.na(zy)] <- 0
+#   iy <- zy > zmax ^ 2
+#
+#   # Eliminate obviously extreme x values?
+#   # zx <- abs(x - median(x)) / mad(x)
+#   # zx[is.na(zx)] <- 0
+#   # ix <- zx > zmax ^ 2
+#   ix <- rep(FALSE, length(iy))
+#
+#   # Initial outliers
+#   oi <- iy | ix
+#   x <- x[!oi]
+#   y <- y[!oi]
+#
+#   #---
+#
+#   # If 'y' is already monotonic or has no variance, simply return a linear interpolation
+#   simple <- sorted(y) | var(y) == 0
+#   xout <- if (simple & is.null(xout)) range(x) else xout
+#
+#   # Data table used below
+#   df <- data.table(x, y)
+#
+#   #---
+#
+#   # Detect and remove outliers
+#   if (!simple) {
+#
+#     # Return smoothed median and lower and upper MAD
+#     d <- smoothQuantile(x, y, qu = "mad", xout = NULL, a = a, b = b)
+#     d <- split(d, d$q)
+#
+#     # Smoothed median for each x value
+#     m <- approx(x = d[[2]]$x, y = d[[2]]$y, xout = x)$y
+#
+#     # Upper MAD
+#     i <- d[[3]]$y > 0
+#     d1 <- approx(x = d[[3]]$x[i], y = d[[3]]$y[i], xout = x)$y
+#     d1[d1 == 0] <- NA
+#
+#     # Lower MAD
+#     i <- d[[1]]$y > 0
+#     d2 <- approx(x = d[[1]]$x[i], y = d[[1]]$y[i], xout = x)$y
+#     d2[d2 == 0] <- NA
+#
+#     # See the median and the cutoff lines for upper and lower outliers
+#     # Points falling outside the envelope are considered outliers
+#     # plot(x, y)
+#     # lines(x, m, col = 2)
+#     # lines(x, m + zmax * d1, col = 3)
+#     # lines(x, m - zmax * d2, col = 4)
+#
+#     # Detect the y outliers
+#     out1 <- y > m + zmax * d1
+#     out2 <- y < m - zmax * d2
+#     oy <- out1 | out2
+#
+#     # Report total number of outliers
+#     nout <- sum(oy, na.rm = TRUE)
+#     if (verbose) cat("Removed ", nout, " outliers (", paste0(signif(100 * nout / n, 3), "%"), ")\n", sep = "")
+#
+#     # Remove the outlier observations
+#     df <- df[!oy]
+#
+#   }
+#
+#   #---
+#
+#   # x-values at which to predict smoothed values
+#   xout <- if (is.null(xout)) {
+#     d[[1]]$x  # Use the x-values returned by quantile smoother
+#   } else {
+#     if (length(xout) == 2) {
+#       xx <- x[x >= min(xout) & x <= max(xout)]
+#       rng <- range(xx)
+#       mn <- diff(rng) / (b * mad(xx, constant = 1))
+#       mn <- min(mn, 200)  # Hard max on number of output x-values
+#       seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
+#     } else {
+#       unique(sort(xout))
+#     }
+#   }
+#
+#   #---
+#
+#   # Final predicted smooth output
+#   result <- if (simple) {
+#
+#     out <- data.frame(x = xout,
+#                       y = suppressWarnings(approx(x = df$x, y = df$y, xout = xout)$y),
+#                       se = 0)
+#     if (!se) out$se <- NULL
+#     out
+#
+#   } else {
+#
+#     # Fit smoothed mean (gam or bam)
+#     big <- nrow(df) > 30e3
+#     fun <- ifelse(big, mgcv::bam,  mgcv::gam)
+#     if (verbose) cat("Fitting smoothed mean using", ifelse(big, "mgcv::bam()", "mgcv::gam()"), "\n")
+#     fit <- fun(y ~ s(x), data = df, discrete = big)
+#     data.frame(x = xout, predict(fit, data.table(x = xout), se.fit = se))
+#
+#   }
+#
+#   # Clean up and return result
+#   names(result) <- c("x", "y", if (se) "se" else NULL)
+#   row.names(result) <- NULL
+#
+#   # Ensure output smoothed values do not exceed the range of 'y' values in 'df'
+#   # result$y <- pmax(result$y, min(df$y))
+#   # result$y <- pmin(result$y, max(df$y))
+#
+#   return(result)
+#
+# }
 
 #------------------
 
@@ -825,34 +887,34 @@ smoothMean <- function(x, y, xout = NULL,
 # CI's using 'r' larger than that returned by maxr_fun() are invalid
 # The cutoff point increases with the number of implicates
 
-mseq <- seq(2, 100, by = 2)
-out <- sapply(mseq, function(m, p = 0.95) {
-
-  # Ratio of ubar to b
-  R <- seq(0, 1, length.out = 1e4)
-
-  # Degrees of freedom (checked; this is correct)
-  df <- (m - 1) * (1 - R * m  / (m + 1)) ^ 2
-
-  # Calculate SE and associated CI
-  ubar <- 1  # Doesn't matter; changes magnitude but shape of subsequent curves
-  se <- sqrt(ubar / R * (1 + 1 / m) - ubar)  # Estimated standard error
-  ci <- se * qt(p, df)  # Estimated CI half-width
-
-  # For a given ubar, the CI width declines with R up to some point and then begins to increase
-  # We expect CI to decline with R, since increasing R means b is getting smaller relative to ubar (greater confidence)
-  # But the eventual increase doesn't make sense, so we return the 'R' value at which the CI is minimized
-  #plot(R, ci, type = "l")
-
-  # The ratio (ubar / b) at which CI width is minimized
-  # Ratios beyond this point return rapidily increasing CI widths
-  R[which.min(ci)]
-
-})
-
-# plot(mseq, out, type = "l")
-maxr_fun <- approxfun(mseq, out, rule = 2)
-rm(mseq, out)
+# mseq <- seq(2, 100, by = 2)
+# out <- sapply(mseq, function(m, p = 0.95) {
+#
+#   # Ratio of ubar to b
+#   R <- seq(0, 1, length.out = 1e4)
+#
+#   # Degrees of freedom (checked; this is correct)
+#   df <- (m - 1) * (1 - R * m  / (m + 1)) ^ 2
+#
+#   # Calculate SE and associated CI
+#   ubar <- 1  # Doesn't matter; changes magnitude but shape of subsequent curves
+#   se <- sqrt(ubar / R * (1 + 1 / m) - ubar)  # Estimated standard error
+#   ci <- se * qt(p, df)  # Estimated CI half-width
+#
+#   # For a given ubar, the CI width declines with R up to some point and then begins to increase
+#   # We expect CI to decline with R, since increasing R means b is getting smaller relative to ubar (greater confidence)
+#   # But the eventual increase doesn't make sense, so we return the 'R' value at which the CI is minimized
+#   #plot(R, ci, type = "l")
+#
+#   # The ratio (ubar / b) at which CI width is minimized
+#   # Ratios beyond this point return rapidily increasing CI widths
+#   R[which.min(ci)]
+#
+# })
+#
+# # plot(mseq, out, type = "l")
+# maxr_fun <- approxfun(mseq, out, rule = 2)
+# rm(mseq, out)
 
 #------------------
 
@@ -861,6 +923,3 @@ sorted <- function(x) {
   xd <- diff(x)
   all(xd >= -sqrt(.Machine$double.eps)) | all(xd <= sqrt(.Machine$double.eps))
 }
-
-
-

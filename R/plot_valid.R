@@ -17,9 +17,8 @@
 #'
 #' @return A list with "plots", "smooth", and "data" slots. The "plots" slot contains the following \code{\link[ggplot2]{ggplot}} objects:
 #' \itemize{
-#'   \item est: Discrepancy (absolute percent error) in point estimates.
-#'   \item moe: Discrepancy (absolute percent error) in 90% margin of error.
-#'   \item bias: Bias (ratio of simulated-to-observed) in 90% margin of error.
+#'   \item est: Comparison of point estimates (median absolute percent error).
+#'   \item moe: Comparison of 90% margin of error (median ratio of simulated-to-observed MOE).
 #'   \item Additional named slots (one for each of the fusion variables) contain the plots described above with scatterplot results.
 #'  }
 #' "smooth" is a data frame with the plotting values used to produce the smoothed median plots.
@@ -72,19 +71,22 @@
 # library(dplyr)
 # library(data.table)
 # source("R/utils.R")
+#
 # fusion.vars <- c("electricity", "natural_gas", "aircon")
 # predictor.vars <- names(recs)[2:12]
+# fsn.path <- train(data = recs,
+#                   y = fusion.vars,
+#                   x = predictor.vars,
+#                   weight = "weight")
+# # Fuse back onto the donor data (multiple implicates)
 # sim <- fuse(data = recs,
-#             file = "test_model.fsn",
-#             M = 40,
-#             ignore_self = TRUE)
-# valid <- validate(observed = recs,
-#                   simulated = sim,
-#                   subset_vars = c("income", "education", "race", "urban_rural"),
-#                   weight = "weight",
-#                   plot = FALSE)
+#             fsn = fsn.path,
+#             M = 40)
 #
-# test <- plot_valid(valid)
+# valid <- validate(observed = recs,
+#                   implicates = sim,
+#                   subset_vars = c("income", "education", "race", "urban_rural"),
+#                   weight = "weight")
 
 #------------------
 
@@ -135,11 +137,13 @@ plot_valid <- function(valid,
   #---
 
   errorFun <- function(obs, sim) {
-    out <- suppressWarnings(log(sim / obs))  # ln(Q); will be NA if 'est.obs' is negative and Inf if it is zero
-    mape <- abs((sim - obs) / obs)  # Standard MAPE can handle case when 'est.obs' is negative (still gives Inf when zero, though)
-    i <- !is.finite(out)
-    out[i] <- mape[i]
-    out[!is.finite(out)] <- NA
+    # out <- suppressWarnings({
+    #   exp(abs(log(sim / obs))) - 1  # Morley 2018 preferred error metric (zeta); will be NA if ratio is negative and Inf if 'obs' is zero; https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017SW001669
+    # })
+    out <- abs((sim - obs) / obs)  # Conventional absolute percent error (gives Inf when obs = 0)
+    #out <- ifelse(!is.finite(out), ape, out)  # If Morley's zeta is non-finite, replace with APE
+    out[!is.finite(out)] <- NA  # If non-finite, return NA
+    out[obs == sim] <- 0  # If 'obs' and 'sim' are identical, return zero error
     return(out)
   }
 
@@ -147,15 +151,25 @@ plot_valid <- function(valid,
   vest <- valid %>%
     mutate(
       cont = is.na(level),
-      est = abs(errorFun(obs = est.obs, sim = est.sim)),
-      moe = abs(errorFun(obs = moe.obs, sim = moe.sim)),
-      bias = abs(moe.sim / est.sim) / abs(moe.obs / est.obs)
+
+      # Point estimate error
+      est = errorFun(obs = est.obs, sim = est.sim),
+
+      # Relative uncertainty ratio (sim / obs)
+      moe = (moe.sim / est.sim) / (moe.obs / est.obs),
+      moe = ifelse(moe.sim == moe.obs, 1, moe),
+      moe = ifelse(is.infinite(moe), NA, moe),
+
+      # Point estimate value-added
+      vad = 1 - abs(est.sim - est.obs) / abs(est.mean - est.obs),
+      vad = ifelse(est.mean == est.obs, 0, vad),
+      vad = pmax(0, vad)
+
     ) %>%
-    group_by(id, share, y, cont) %>%
-    summarize_at(c("est", "moe", "bias"), .funs = mean) %>%
-    ungroup() %>%
-    mutate_if(is.numeric, ~ ifelse(is.finite(.x), .x, NA)) %>%
-    na.omit() # Retain only observations with complete, non-NA error metrics
+    # group_by(id, share, y, cont) %>%
+    # summarize_at(c("est", "moe", "vad"), .funs = mean) %>%  # Collapses categorical levels to mean of performance metrics
+    # ungroup() %>%
+    mutate_if(is.numeric, ~ ifelse(is.finite(.x), .x, NA))  # Sets any non-finite values to NA
 
   #---
 
@@ -166,12 +180,15 @@ plot_valid <- function(valid,
 
     d <- filter(vest, y == v)
 
-    est <- smoothMean(x = d$share, y = d$est, verbose = FALSE)
-    moe  <- smoothMean(x = d$share, y = d$moe, verbose = FALSE)
-    bias <- smoothMean(x = d$share, y = d$bias, verbose = FALSE)
+    est <- smoothQuantile(x = d$share, y = d$est, qu = 0.5)
+    #est <- smoothMean(x = d$share, y = d$est, verbose = FALSE)
 
-    out <- rbindlist(list(est = est, moe = moe, bias = bias), idcol = "metric")
-    out <- out[y >= 0, ]  # Drop rows where the smoothed value goes negative (not valid)
+    moe <- smoothQuantile(x = d$share, y = d$moe, qu = 0.5)
+    #moe  <- smoothMean(x = d$share, y = d$moe, verbose = FALSE)
+
+    vad <- smoothQuantile(x = d$share, y = d$vad, qu = 0.5)
+
+    out <- rbindlist(list(est = est, moe = moe, vad = vad), idcol = "metric", fill = TRUE)
     out[, CAT := !d$cont[1]]
     out[, VAR := v]
     setnames(out, "x", "SHR")
@@ -180,17 +197,49 @@ plot_valid <- function(valid,
   }, mc.cores = cores) %>%
     data.table::rbindlist()
 
+  # Drop invalid rows -- cases where the returned smoothed value is infeasible
+  # qest <- qest %>%
+  #   filter(y >= 0 | (y <= 1 & metric == "vad"))
+
+  # qest <- qest %>%
+  #   mutate(y = ifelse(metric %in% c("est", "moe"), pmax(0, y), pmin(1, y)))
+
+  # Ensure feasible smoothed values
+
+  min.max <- vest %>%
+    group_by(y) %>%
+    summarize_at(c("est", "vad", "moe"), list(min = min, max = max), na.rm = TRUE) %>%
+    rename(VAR = y)
+
+  qest <- qest %>%
+    left_join(min.max, by = "VAR") %>%
+    mutate(y = ifelse(metric == "est", pmax(pmin(y, est_max), est_min), y),
+           y = ifelse(metric == "moe", pmax(pmin(y, moe_max), moe_min), y),
+           y = ifelse(metric == "vad", pmax(pmin(y, vad_max), vad_min), y)) %>%
+    select(metric:VAR)
+
+  #---
+
+  # Summary performance metrics (print to console)
+
+  sum.perf <- dcast(qest, ... ~ metric, value.var = "y") %>%
+    group_by(VAR) %>%
+    summarize_at(c("est", "vad", "moe"), mean) %>%
+    rename(y = VAR)
+  cat("Average smoothed performance metrics across subset range:\n")
+  print(as.data.frame(sum.perf), digits = 3, print.gap = 2)
+
   #---
 
   # Restrict the smooth results to x-range available for all of the variables
   # This ensures that the plots have a same/consistent x-axis for each of the y variables
 
-  #xrng <- range(qest$SHR)
-  xrng <- qest %>%
-    group_by(VAR) %>%
-    summarize(min = min(SHR), max = max(SHR), .groups = "drop") %>%
-    summarize(min = max(min), max = min(max)) %>%
-    unlist()
+  xrng <- range(qest$SHR)
+  # xrng <- qest %>%
+  #   group_by(VAR) %>%
+  #   summarize(min = min(SHR), max = max(SHR), .groups = "drop") %>%
+  #   summarize(min = max(min), max = min(max)) %>%
+  #   unlist()
 
   qest <- qest %>%
     filter(SHR >= xrng[1], SHR <= xrng[2])
@@ -217,25 +266,33 @@ plot_valid <- function(valid,
   #---
 
   # ggplot elements to add to each specific plot
-  p1.add <- list(scale_y_continuous(name = "Mean absolute percent error", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05)), labels = pct),
-                 labs(subtitle = "Discrepancy in point estimates"))
+  p1.add <- list(scale_y_continuous(name = "Median absolute percent error", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05)), labels = pct),
+                 labs(subtitle = "Comparison of point estimates"))
 
-  p2.add <- list(scale_y_continuous(name = "Mean absolute percent error", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05)), labels = pct),
-                 labs(subtitle = "Discrepancy in 90% margin of error (MOE)"))
-
-  p3.add <- list(scale_y_continuous(name = "Mean ratio of simulated-to-observed MOE", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05))),
+  p2.add <- list(scale_y_continuous(name = "Median value-added", n.breaks = 8, limits = c(0, 1), expand = expansion(mult = c(0.01, 0.05))),
                  geom_hline(yintercept = 1, linetype = 2),
-                 labs(subtitle = "Bias in 90% margin of error (MOE)"))
+                 labs(subtitle = "Value-added relative to naive estimates"))
+
+  p3.add <- list(scale_y_continuous(name = "Median ratio of simulated-to-observed uncertainty", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05))),
+                 geom_hline(yintercept = 1, linetype = 2),
+                 labs(subtitle = "Comparison of relative uncertainty (MOE / estimate)"))
+
+
+  # p3.add <- list(scale_y_continuous(name = "Median ratio of simulated-to-observed MOE", n.breaks = 8, limits = c(0, NA), expand = expansion(mult = c(0.01, 0.05))),
+  #                geom_hline(yintercept = 1, linetype = 2),
+  #                labs(subtitle = "Bias in 90% margin of error (MOE)"))
 
   #---
 
-  # Multiple variable plots; no standard error shading
-  p1 <- ggplot(filter(qest, metric == "est"), aes(x = SHR, y = y, color = VAR, linetype = CAT)) + p1.add + plot.all + geom_line()
-  p2 <- ggplot(filter(qest, metric == "moe"), aes(x = SHR, y = y, color = VAR, linetype = CAT)) + p2.add + plot.all + geom_line()
-  p3 <- ggplot(filter(qest, metric == "bias"), aes(x = SHR, y = y, color = VAR, linetype = CAT)) + p3.add + plot.all + geom_line()
+  # Multi-variable plots
+  # NOTE: Set 'linetype = CAT' to indicate whether each 'y' is continuous or categorical
+  p1 <- ggplot(filter(qest, metric == "est"), aes(x = SHR, y = y, color = VAR, linetype = NULL)) + p1.add + plot.all + geom_line()
+  p2 <- ggplot(filter(qest, metric == "vad"), aes(x = SHR, y = y, color = VAR, linetype = NULL)) + p2.add + plot.all + geom_line()
+  p3 <- ggplot(filter(qest, metric == "moe"), aes(x = SHR, y = y, color = VAR, linetype = NULL)) + p3.add + plot.all + geom_line()
+  #p3 <- ggplot(filter(qest, metric == "bias"), aes(x = SHR, y = y, color = VAR, linetype = NULL)) + p3.add + plot.all + geom_line()
 
   out1 <- list(p1, p2, p3)
-  names(out1) <- c("est", "moe", "bias")
+  names(out1) <- c("est", "vad", "moe")
 
   if (!is.null(path)) {
     for (i in names(out1)) {
@@ -253,7 +310,7 @@ plot_valid <- function(valid,
     pdata <- filter(qest, VAR == v)
     ed <- filter(vest, y == v, share >= xrng[1], share <= xrng[2])
 
-    r <- median(ed$est) + c(-1, 1) * fct * mad(ed$est)
+    r <- median(ed$est, na.rm = TRUE) + c(-1, 1) * fct * mad(ed$est, na.rm = TRUE)
     p1 <- ggplot(filter(pdata, metric == "est"), aes(x = SHR, y = y)) +
       geom_point(data = filter(ed, est >= r[1], est <= r[2]),
                  aes(x = share, y = est), shape = 1) +
@@ -263,20 +320,26 @@ plot_valid <- function(valid,
       #             fill = "gray", alpha = 0.25, color = "red", linetype = "dotted") +
       p1.add + plot.all + labs(title = v) + geom_line(color = "red")
 
-    r <- median(ed$moe) + c(-1, 1) * fct * mad(ed$moe)
-    p2 <- ggplot(filter(pdata, metric == "moe"), aes(x = SHR, y = y)) +
-      geom_point(data = filter(ed, moe >= r[1], moe <= r[2]),
-                 aes(x = share, y = moe), shape = 1) +
+    r <- c(0, 1)
+    p2 <- ggplot(filter(pdata, metric == "vad"), aes(x = SHR, y = y)) +
+      geom_point(data = filter(ed, vad >= r[1], vad <= r[2]),
+                 aes(x = share, y = vad), shape = 1) +
       p2.add + plot.all + labs(title = v) + geom_line(color = "red")
 
-    r <- median(ed$bias) + c(-1, 1) * fct * mad(ed$bias)
-    p3 <- ggplot(filter(pdata, metric == "bias"), aes(x = SHR, y = y)) +
-      geom_point(data = filter(ed, bias >= r[1], bias <= r[2]),
-                 aes(x = share, y = bias), shape = 1) +
+    r <- median(ed$moe, na.rm = TRUE) + c(-1, 1) * fct * mad(ed$moe, na.rm = TRUE)
+    p3 <- ggplot(filter(pdata, metric == "moe"), aes(x = SHR, y = y)) +
+      geom_point(data = filter(ed, moe >= r[1], moe <= r[2]),
+                 aes(x = share, y = moe), shape = 1) +
       p3.add + plot.all + labs(title = v) + geom_line(color = "red")
 
+    # r <- median(ed$bias) + c(-1, 1) * fct * mad(ed$bias)
+    # p3 <- ggplot(filter(pdata, metric == "bias"), aes(x = SHR, y = y)) +
+    #   geom_point(data = filter(ed, bias >= r[1], bias <= r[2]),
+    #              aes(x = share, y = bias), shape = 1) +
+    #   p3.add + plot.all + labs(title = v) + geom_line(color = "red")
+
     out <- list(p1, p2, p3)
-    names(out) <- c("est", "moe", "bias")
+    names(out) <- c("est", "vad", "moe")
 
     # Save plots to disk
     if (!is.null(path)) {
@@ -296,7 +359,10 @@ plot_valid <- function(valid,
   if (!is.null(path)) cat("Plots saved to:", path, "\n")
 
   # Assemble final result
-  result <- list(plots = c(out1, out2), smooth = qest, data = valid)
+  result <- list(plots = c(out1, out2),
+                 perf = sum.perf,
+                 smooth = qest,
+                 data = valid)
   if (!inherits(valid, "validate")) class(result) <- c("validate", class(result))
   return(result)
 

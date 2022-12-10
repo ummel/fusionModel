@@ -47,6 +47,7 @@
 #' #---------
 #'
 #' # Multiple types of analyses can be done at once
+#' # This call uses the full sample; by = NULL, by default
 #' result <- analyze(x = list(mean = c("natural_gas", "aircon"),
 #'                            median = "electricity",
 #'                            sum = c("electricity", "aircon")),
@@ -58,12 +59,12 @@
 #'
 #' #-----
 #'
-#' # Mean electricity consumption, by climate zone
+#' # Mean electricity consumption, by climate zone and urban/rural status
 #' result1 <- analyze(x = list(mean = "electricity"),
 #'                   implicates = sim,
 #'                   static = recs,
 #'                   weight = "weight",
-#'                   by = "climate")
+#'                   by = c("climate", "urban_rural"))
 #'
 #' # Same as above but including sample weight uncertainty
 #' # Note that only the first 30 replicate weights are used internally
@@ -72,7 +73,7 @@
 #'                   static = recs,
 #'                   weight = "weight",
 #'                   rep_weights = paste0("rep_", 1:96),
-#'                   by = "climate")
+#'                   by = c("climate", "urban_rural"))
 #'
 #' # Helper function for comparison plots
 #' pfun <- function(x, y) {plot(x, y); abline(0, 1, lty = 2)}
@@ -82,9 +83,12 @@
 #' pfun(result1$est, result2$est)
 #' pfun(result1$moe, result2$moe)
 #'
+#' # Notice that relative uncertainty declines with subset size
+#' plot(result1$N, result1$moe / result1$est)
+#'
 #' #-----
 #'
-#' # Use custom function to perform more complex analyses
+#' # Use a custom function to perform more complex analyses
 #' # Custom function should return a data frame with non-standard target variables
 #'
 #' my_fun <- function(data) {
@@ -103,7 +107,7 @@
 #'}
 #'
 #' # Do analysis using variables produced by custom function
-#' # Can mix in standard target variables as well
+#' # Can included non-custom target variables as well
 #' result <- analyze(x = list(mean = c("kwh_per_ft2", "use_natural_gas", "electricity")),
 #'                   implicates = sim,
 #'                   static = recs,
@@ -220,7 +224,11 @@ analyze <- function(x,
   stopifnot(all(nM$M %in% seq_len(Mimp)))
   stopifnot(all(nM$N == N))
   if (!is.null(static)) stopifnot(nrow(static) == N)
-  cat("Using", Mimp, "implicate(s)\n")
+  if (Mimp > 1) {
+    cat("Using", Mimp, "implicates\n")
+  } else {
+    cat("Only 1 implicate; returning NA for 'moe'\n")
+  }
 
   #---
 
@@ -426,29 +434,30 @@ analyze <- function(x,
   # b1: Variance of estimates across implicates (approximated by variance of mixture of normal distributions)
   d <- d[, .(est = mean(estimate1),
              ubar = mean(variance),
-             b1 = (sum(estimate1 ^ 2 + variance) / Mimp) - mean(estimate1) ^ 2,  # Safe approximation of var(estimate1); does not risk b1 < ubar
+             b1 = var(estimate1),
+             #b1 = (sum(estimate1 ^ 2 + variance) / Mimp) - mean(estimate1) ^ 2,  # Conservative approximation of var(estimate1); does not risk b1 < ubar
              b2 = pmax(0, var(estimate2) - var(estimate1)) * var_scale * (Mimp - 1) / Mimp),  # Approximate additional variance due to uncertainty in sample weights
          by = c(by, "type", "y")]
 
   # Calculate standard error, degrees of freedom, and margin of error
   # Note that if ubar = 0, then b = 0 necessarily; the maxr adjustment results in b = NA; ifelse() below forces b = 0 in this case
   # 'df' is NA when se = 0, so it is forced to 1 so CI calculation does not produce error
-  maxr <- maxr_fun(Mimp)
+  #maxr <- maxr_fun(Mimp)
   d <- mutate(d,
               b = b1 + b2,
-              b = ifelse(ubar / b > maxr, ubar / maxr, b),
-              b = ifelse(ubar == 0, 0, b),
+              # b = ifelse(ubar / b > maxr, ubar / maxr, b),
+              # b = ifelse(ubar == 0, 0, b),
 
               # Rubin 1987
-              # se = sqrt(ubar + (1 + Mimp^(-1)) * b),
-              # r = (1+Mimp^(-1))*b/ubar,
-              # df = (Mimp-1)*(1+r^(-1))^2,
-              # r = NULL
+              se = sqrt(ubar + (1 + Mimp^(-1)) * b),
+              r = (1+Mimp^(-1))*b/ubar,
+              df = (Mimp-1)*(1+r^(-1))^2,
+              r = NULL
 
               # Reiter and Raghunathan (2007)
-              se = sqrt(b * (1 + 1 / Mimp) - ubar),
-              df = (Mimp - 1) * (1 - Mimp * ubar / ((Mimp + 1) * b)) ^ 2,
-              df = ifelse(se == 0, 1, df)
+              # se = sqrt(b * (1 + 1 / Mimp) - ubar),
+              # df = (Mimp - 1) * (1 - Mimp * ubar / ((Mimp + 1) * b)) ^ 2,
+              # df = ifelse(se == 0, 1, df)
   ) %>%
     calcMOE()
 

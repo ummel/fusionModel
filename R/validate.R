@@ -44,15 +44,16 @@
 
 #-----
 
+# library(fusionModel)
 # library(dplyr)
 # library(data.table)
 # library(purrr)
 # library(ggplot2)
 # library(fst)
 # source("R/utils.R")
-
+# source("R/analyze_funs.R")
 # observed <- read_fst("~/Documents/Projects/fusionData/fusion/RECS/2015/2015/input/RECS_2015_2015_train.fst")
-# implicates <- read_fsd("~/Documents/Projects/fusionData/fusion/RECS/2015/2015/output/RECS_2015_2015_valid2.fsd")
+# implicates <- read_fsd("~/Documents/Projects/fusionData/fusion/RECS/2015/2015/output/RECS_2015_2015_valid.fsd")
 # subset_vars = c("moneypy__hincp", "hhage__agep", "householder_race__rac1p", "education__schl", "nhsldmem__np", "kownrent__ten", "loc..recs_division")
 # weight = "weight"
 # min_size = 30
@@ -78,10 +79,10 @@ validate <- function(observed,
   # Check inputs
   stopifnot({
     all(setdiff(names(sim), "M") %in% names(obs))
-    is.null(subset_vars) | (is.character(subset_vars) & all(subset_vars %in% names(obs)))
+    is.character(subset_vars) & all(subset_vars %in% names(obs))
     is.null(weight) | (length(weight) == 1 & weight %in% names(obs))
+    min_size > 0
     is.logical(plot)
-    min_size > 0 & min_size %% 1 == 0
     cores > 0 & cores %% 1 == 0
   })
 
@@ -108,7 +109,7 @@ validate <- function(observed,
   if (any(y %in% subset_vars)) stop("Fused variabes are not allowed as 'subset_vars'")
 
   # Generate list of combinations of subset variables to test
-  # Restricted to no more than 2 subsetting variables per combination (m = 2)
+  # Restricted to no more than 2 subset variables per combination (m = 2)
   scomb <- as.list(subset_vars)
   if (length(subset_vars) > 1) scomb <- c(scomb, combn(subset_vars, m = 2, simplify = FALSE))
 
@@ -152,7 +153,7 @@ validate <- function(observed,
     for (j in na.cols) {
       x <- observed[[j]]
       ind <- is.na(x)
-      observed[ind, j] <-  imputationValue(x, ind)
+      observed[ind, j] <- imputationValue(x, ind)
     }
   }
 
@@ -166,13 +167,21 @@ validate <- function(observed,
   setkeyv(sim, c("M", subset_vars))
   setkeyv(obs, subset_vars)
 
+  #---
+
   # Report the overall correlation between observed and simulated fusion variables
   # This is a quick check if the simulated data are simply replicating the original values (over-fitting)
-  # Just looks at first implicate, as this is merely diagnositic and the correlation typically differs little across implicates
-  ycor <- sapply(y, function(v) suppressWarnings(cor(obs[[v]], sim[M == 1, ..v])))
-  #cat("Correlation between observed and fused values:", round(mean(ycor), 3), "\n")
+  ycor <- sapply(y, function(v) suppressWarnings(cor(rep(obs[[v]], Mimp), sim[, ..v])))
   cat("Correlation between observed and fused values:\n")
-  print(summary(ycor))
+  print(summary(ycor), digits = 2)
+
+  #---
+
+  # TEST -- generate random versions of the 'y' variables in 'sim'
+  # for (v in y) {
+  #   set(sim, j = paste0(v, "__RND"), value = sample(obs[[v]], size = nrow(sim), replace = TRUE))
+  # }
+  # ysim <- c(y, paste0(y, "__RND"))
 
   #---
 
@@ -223,7 +232,6 @@ validate <- function(observed,
     #---
 
     # Calculate outcomes for the observed data
-    #g <- obs[, lapply(.SD, weightedVAR, w = W), by = svar, .SDcols = y]
     g <- obs[, lapply(.SD, weighted_mean, w1 = W, w2 = W), by = svar, .SDcols = y]
     g$metric <- rep(c("estimate1", "estimate2", "variance"), times = nrow(g) / 3)
     g <- melt(g, measure.vars = y, variable.name = "y")
@@ -242,6 +250,7 @@ validate <- function(observed,
 
     # Weighted mean and variance of the mean for each implicate
     d <- sim[, lapply(.SD, weighted_mean, w1 = W, w2 = W), by = c("M", svar), .SDcols = y]
+    #d <- sim[, lapply(.SD, weighted_mean, w1 = W, w2 = W), by = c("M", svar), .SDcols = ysim]
     d$metric <- rep(c("estimate1", "estimate2", "variance"), times = nrow(d) / 3)
     d <- melt(d, id.vars = c("M", "metric", svar), variable.name = "y")
     d <- dcast(d, ... ~ metric, value.var = "value")
@@ -252,29 +261,34 @@ validate <- function(observed,
     # b: Variance of estimates, across the implicates (approximated by variance of mixture of normal distributions)
     d <- d[, .(est = mean(estimate1),
                ubar = mean(variance),
-               b = (sum(estimate1 ^ 2 + variance) / Mimp) - mean(estimate1) ^ 2),  # Safe approximation of var(estimate1); does not risk b1 < ubar
+               b = var(estimate1)),
+               #b = (sum(estimate1 ^ 2 + variance) / Mimp) - mean(estimate1) ^ 2),  # Conservative approximation of var(estimate1); does not risk b1 < ubar
            by = c(svar, "y")]
 
-    # Calculate standard error and degrees of freedom
-    maxr <- maxr_fun(Mimp)
+    # Adds "share" and "id" variables
+    d <- d[subshr, on = svar]
+
+    # Calculate margin of error
+    #maxr <- maxr_fun(Mimp)
     d <- mutate(d,
-                b = ifelse(ubar / b > maxr, ubar / maxr, b),
-                b = ifelse(ubar == 0, 0, b),
+                # b = ifelse(ubar / b > maxr, ubar / maxr, b),
+                # b = ifelse(ubar == 0, 0, b),
 
                 # Rubin 1987
-                # se = sqrt(ubar + (1 + Mimp^(-1)) * b),
-                # r = (1+Mimp^(-1))*b/ubar,
-                # df = (Mimp-1)*(1+r^(-1))^2,
+                se = sqrt(ubar + (1 + Mimp^(-1)) * b),
+                r = (1 + Mimp^(-1)) * b / ubar,
+                df = (Mimp - 1) * (1 + r^(-1)) ^ 2,
+                df = ifelse(is.infinite(df), as.integer(share * N - 1), df), # Set 'df' to standard value if Inf is returned by Rubin's formula (i.e. when b = 0; no variance across implicates)
+                r = NULL
 
                 # Reiter and Raghunathan (2007)
-                se = sqrt(b * (1 + 1 / Mimp) - ubar),
-                df = (Mimp - 1) * (1 - Mimp * ubar / ((Mimp + 1) * b)) ^ 2,
-                df = ifelse(se == 0, 1, df)
+                # se = sqrt(b * (1 + 1 / Mimp) - ubar),
+                # df = (Mimp - 1) * (1 - Mimp * ubar / ((Mimp + 1) * b)) ^ 2,
+                # df = ifelse(se == 0, 1, df)
     ) %>%
-      select(-ubar, -b) %>%
+      select(-ubar, -b, -share, -id) %>%
+      #select(-ubar, -b) %>%
       calcMOE()
-
-    #---
 
     # Merge observed and simulated results
     comp <- merge(g, d, by = c(svar, "y"), suffixes = c(".obs", ".sim")) %>%
@@ -292,6 +306,12 @@ validate <- function(observed,
 
   #---
 
+  # Add the observed mean estimates (est.mean)
+  avg <- matrixStats::colWeightedMeans(x = as.matrix(obs[, ..y]), w = obs$W)
+  set(comp, j = "est.mean", value = avg[match(comp$y, names(avg))])
+
+  #---
+
   # Add original factor variable levels, if necessary
   if (length(yfct) > 0) {
     comp <- merge(x = comp, y = attr(obs, "one_hot_link"), by.x = "y", by.y = "dummy", all.x = TRUE, sort = FALSE)
@@ -302,25 +322,19 @@ validate <- function(observed,
     comp$level <- NA
   }
 
-  # Enforce lower and upper CI bounds on nominal variables that report proportions
-  # comp <- comp %>%
-  #   mutate(lwr.obs = ifelse(is.na(level), lwr.obs, pmax(0, lwr.obs)),
-  #          lwr.sim = ifelse(is.na(level), lwr.sim, pmax(0, lwr.sim)),
-  #          upr.obs = ifelse(is.na(level), upr.obs, pmin(1, upr.obs)),
-  #          upr.sim = ifelse(is.na(level), upr.sim, pmin(1, upr.sim)))
+  #---
 
   # Report total unique subsets analyzed
   cat("Performed", nrow(comp), "analyses across", uniqueN(comp$id), "subsets\n")
-  #comp$iset <- comp$nsets <- NULL  # Could potentially remove 'ubar' and 'b', too...
 
   # Data frame with comparison results
-  keep <- c("id", "share", "y", "level", "est.obs", "moe.obs", "est.sim", "moe.sim")
+  keep <- c("id", "share", "y", "level", "est.obs", "moe.obs", "est.sim", "moe.sim", "est.mean")
   result <- comp[, ..keep]
   result$y <- as.character(result$y)
-  class(result) <- c("validate", class(result))
+  class(result) <- c("validate", class(comp))
 
   # Clean up
-  rm(obs, sim)
+  rm(obs, sim, comp)
 
   #---
 
