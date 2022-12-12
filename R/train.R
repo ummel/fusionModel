@@ -257,7 +257,7 @@ train <- function(data,
   # This information is used be fuse() to select simulated values
   # This should include all fusion variables other than solo categorical (multiclass or logical) variables
   ysave <- y[ytype == "continuous" | y %in% unlist(ylist[lengths(ylist) > 1])]
-  dtemp <- as.data.frame(dmat[, ysave])
+  dtemp <- as.data.frame(dmat[, ysave, drop = FALSE])
   dtemp$W <- W.int
   fst::write_fst(x = dtemp, path = file.path(td, "donor.fst"), compress = 100)
   rm(dtemp)

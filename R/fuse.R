@@ -70,16 +70,15 @@
 # library(tidyverse)
 # library(data.table)
 # source("R/utils.R")
-#
-# #Example inputs
+# fusion.vars <- c("electricity", "natural_gas", "aircon")
+# predictor.vars <- names(recs)[2:12]
+# fsn <- train(data = recs, y = fusion.vars, x = predictor.vars)
 # data <- recs
-# fsn <- "fusion_model.fsn"
+# fsd = "results.fsd"
 # M <- 10
 # kblock = 10
 # cores = 1
 # margin = 2
-# seed = NULL
-# fsd = "results.fsd"
 
 #---------------------
 
