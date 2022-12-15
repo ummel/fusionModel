@@ -47,12 +47,11 @@
 #' #---------
 #'
 #' # Multiple types of analyses can be done at once
-#' # This call uses the full sample; by = NULL, by default
+#' # This calculates estimates using the full sample
 #' result <- analyze(x = list(mean = c("natural_gas", "aircon"),
 #'                            median = "electricity",
 #'                            sum = c("electricity", "aircon")),
 #'                   implicates = sim,
-#'                   static = recs,
 #'                   weight = "weight")
 #'
 #' View(result)
@@ -239,7 +238,7 @@ analyze <- function(x,
   } else {
     static <- as.data.table(static)
     if (is.null(weight) & is.null(rep_weights)) {
-      static[, W = 1]
+      static[, W := 1]
       cat("Assuming uniform sample weights\n")
     } else {
       setnames(static, weight, "W")

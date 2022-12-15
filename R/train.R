@@ -50,10 +50,10 @@ NULL
 #' # When 'y' is a list, it can specify variables to fuse as a block
 #' fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 #' fusion.vars
-#' train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path)
+#' train(data = recs, y = fusion.vars, x = predictor.vars)
 #'
 #' # Specify a single set of LightGBM hyperparameters
-#' train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
+#' train(data = recs, y = fusion.vars, x = predictor.vars,
 #'       hyper = list(boosting = "goss",
 #'                    feature_fraction = 0.8,
 #'                    num_iterations = 300
@@ -61,7 +61,7 @@ NULL
 #'
 #' # Specify a range of LightGBM hyperparameters to search over
 #' # This takes longer, because there are more models to test
-#' train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
+#' train(data = recs, y = fusion.vars, x = predictor.vars,
 #'       hyper = list(num_leaves = c(10, 30),
 #'                    feature_fraction = c(0.7, 0.9),
 #'                    num_iterations = 50

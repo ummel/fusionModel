@@ -85,7 +85,7 @@ weighted_median <- function(x, w1, w2, nboot = 200) {
 
   n <- length(x)
 
-  out <- if (var(x) > 0) {
+  out <- if (n > 1 & var(x) > 0) {
 
     # Median estimate using 'w1'
     med1 <- matrixStats::weightedMedian(x, w1)
