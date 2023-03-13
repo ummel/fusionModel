@@ -795,7 +795,7 @@ train <- function(data,
     nobs = nrow(dmat),
     timing = difftime(Sys.time(), t0),
     version = list(fusionModel = utils::packageVersion("fusionModel"), R = getRversion()),
-    call = match.call()
+    call = match.call.defaults()
   )
 
   # Add the metadata information returned by buildFun()
