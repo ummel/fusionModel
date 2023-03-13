@@ -120,11 +120,11 @@ prepXY <- function(data,
     # Create '*_zero' versions of the zero-inflated variables
     dinf <- data[yinf] %>%
       mutate_all(~ .x != 0) %>%
-      setNames(paste0(yinf, "_zero"))
+      setNames(paste0(yinf, "_zero"))  # Variable has "_zero" suffix, but it actually indicates when the original 'y' variable is NON-zero.
 
     # Update the zero-inflated variables in data to have NA instead of zero values
     data <- data %>%
-      mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%
+      #mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%
       cbind(dinf)
 
     # Update 'y' to include '*_zero' versions in block with original zero-inflated variables
@@ -146,7 +146,7 @@ prepXY <- function(data,
 
   Y <- data[yu] %>%
     #mutate_if(is.numeric, ~ ecdf(.x)(.x)) %>%   # Convert numeric response to percentile
-    mutate_if(is.numeric, ~ (.x - median(.x, na.rm = T)) / mad(.x, na.rm = T)) %>%   # Convert numeric response to robust scaled
+    #mutate_if(is.numeric, ~ (.x - median(.x, na.rm = T)) / mad(.x, na.rm = T)) %>%   # Convert numeric response to robust scaled (note: produces NA's if mad(x) is zero)
     mutate_if(is.logical, as.integer) %>%
     one_hot(dropOriginal = TRUE, dropUnusedLevels = TRUE)
   ylink <- attr(Y, "one_hot_link")
@@ -193,14 +193,16 @@ prepXY <- function(data,
 
   #-----
 
+  # Correct? not for _zero y's...
   ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
 
   #-----
 
-  # Wrapper funtion for fitting a glmnet LASSO model
-  # Used repeated in looped calls below
+  # Wrapper function for fitting a glmnet LASSO model
+  # Used repeatedly in looped calls below
   gfit <- function(y, x) {
-    i <- !is.na(Z[, y])
+    #i <- !is.na(Z[, y])  # Original
+    i <- if (y %in% yinf) Z[, y] != 0 else rep(TRUE, nrow(Z))  # TEST
     suppressWarnings({
       glmnet::glmnet(
       x = Z[i, x],
@@ -225,15 +227,15 @@ prepXY <- function(data,
   cat("Fitting full models for each 'y'\n")
 
   # Fit the "full" models for each fusion variable/block
-  rmax <- parallel::mclapply(y, function(v) {
-    sapply(v, function(v) {  # This wrapper is necessary to handle blocked case where 'v' consists of 2+ fusion variables
+  rmax <- parallel::mclapply(y, function(yvar) {
+    sapply(yvar, function(v) {
       V <- vc[[v]]  # Column names of dummies in case where 'v' is a factor
-      fits <- lapply(V, function(yv) gfit(y = yv, x = c(xok[[yv]], setdiff(ycols, V))))
+      fits <- lapply(V, function(yv) gfit(y = yv, x = c(xok[[yv]], setdiff(ycols, c(yvar, V)))))
       r2 <- sapply(fits, function(m) max(m$dev.ratio))
-      if (length(r2) > 1) r2 <- sum(r2 * ywgt[V])
+      if (length(r2) > 1) r2 <- sum(r2 * ywgt[V]) # Only applies weighting when 'r2' contains multiple values (i.e. unique value for each factor level within a variable)
       r2
     }) %>%
-      mean()  # Returns mean of max R2 in case of 2+ blocked variables
+      mean()  # Returns mean of R2 in case of multiple 'yvar'
   }, mc.cores = cores) %>%
     simplify2array() %>%
     setNames(y)
@@ -246,15 +248,16 @@ prepXY <- function(data,
   ord <- NULL  # Vector with preferred fusion variable sequence
   xpred <- NULL
 
+  # Print loop progress to console?
   for (i in 1:length(y)) {
 
     # Candidate y variables remaining to add to 'ord'
     ycand <- setdiff(y, ord)
 
-    out <- parallel::mclapply(ycand, function(v) {
+    out <- parallel::mclapply(ycand, function(yvar) {
 
-      # This wrapper is necessary to handle blocked case where 'v' consists of 2+ fusion variables
-      out2 <- lapply(v, function(v) {
+      # This wrapper is necessary to handle cases of blocked 'yvar' with 2+ fusion variables OR case of zero-inflated fusion variable with a "_zero" version included.
+      out2 <- lapply(yvar, function(v) {
         V <- vc[[v]]
         fits <- lapply(V, function(yv) {
           m <-  gfit(y = yv, x = c(xok[[yv]], unlist(vc[unlist(ord)])))
