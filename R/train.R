@@ -1,7 +1,3 @@
-#' @import dplyr
-#' @rawNamespace import(stats, except = c(filter, lag))
-#' @rawNamespace import(data.table, except = c(first, last, between))
-NULL
 #' Train a fusion model
 #'
 #' @description
@@ -34,6 +30,7 @@ NULL
 #'   \item learning_rate
 #'   \item max_bin
 #'   \item min_data_in_bin
+#'   \item max_cat_threshold
 #'  }
 #' @details Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
 #'
@@ -281,7 +278,8 @@ train <- function(data,
     learning_rate = 0.1,
     max_depth = -1,
     max_bin = 255,
-    min_data_in_bin = 3
+    min_data_in_bin = 3,
+    max_cat_threshold = 32
   )
 
   # Use default hyperparameters, if not specified by user
@@ -295,10 +293,10 @@ train <- function(data,
   # If forking, LightGBM uses single core internally
   hyper$num_threads <- ifelse(fork, 1L, cores)
 
-  # The 'dataset' parameters 'max_bin' and 'min_data_in_bin' can only have a single value (they are not eligible to be varied within fitLGB)
-  # Note that 'feature_pre_filter' is set to FALSE to allow multiple 'min_data_in_leaf' values within 'hyper'
+  # The 'dataset' parameters 'max_bin', 'min_data_in_bin', and 'max_cat_threshold' can only have a single value (they are not eligible to be varied within fitLGB)
+  # Note that 'feature_pre_filter' is forced to FALSE if there are multiple 'min_data_in_leaf' values within 'hyper'
   # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
-  for (v in c("max_bin", "min_data_in_bin")) {
+  for (v in c("max_bin", "min_data_in_bin", "max_cat_threshold")) {
     if (length(hyper[[v]]) > 1) {
       hyper[[v]] <- hyper[[v]][1]
       cat("Only one", v, "value allowed. Using:", hyper[[v]], "\n")
@@ -306,9 +304,11 @@ train <- function(data,
   }
   dparams <- list(max_bin = hyper$max_bin,
                   min_data_in_bin = hyper$min_data_in_bin,
-                  feature_pre_filter = FALSE)
+                  max_cat_threshold = hyper$max_cat_threshold,
+                  feature_pre_filter = length(hyper$min_data_in_leaf) == 1)
   hyper$max_bin <- NULL
   hyper$min_data_in_bin <- NULL
+  hyper$max_cat_threshold <- NULL
 
   # Create hyperparameter grid to search
   hyper.grid <- hyper %>%
@@ -811,7 +811,7 @@ train <- function(data,
   # Zip up all of the model directories
   zip::zip(zipfile = fsn, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)  # Zips to the temporary directory
   file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = fsn, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
-  cat("Fusion model saved to:", fsn, "\n")
+  cat("Fusion model saved to:\n", fsn, "\n")
   unlink(td)
 
   # Report processing time
