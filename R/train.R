@@ -144,7 +144,7 @@ train <- function(data,
     nquantiles > 0
     nclusters >= 0
     all(krange >= 5) & length(krange) == 2
-    is.null(hyper) | is.list(hyper)
+    is.null(hyper) | (is.list(hyper) & !anyDuplicated(names(hyper)))
     is.logical(fork)
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
   })
@@ -287,6 +287,11 @@ train <- function(data,
     if (!v %in% names(hyper)) {
       hyper[[v]] <- hyper.default[[v]]
     }
+  }
+
+  # Check for bagging in presence of GOSS (not possible)
+  if (hyper$bagging_fraction < 1 & hyper$boosting == "goss") {
+    warning("LightGBM 'goss' method is not compatible with 'bagging_fraction' < 1; bagging was disabled to prevent error.")
   }
 
   # Set the number of LightGBM threads
