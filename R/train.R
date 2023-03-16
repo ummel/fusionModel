@@ -203,6 +203,7 @@ train <- function(data,
   # Detect and impute any missing values in 'x' variables
   data <- checkData(data, y, x)
   x <- intersect(x, names(data))
+  for (i in 1:length(xlist)) xlist[[i]] <- intersect(xlist[[i]], x)
 
   #-----
 
