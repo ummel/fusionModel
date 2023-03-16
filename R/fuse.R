@@ -471,7 +471,7 @@ fuse <- function(data,
   out <- if (is.null(fsd)) {
     read_fsd(if (is.null(csv.path)) dtemp else csv.path)
   } else {
-    cat("Fusion results saved to:", csv.path, "\n")
+    cat("Fusion results saved to:\n", csv.path, "\n")
     NULL
   }
 

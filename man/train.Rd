@@ -68,6 +68,7 @@ The \code{hyper} argument can be used to specify the LightGBM hyperparameter val
 \item learning_rate
 \item max_bin
 \item min_data_in_bin
+\item max_cat_threshold
 }
 
 Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
@@ -83,10 +84,10 @@ fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 # When 'y' is a list, it can specify variables to fuse as a block
 fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 fusion.vars
-train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path)
+train(data = recs, y = fusion.vars, x = predictor.vars)
 
 # Specify a single set of LightGBM hyperparameters
-train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
+train(data = recs, y = fusion.vars, x = predictor.vars,
       hyper = list(boosting = "goss",
                    feature_fraction = 0.8,
                    num_iterations = 300
@@ -94,7 +95,7 @@ train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
 
 # Specify a range of LightGBM hyperparameters to search over
 # This takes longer, because there are more models to test
-train(data = recs, y = fusion.vars, x = predictor.vars, fsn = fsn.path,
+train(data = recs, y = fusion.vars, x = predictor.vars,
       hyper = list(num_leaves = c(10, 30),
                    feature_fraction = c(0.7, 0.9),
                    num_iterations = 50

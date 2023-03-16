@@ -74,12 +74,11 @@ head(sim)
 #---------
 
 # Multiple types of analyses can be done at once
-# This call uses the full sample; by = NULL, by default
+# This calculates estimates using the full sample
 result <- analyze(x = list(mean = c("natural_gas", "aircon"),
                            median = "electricity",
                            sum = c("electricity", "aircon")),
                   implicates = sim,
-                  static = recs,
                   weight = "weight")
 
 View(result)
