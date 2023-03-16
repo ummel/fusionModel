@@ -320,8 +320,10 @@ analyze <- function(x,
   hotf <- names(x) %in% c("mean", "sum")
   othx <- unique(unlist(lapply(x[!hotf], function(x) if (is.vector(x)) x else all.vars(x))))
   hotx <- unique(unlist(x[hotf]))
-  hotx <- names(which(sapply(sim[, ..hotx], is.factor)))
-  if (length(hotx) > 0) sim <- one_hot(sim, hotx, dropOriginal = FALSE)
+  if (length(hotx) > 0) {
+    hotx <- names(which(sapply(sim[, ..hotx], is.factor)))
+    sim <- one_hot(sim, hotx, dropOriginal = FALSE)
+  }
 
   # Look up table for variables that are one-hot encoded
   flink <- attr(sim, "one_hot_link")
