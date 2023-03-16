@@ -8,8 +8,21 @@
 \description{
 Data fusion and analysis of synthetic data in R.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://ummel.github.io/fusionModel/}
+}
+
+}
 \author{
 \strong{Maintainer}: Kevin Ummel \email{ummel@berkeley.edu}
+
+Other contributors:
+\itemize{
+  \item Karthik Akkiraju [contributor]
+  \item Miguel Poblete Cazenave [contributor]
+}
 
 }
 \keyword{internal}

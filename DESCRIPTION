@@ -1,8 +1,10 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.2.1
-Authors@R: 
-    person("Kevin", "Ummel", , "ummel@berkeley.edu", role = c("aut", "cre"))
+Version: 2.2.2
+Authors@R: c(
+    person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "ummel@berkeley.edu"),
+    person(given = "Karthik", family = "Akkiraju", role = "ctb"),
+    person(given = "Miguel", family = "Poblete Cazenave", role = "ctb"))
 Description: Data fusion and analysis of synthetic data in R.
 License: GPL-3
 Depends: 
@@ -26,4 +28,5 @@ Suggests:
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.2.3
+URL: https://ummel.github.io/fusionModel/
