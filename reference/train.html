@@ -10,7 +10,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">fusionModel</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.2.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.2.3</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -146,19 +146,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.972 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.973 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    71.0   148.0   196.4   309.2   498.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    72.0   161.5   203.3   327.0   498.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.975 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.976 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   10.00   64.75  146.00  192.00  310.00  498.00 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    67.5   150.0   195.7   319.0   498.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.5 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.35 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># When 'y' is a list, it can specify variables to fuse as a block</span></span></span>
 <span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"heating_share"</span>, <span class="st">"cooling_share"</span>, <span class="st">"other_share"</span><span class="op">)</span><span class="op">)</span></span></span>
@@ -178,19 +178,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.971 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.973 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    67.0   140.0   189.7   293.0   499.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      10      70     151     199     319     499 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.975 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.973 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   144.0   186.1   284.5   498.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    63.0   146.0   188.9   296.5   499.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 3 of 3: heating_share, cooling_share, other_share</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 16.7 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 16.2 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Specify a single set of LightGBM hyperparameters</span></span></span>
 <span class="r-in"><span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span>,</span></span>
@@ -203,19 +203,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.967 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.97 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    68.0   160.0   196.7   309.2   499.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    72.0   154.0   191.5   294.5   499.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.961 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.965 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    61.0   153.0   189.7   292.5   497.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    60.0   147.0   191.3   303.2   498.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 3 of 3: heating_share, cooling_share, other_share</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 17.6 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 18 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Specify a range of LightGBM hyperparameters to search over</span></span></span>
 <span class="r-in"><span><span class="co"># This takes longer, because there are more models to test</span></span></span>
@@ -229,19 +229,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.982 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.979 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    71.0   160.0   199.9   319.0   499.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      10      80     181     214     342     498 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.983 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.985 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    64.0   140.0   181.1   270.5   499.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    58.0   138.0   184.1   289.0   498.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 3 of 3: heating_share, cooling_share, other_share</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 34.9 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 37 secs </span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>

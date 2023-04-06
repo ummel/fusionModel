@@ -16,9 +16,6 @@
     <loc>https://ummel.github.io/fusionModel/reference/fuse.html</loc>
   </url>
   <url>
-    <loc>https://ummel.github.io/fusionModel/reference/fuseCART.html</loc>
-  </url>
-  <url>
     <loc>https://ummel.github.io/fusionModel/reference/fusionModel-package.html</loc>
   </url>
   <url>
@@ -38,9 +35,6 @@
   </url>
   <url>
     <loc>https://ummel.github.io/fusionModel/reference/train.html</loc>
-  </url>
-  <url>
-    <loc>https://ummel.github.io/fusionModel/reference/trainCART.html</loc>
   </url>
   <url>
     <loc>https://ummel.github.io/fusionModel/reference/validate.html</loc>
