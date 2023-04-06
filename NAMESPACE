@@ -2,10 +2,13 @@
 
 export(analyze)
 export(fuse)
+export(fuseCART)
+export(fusionOutput)
 export(plot_valid)
 export(prepXY)
 export(read_fsd)
 export(train)
+export(trainCART)
 export(validate)
 import(data.table, except = c(first, last, between))
 import(dplyr)
