@@ -30,6 +30,9 @@
 #' fusion.vars <- c("electricity", "natural_gas", "aircon")
 #' predictor.vars <- names(recs)[2:12]
 #' fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
+#'
+#' @export
+#' @noRd
 
 #---------------------
 

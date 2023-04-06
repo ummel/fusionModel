@@ -7,30 +7,8 @@
 #' @param train.object Output from a successful call to \link{train}.
 #' @param ignore_self Logical. If \code{TRUE}, the simulation step excludes "self matches" (i.e. row 1 in \code{data} cannot match with row 1 in the original donor. Only useful for validation exercises. Do not use otherwise.
 #'
-#' @return For \code{fuse()}, a data frame with same number of rows as \code{data} and one column for each synthetic fusion variable. The order of the columns reflects the order in which they where fused.
-#' @return For \code{fuseM()}, a data frame with number of rows equal to \code{M * nrow(data)}. Integer column ".M" indicates implicate assignment of each observation. Note that the ordering of recipient observations is consistent within implicates, so do not change the row order if using with \code{analyze()}.
-#'
-#' @examples
-#' # Build a fusion model using RECS microdata
-#' ?recs
-#' fusion.vars <- c("electricity", "natural_gas", "aircon")
-#' predictor.vars <- names(recs)[2:12]
-#' fit <- train(data = recs, y = fusion.vars, x = predictor.vars)
-#'
-#' # Generate single implicate of synthetic 'fusion.vars',
-#' #  using original RECS data as the recipient
-#' recipient <- recs[predictor.vars]
-#' sim <- fuse(data = recipient, train.object = fit)
-#' head(sim)
-#'
-#' # Generate multiple implicates
-#' sim <- fuseM(data = recipient, train.object = fit, M = 5)
-#' head(sim)
-#' table(sim$.M)
-
-# NOT USED
-# #' @param induce Logical. Experimental. Should simulated values be adjusted to induce better agreement with observed rank correlations in donor? Warning: \code{induce = TRUE} can be slow for large datasets.
-# #' @param induce.ignore Character. If \code{induce = TRUE}, an optional vector of fusion and/or predictor variables for which correlation should NOT be induced. Can include \link[base:regex]{regular expressions}. The default value (\code{induce.ignore = NULL}) induces correlation across all variables.
+#' @export
+#' @noRd
 
 #---------------------
 
