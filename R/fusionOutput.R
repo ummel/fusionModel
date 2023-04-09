@@ -73,7 +73,7 @@ fusionOutput <- function(input,
 
   # Check validity of the 'input' path
   if (!dir.exists(input)) stop("'input' directory does not exist.")
-  input <- normalizePath(input)
+  input <- full.path(input)
 
   # Construct the file path 'stub' for the output files
   stub <- if (is.null(output)) {
@@ -86,7 +86,7 @@ fusionOutput <- function(input,
     }
   } else {
     if (!dir.exists(output)) stop("'output' directory does not exist.")
-    normalizePath(output)
+    full.path(output)
   }
 
   # Set number of implicates automatically, if not specified

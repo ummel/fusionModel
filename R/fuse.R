@@ -114,7 +114,7 @@ fuse <- function(data,
     file.path(td, "fused.csv")
   } else {
     if (!endsWith(fsd, ".fsd")) stop("Argument 'fsd' must have file suffix '.fsd'")
-    dir <- normalizePath(dirname(fsd), mustWork = FALSE)
+    dir <- full.path(dirname(fsd), mustWork = FALSE)
     if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
     file.path(dir, basename(fsd))
   }

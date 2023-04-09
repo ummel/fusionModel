@@ -937,3 +937,10 @@ match.call.defaults <- function(..., exclude = NULL) {
     call[i] <- list(formals[[i]])
   match.call(sys.function(sys.parent()), call)
 }
+
+#-------------------
+
+# Return normalized path using the '.Platform$file.sep' separator
+full.path <- function(path, mustWork = NA) {
+  normalizePath(path = path, winslash = .Platform$file.sep, mustWork = mustWork)
+}

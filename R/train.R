@@ -159,7 +159,7 @@ train <- function(data,
   fork <- fork & .Platform$OS.type == "unix" & cores > 1 & length(ylist) > 1 & cores <= length(ylist)
 
   # Check 'fsn' path and create parent directories, if necessary
-  dir <- normalizePath(dirname(fsn), mustWork = FALSE)
+  dir <- full.path(dirname(fsn), mustWork = FALSE)
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
   fsn <- file.path(dir, basename(fsn))
 
