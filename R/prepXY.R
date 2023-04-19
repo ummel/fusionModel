@@ -145,8 +145,6 @@ prepXY <- function(data,
   xcols <- names(X)
 
   Y <- data[yu] %>%
-    #mutate_if(is.numeric, ~ ecdf(.x)(.x)) %>%   # Convert numeric response to percentile
-    #mutate_if(is.numeric, ~ (.x - median(.x, na.rm = T)) / mad(.x, na.rm = T)) %>%   # Convert numeric response to robust scaled (note: produces NA's if mad(x) is zero)
     mutate_if(is.logical, as.integer) %>%
     one_hot(dropOriginal = TRUE, dropUnusedLevels = TRUE)
   ylink <- attr(Y, "one_hot_link")
@@ -159,12 +157,15 @@ prepXY <- function(data,
 
   #-----
 
+  # intersect() call restricts to factor levels present in 'Z' (some levels can be dropped when 'data' is randomly subsampled)
   vc <- lapply(yu, function(v) {
-    if (v %in% yfactor) {
-      filter(ylink, original == v)$dummy
+    out <- if (v %in% yfactor) {
+      vl <- filter(ylink, original == v)$dummy
+      intersect(vl, colnames(Z))
     } else {
       v
     }
+    return(out)
   }) %>%
     setNames(yu)
 
@@ -193,24 +194,18 @@ prepXY <- function(data,
 
   #-----
 
-  # Correct? not for _zero y's...
-  ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
-
-  #-----
-
   # Wrapper function for fitting a glmnet LASSO model
   # Used repeatedly in looped calls below
   gfit <- function(y, x) {
-    #i <- !is.na(Z[, y])  # Original
-    i <- if (y %in% yinf) Z[, y] != 0 else rep(TRUE, nrow(Z))  # TEST
+    i <- if (y %in% yinf) Z[, y] != 0 else rep(TRUE, nrow(Z))
     suppressWarnings({
       glmnet::glmnet(
-      x = Z[i, x],
-      y = Z[i, y],
-      weights = W[i],
-      family = "gaussian",
-      pmax = min(xmax, length(x)),
-      alpha = 1)
+        x = Z[i, x],
+        y = Z[i, y],
+        weights = W[i],
+        family = "gaussian",
+        pmax = min(xmax, length(x)),
+        alpha = 1)
     })
   }
 
@@ -225,6 +220,9 @@ prepXY <- function(data,
   #-----
 
   cat("Fitting full models for each 'y'\n")
+
+  # Weights
+  ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
 
   # Fit the "full" models for each fusion variable/block
   rmax <- parallel::mclapply(y, function(yvar) {
@@ -343,3 +341,4 @@ prepXY <- function(data,
   return(result)
 
 }
+
