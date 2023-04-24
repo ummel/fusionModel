@@ -147,15 +147,15 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.973 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.975 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    70.0   147.0   197.7   317.0   498.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    73.0   155.0   200.5   320.0   499.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 2 of 3: natural_gas</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- R-squared of cluster means: 0.976 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   143.0   190.3   306.0   498.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    63.0   148.0   192.3   305.0   499.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Training step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
@@ -176,15 +176,15 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 8.22 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.55 secs </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                     aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        6060       189.6            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       11350         0.0            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       15440       273.7 Both a central system and individual units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        7950       871.0            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        3854         0.0   Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        2405       427.0                        No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        9280         530          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       18100           0 Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       18270           0                      No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        5980         674          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        9530         824          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        7960           0 Individual window/wall or portable units</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">#---------</span></span></span>
 <span class="r-in"><span></span></span>
@@ -197,7 +197,7 @@
 <span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Assuming uniform sample weights</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.369 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.533 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/View.html" class="external-link">View</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>unable to open display</span>
@@ -212,7 +212,7 @@
 <span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span></span>
 <span class="r-in"><span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.065 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.0603 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Same as above but including sample weight uncertainty</span></span></span>
 <span class="r-in"><span><span class="co"># Note that only the first 30 replicate weights are used internally</span></span></span>
@@ -224,7 +224,7 @@
 <span class="r-in"><span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 of 96 replicate weights</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.125 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.126 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Helper function for comparison plots</span></span></span>
 <span class="r-in"><span><span class="va">pfun</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span> <span class="op">{</span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">}</span></span></span>
@@ -269,7 +269,7 @@
 <span class="r-in"><span>                  fun <span class="op">=</span> <span class="va">my_fun</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Applying custom 'fun' to data</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.922 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.964 secs </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
