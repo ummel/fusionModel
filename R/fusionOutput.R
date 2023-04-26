@@ -120,10 +120,11 @@ fusionOutput <- function(input,
   #-----
 
   # Report initial messages to console and log
+  # The try() wrapper for fusionData is to allow case of running fusionModel::fusionOutput() on a server
   cat(format(tstart, usetz = TRUE), "\n")
   cat(R.version.string, "\n")
   cat("Platform:", R.Version()$platform, "\n")
-  cat("fusionData v", as.character(utils::packageVersion("fusionData")), "\n", sep = "")
+  try(cat("fusionData v", as.character(utils::packageVersion("fusionData")), "\n", sep = ""), silent = TRUE)
   cat("fusionModel v", as.character(utils::packageVersion("fusionModel")), "\n\n", sep = "")
 
   # Print the original function arguments
@@ -228,8 +229,13 @@ fusionOutput <- function(input,
                                  x = prep$x,
                                  fsn = paste0(stub, "model.fsn"),
                                  weight = "weight",
-                                 cores = ncores,
+                                 nfolds = 5,
+                                 nquantiles = 3,
+                                 nclusters = 2000,
+                                 krange = c(10, 500),
                                  hyper = hyper.params,
+                                 fork = fork,
+                                 cores = ncores,
                                  ...)
 
   # If train() was forked, reset number of threads allowed in data.table and fst
