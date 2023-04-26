@@ -102,19 +102,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.973 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    72.0   152.0   196.8   307.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.976 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    64.0   149.0   198.4   333.0   498.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   10.00   66.25  147.50  196.89  320.75  497.00 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.972 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    65.0   140.0   184.3   283.0   498.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.46 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 6.11 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Generate single implicate of synthetic 'fusion.vars',</span></span></span>
 <span class="r-in"><span><span class="co">#  using original RECS data as the recipient</span></span></span>
@@ -133,15 +133,15 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.774 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.608 secs </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       11090         517          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       25530           0          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       17940         315          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        6140        1160          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        5480         628 Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        4590           0 Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                     aircon</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        4610         345                        No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       16220           0   Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       18350           0            Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1       12040         424 Both a central system and individual units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        4164         544                        No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        2400           0   Individual window/wall or portable units</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Calling fuse() again produces different results</span></span></span>
 <span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span><span class="op">)</span></span></span>
@@ -158,15 +158,15 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.788 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.605 secs </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                     aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       10010       215.7            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       11330         0.0   Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1        2255       389.5 Both a central system and individual units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1       13330         0.0            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1       10130       628.0   Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        2487       294.0   Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        2833       491.0                      No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1        5540       574.0 Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       12820       224.6          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        6130       637.0          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1       11960         0.0                      No air conditioning</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        2700       341.4 Individual window/wall or portable units</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Generate multiple implicates</span></span></span>
 <span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
@@ -183,15 +183,15 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 2.01 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 1.53 secs </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                     aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        5330         393                        No air conditioning</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1        8400         164            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       23700         619 Both a central system and individual units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1       10810         443            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        2770         692            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        3706           0   Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       10010         466          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       13800           0          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       17400           0          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        9800         747          Central air conditioning system</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1       10740           0 Individual window/wall or portable units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        3935           0 Individual window/wall or portable units</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">M</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    1    2    3    4    5 </span>
@@ -216,7 +216,7 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Writing fusion output to .fsd file </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion results saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/results.fsd </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 2.05 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 1.57 secs </span>
 <span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="read_fsd.html">read_fsd</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
 <span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in data.table::fread(file = csv, data.table = TRUE, nThread = cores):</span> To read gz and bz2 files directly, fread() requires 'R.utils' package which cannot be found. Please install 'R.utils' using 'install.packages('R.utils')'.</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>

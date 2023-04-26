@@ -111,19 +111,19 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.971 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.976 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   10.00   87.75  181.00  216.53  343.00  498.00 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    81.0   181.0   213.8   339.0   500.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.977 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.975 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    60.0   141.0   197.7   345.0   499.0 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    63.0   142.0   195.3   319.0   499.0 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.47 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 5.89 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Fuse back onto the donor data (multiple implicates)</span></span></span>
 <span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>,</span></span>
@@ -142,7 +142,7 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 11.9 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 9.22 secs </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Calculate validation results</span></span></span>
 <span class="r-in"><span><span class="va">valid</span> <span class="op">&lt;-</span> <span class="fu">validate</span><span class="op">(</span>observed <span class="op">=</span> <span class="va">recs</span>,</span></span>
@@ -152,17 +152,17 @@
 <span class="r-out co"><span class="r-pr">#&gt;</span> One-hot encoding categorical fusion variables</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Correlation between observed and fused values:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   0.047   0.213   0.244   0.281   0.404   0.489 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   0.043   0.201   0.232   0.275   0.404   0.495 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Processing validation analyses for 3 fusion variables</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Performed 642 analyses across 107 subsets</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Smoothing validation metrics</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Average smoothed performance metrics across subset range:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>              y     est    vad   moe</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1       aircon  0.0254  0.743  1.36</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  electricity  0.0172  0.684  1.15</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  natural_gas  0.0239  0.852  1.17</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       aircon  0.0338  0.696  1.36</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  electricity  0.0169  0.692  1.17</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  natural_gas  0.0228  0.850  1.15</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Creating ggplot2 graphics  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 3.37 secs </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 2.68 secs </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
