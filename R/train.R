@@ -17,6 +17,7 @@
 #' @param cores Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.
 #'
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
+#' @details `y` variables that exhibit no variance or continuous `y` variables with less than `10 * nfolds` non-zero observations (minimum required for cross-validation) are automatically removed with a warning.
 #' @details The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
 #' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
 #' @details \itemize{
@@ -49,6 +50,11 @@
 #' fusion.vars
 #' train(data = recs, y = fusion.vars, x = predictor.vars)
 #'
+#' # When 'x' is a list, it specifies which predictor variables to use for each 'y'
+#' xlist <- list(predictor.vars[1:4], predictor.vars[2:8], predictor.vars)
+#' xlist
+#' train(data = recs, y = fusion.vars, x = xlist)
+#'
 #' # Specify a single set of LightGBM hyperparameters
 #' train(data = recs, y = fusion.vars, x = predictor.vars,
 #'       hyper = list(boosting = "goss",
@@ -69,6 +75,7 @@
 
 # Manual testing
 # library(fusionModel)
+# library(tidyverse)
 # library(data.table)
 # library(dplyr)
 # source("R/utils.R")
@@ -91,6 +98,8 @@
 
 # Try with variable block
 #y <- c(list(y[1:2]), y[-c(1:2)])
+
+
 
 #---------------------
 
@@ -167,9 +176,6 @@ train <- function(data,
   td <- tempfile()
   dir.create(td, showWarnings = FALSE)
 
-  # Determine fusion variable directory prefixes for saving to disk
-  pfixes <- formatC(seq_along(ylist), width = nchar(length(ylist)), format = "d", flag = "0")
-
   #-----
 
   # Create and/or check observation weights
@@ -190,7 +196,7 @@ train <- function(data,
   # Check data and variable name validity
   if (anyNA(data[y])) stop("Missing (NA) values are not allowed in 'y'")
 
-  # Check that the 'xvars' and 'yvars' contain only syntactically valid names
+  # Check that the 'x' and 'y' contain only syntactically valid names
   bad <- setdiff(c(x, y), make.names(c(x, y)))
   if (length(bad)) stop("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
 
@@ -198,21 +204,29 @@ train <- function(data,
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # Check for character-type variables; stop with error if any detected
   # Check for no-variance (constant) variables
   # Detect and impute any missing values in 'x' variables
-  data <- checkData(data, y, x)
+  data <- checkData(data, y, x, nfolds)
   x <- intersect(x, names(data))
-  for (i in 1:length(xlist)) xlist[[i]] <- intersect(xlist[[i]], x)
+  n <- length(xlist)
+  for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
+  y <- intersect(y, names(data))
+  for (i in 1:n) ylist[[i]] <- intersect(ylist[[i]], y)
+  keep <- setdiff(1:n, c(which(lengths(xlist) == 0), which(lengths(ylist) == 0)))
+  xlist <- xlist[keep]
+  ylist <- ylist[keep]
+
+  # Determine fusion variable directory prefixes for saving to disk
+  pfixes <- formatC(seq_along(ylist), width = nchar(length(ylist)), format = "d", flag = "0")
 
   #-----
 
-  # Extract data classes and levels for the 'yvars'
+  # Extract data classes and levels for the 'y' variables
   d <- data[y]
   yclass <- lapply(d, class)
   ylevels <- lapply(d[grepl("factor", yclass)], levels)
 
-  # Extract data classes and levels for the 'xvars'
+  # Extract data classes and levels for the 'x' variables
   d <- data[x]
   xclass <- lapply(d, class)
   xlevels <- lapply(d[grepl("factor", xclass)], levels)
@@ -230,10 +244,8 @@ train <- function(data,
   #-----
 
   # Print variable information to console
-  xvars <- x
-  yvars <- y
-  cat(length(yvars), "fusion variables\n")
-  cat(length(xvars), "initial predictor variables\n")
+  cat(length(y), "fusion variables\n")
+  cat(length(x), "initial predictor variables\n")
   cat(nrow(data), "observations\n")
 
   # Report if using different sets of predictor variables across the fusion variables
@@ -244,7 +256,7 @@ train <- function(data,
   }
 
   # Limit 'data' to the necessary variables
-  data <- data[c(xvars, yvars)]
+  data <- data[c(x, y)]
 
   # Coerce 'data' to sparse numeric matrix for use with LightGBM
   dmat <- to_mat(data)
@@ -335,7 +347,7 @@ train <- function(data,
     block <- length(v) > 1
 
     # Print message to console
-    if (verbose) cat("Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
+    if (verbose) cat("-- Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
 
     # 'y' variables from prior clusters to be included as predictors
     yv <- if (i == 1) NULL else unlist(ylist[1:(i - 1)])
@@ -491,11 +503,6 @@ train <- function(data,
       # Save LightGBM mean model (m.txt) to disk
       # NOTE: mmod$best_iter and mmod$best_score custom attributes are not retained in save
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
-
-      # Record the conditional mean/expectation results in metadata
-      # This is necessary because lgb.save does not retain them in .txt model object
-      # yvalid <- c(yvalid, mmod$best_score)
-      # yiters <- c(yiters, mmod$best_iter)
 
       #-----
 
@@ -724,12 +731,12 @@ train <- function(data,
         ssr <- sum((kc[, 1] - mb) ^ 2)
         sst <- sum((kc[, 1] - mean(kc[, 1])) ^ 2)
         r2 <- 1 - ssr / sst  # r-squared
-        if (verbose) cat("-- R-squared of cluster means:", round(r2, 3), "\n")
+        if (verbose) cat("  -- R-squared of cluster means:", round(r2, 3), "\n")
         #plot(kc[, 1], mb); abline(0, 1, col = 2)
 
         # Report to console info about the preferred number of neighbors across clusters
         if (verbose) {
-          cat("-- Number of neighbors in each cluster:\n")
+          cat("  -- Number of neighbors in each cluster:\n")
           print(summary(kbest))
         }
 

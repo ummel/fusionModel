@@ -264,7 +264,7 @@ one_hot <- function(data, y = NULL, dt = TRUE, dropOriginal = TRUE, dropUnusedLe
 stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
   stopifnot((tfrac > 0 & tfrac <= 1) | (tfrac > 1 & tfrac %% 1 == 0))
   if (ycont) y <- dplyr::ntile(y, ntiles)
-  if (tfrac <= 1) { # Training set indicator (logical)
+  if (tfrac <= 1) { # Create training set (logical vector indicating training set observations)
     out <- vector(mode = "logical", length = length(y))
     for (i in unique(y)) {
       ind <- y == i
@@ -272,7 +272,7 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
       out[ind] <- data.table::frank(runif(N), ties.method = "random") <= round(tfrac * N)
     }
   }
-  if (tfrac > 1) {  # Cross-validation folds (list of integer row indices)
+  if (tfrac > 1) {  # Assign cross-validation folds (list of integer row indices in each fold)
     out <- vector(mode = "integer", length = length(y))
     for (i in unique(y)) {
       ind <- y == i
@@ -290,18 +290,32 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
 
 # Function to check a 'data' object against inputs 'y' and 'x'
 # Detects character columns, no-variance columns, and missing data columns (imputes as needed)
-# This simply wraps a code chunk that was present in train(), blockchain(), and prescreen()
+# This simply wraps a code chunk that was present in train() and prepXY()
 
-checkData <- function(data, y, x) {
+checkData <- function(data, y, x, nfolds = NULL) {
 
   # Check for character-type variables; stop with error if any detected
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # Check for no-variance (constant) variables
-  # Stop with error if any 'y' are constant; remove constant 'x' with message
+  # Remove (with warning) any zero-variance 'y' variables
   constant <- names(which(sapply(data[y], novary)))
-  if (length(constant)) stop("Zero-variance 'y' variable(s) detected (remove them):\n", paste(constant, collapse = ", "))
+  if (length(constant)) {
+    y <- setdiff(y, constant)
+    data <- select(data, -all_of(constant))
+    warning("Removed zero-variance 'y' variable(s):\n", paste(constant, collapse = ", "), immediate. = TRUE)
+  }
+
+  # Remove (with warning) any inflated 'y' variables with fewer than 10*nfolds non-zero values
+  if (!is.null(nfolds)) {
+    toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds * 10 else FALSE)))
+    if (length(toofew)) {
+      data <- select(data, -all_of(toofew))
+      warning("Removed 'y' variable(s) with too few non-zero values:\n", paste(toofew, collapse = ", "), immediate. = TRUE)
+    }
+  }
+
+  # Remove (with message) any zero-variance 'x' variables
   constant <- names(which(sapply(data[x], novary)))
   if (length(constant)) {
     x <- setdiff(x, constant)

@@ -53,6 +53,8 @@ Train a fusion model on "donor" data using sequential \href{https://lightgbm.rea
 \details{
 When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 
+\code{y} variables that exhibit no variance or continuous \code{y} variables with less than \code{10 * nfolds} non-zero observations (minimum required for cross-validation) are automatically removed with a warning.
+
 The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
 
 The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
@@ -85,6 +87,11 @@ fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
 fusion.vars
 train(data = recs, y = fusion.vars, x = predictor.vars)
+
+# When 'x' is a list, it specifies which predictor variables to use for each 'y'
+xlist <- list(predictor.vars[1:4], predictor.vars[2:8], predictor.vars)
+xlist
+train(data = recs, y = fusion.vars, x = xlist)
 
 # Specify a single set of LightGBM hyperparameters
 train(data = recs, y = fusion.vars, x = predictor.vars,
