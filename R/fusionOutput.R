@@ -229,12 +229,7 @@ fusionOutput <- function(input,
                                  x = prep$x,
                                  fsn = paste0(stub, "model.fsn"),
                                  weight = "weight",
-                                 nfolds = 5,
-                                 nquantiles = 3,
-                                 nclusters = 2000,
-                                 krange = c(10, 500),
                                  hyper = hyper.params,
-                                 fork = fork,
                                  cores = ncores,
                                  ...)
 
@@ -246,7 +241,7 @@ fusionOutput <- function(input,
 
   #-----
 
-  if (validation | validation == 1) {
+  if (validation | validation %in% 1:2) {
 
     cat("\n|=== Fuse onto training data for internal validation ===|\n\n")
 

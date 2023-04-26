@@ -144,7 +144,9 @@ train <- function(data,
     is.data.frame(data)
     all(y %in% names(data))
     !any(c("M", "W..", "R..") %in% y)  # Reserved variable names
+    all(lengths(ylist) > 0)
     all(x %in% names(data))
+    length(xlist[[1]]) > 0  # Technically, only the first 'xlist' slot is required to have variables specified (others can be NULL/empty)
     length(ylist) == length(xlist)
     length(intersect(y, x)) == 0
     is.character(fsn) & endsWith(fsn, ".fsn")
@@ -210,9 +212,10 @@ train <- function(data,
   x <- intersect(x, names(data))
   n <- length(xlist)
   for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
+  if (length(xlist[[1]]) == 0) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
   y <- intersect(y, names(data))
   for (i in 1:n) ylist[[i]] <- intersect(ylist[[i]], y)
-  keep <- setdiff(1:n, c(which(lengths(xlist) == 0), which(lengths(ylist) == 0)))
+  keep <- setdiff(1:n, which(lengths(ylist) == 0))
   xlist <- xlist[keep]
   ylist <- ylist[keep]
 

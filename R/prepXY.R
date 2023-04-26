@@ -69,10 +69,20 @@ prepXY <- function(data,
 
   t0 <- Sys.time()
 
+  # Create correct 'y' and 'ylist', depending on input type
+  if (is.list(y)) {
+    ylist <- y
+    y <- unlist(ylist)
+  } else {
+    ylist <- as.list(y)
+  }
+
   stopifnot(exprs = {
     is.data.frame(data)
-    all(unlist(y) %in% names(data))
+    all(y %in% names(data))
     all(x %in% names(data))
+    length(intersect(y, x)) == 0
+    all(lengths(ylist) > 0)
     is.null(weight) | weight %in% names(data)
     is.null(xforce) | all(xforce %in% x)
     xmax >= 5
@@ -83,10 +93,22 @@ prepXY <- function(data,
   })
 
   if (is.data.table(data)) data <- as.data.frame(data)
-  if (!is.list(y)) y <- as.list(y)
 
-  # Create 'yu'; all individual y variables, in case 'y' input has blocked variables
-  yu <- unlist(y)
+  # Check for character-type variables; stop with error if any detected
+  # Check for no-variance (constant) variables
+  # Detect and impute any missing values in 'x' variables
+  # Note that checkData() is hard-coded to ensure enough non-zero observations for 5-fold cross-validation; default value in train()
+  # Note that train() runs its own checkData() with nfolds set to user value
+  data <- checkData(data = data, y = y, x = x, nfolds = 5)
+  x <- intersect(x, names(data))
+  xforce <- intersect(xforce, x)
+  for (i in 1:length(ylist)) ylist[[i]] <- intersect(ylist[[i]], names(data))
+  ylist <- purrr::compact(ylist)
+
+  #---
+
+  # Create 'y'; all individual y variables, in case 'ylist' has blocked variables
+  y <- unlist(ylist)
 
   # Observation weights vector
   W <- if (is.null(weight)) {
@@ -94,12 +116,6 @@ prepXY <- function(data,
   } else {
     data[[weight]] / mean(data[[weight]])
   }
-
-  # Check for character-type variables; stop with error if any detected
-  # Check for no-variance (constant) variables
-  # Detect and impute any missing values in 'x' variables
-  data <- checkData(data = data, y = yu, x = x)
-  x <- intersect(x, names(data))
 
   #-----
 
@@ -112,8 +128,8 @@ prepXY <- function(data,
 
   #-----
 
-  # Which 'yu' variables are zero-inflated?
-  yinf <- names(which(sapply(data[yu], inflated)))
+  # Which 'y' variables are zero-inflated?
+  yinf <- names(which(sapply(data[y], inflated)))
 
   if (length(yinf)) {
 
@@ -127,9 +143,9 @@ prepXY <- function(data,
       #mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%
       cbind(dinf)
 
-    # Update 'y' to include '*_zero' versions in block with original zero-inflated variables
-    y <- lapply(y, function(v) if (any(v %in% yinf)) c(v, paste0(intersect(v, yinf), "_zero")) else v)
-    yu <- unlist(y)
+    # Update 'ylist' to include '*_zero' versions in block with original zero-inflated variables
+    ylist <- lapply(ylist, function(v) if (any(v %in% yinf)) c(v, paste0(intersect(v, yinf), "_zero")) else v)
+    y <- unlist(ylist)
 
   }
 
@@ -144,11 +160,11 @@ prepXY <- function(data,
   xlink <- attr(X, "one_hot_link")
   xcols <- names(X)
 
-  Y <- data[yu] %>%
+  Y <- data[y] %>%
     mutate_if(is.logical, as.integer) %>%
     one_hot(dropOriginal = TRUE, dropUnusedLevels = TRUE)
   ylink <- attr(Y, "one_hot_link")
-  yfactor <- names(which(sapply(data[yu], is.factor)))
+  yfactor <- names(which(sapply(data[y], is.factor)))
   ycols <- names(Y)
 
   rm(data)
@@ -158,7 +174,7 @@ prepXY <- function(data,
   #-----
 
   # intersect() call restricts to factor levels present in 'Z' (some levels can be dropped when 'data' is randomly subsampled)
-  vc <- lapply(yu, function(v) {
+  vc <- lapply(y, function(v) {
     out <- if (v %in% yfactor) {
       vl <- filter(ylink, original == v)$dummy
       intersect(vl, colnames(Z))
@@ -167,7 +183,7 @@ prepXY <- function(data,
     }
     return(out)
   }) %>%
-    setNames(yu)
+    setNames(y)
 
   #-----
 
@@ -225,7 +241,7 @@ prepXY <- function(data,
   ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
 
   # Fit the "full" models for each fusion variable/block
-  rmax <- parallel::mclapply(y, function(yvar) {
+  rmax <- parallel::mclapply(ylist, function(yvar) {
     sapply(yvar, function(v) {
       V <- vc[[v]]  # Column names of dummies in case where 'v' is a factor
       fits <- lapply(V, function(yv) gfit(y = yv, x = c(xok[[yv]], setdiff(ycols, c(yvar, V)))))
@@ -236,7 +252,7 @@ prepXY <- function(data,
       mean()  # Returns mean of R2 in case of multiple 'yvar'
   }, mc.cores = cores) %>%
     simplify2array() %>%
-    setNames(y)
+    setNames(ylist)
 
   #-----
 
@@ -247,10 +263,10 @@ prepXY <- function(data,
   xpred <- NULL
 
   # Print loop progress to console?
-  for (i in 1:length(y)) {
+  for (i in 1:length(ylist)) {
 
     # Candidate y variables remaining to add to 'ord'
-    ycand <- setdiff(y, ord)
+    ycand <- setdiff(ylist, ord)
 
     out <- parallel::mclapply(ycand, function(yvar) {
 
