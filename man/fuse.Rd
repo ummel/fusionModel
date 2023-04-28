@@ -17,7 +17,7 @@ fuse(data, fsn, fsd = NULL, M = 1, kblock = 10, margin = 2, cores = 1)
 
 \item{kblock}{Integer. Fixed number of nearest neighbors to use when fusing variables in a block. Must be >= 5 and <= 30. Not applicable for variables fused on their own (i.e. no block).}
 
-\item{margin}{Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall.}
+\item{margin}{Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall. Alternatively, can be set to a negative value to manually specify the number of chunks to use. For example, \code{margin = -3} splits \code{M} implicates into three chunks of approximately equal size.}
 
 \item{cores}{Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems if OpenMP is available.}
 }

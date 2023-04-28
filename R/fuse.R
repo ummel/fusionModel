@@ -8,7 +8,7 @@
 #' @param fsd Character. Optional results file to be created ending in \code{.fsd} (i.e. "fused data"). Can then be read by \code{\link{read_fsd}}. If \code{fsd = NULL} (the default), the fusion results are returned as a \code{\link[data.table]{data.table}}.
 #' @param M Integer. Number of implicates to simulate.
 #' @param kblock Integer. Fixed number of nearest neighbors to use when fusing variables in a block. Must be >= 5 and <= 30. Not applicable for variables fused on their own (i.e. no block).
-#' @param margin Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall.
+#' @param margin Numeric. Safety margin used when estimating how many implicates can be processed in memory at once. Set higher if \code{fuse()} experiences a memory shortfall. Alternatively, can be set to a negative value to manually specify the number of chunks to use. For example, `margin = -3` splits `M` implicates into three chunks of approximately equal size.
 #' @param cores Integer. Number of cores used. LightGBM prediction is parallel-enabled on all systems if OpenMP is available.
 #'
 #' @details TO UPDATE.
@@ -99,7 +99,7 @@ fuse <- function(data,
     M > 0 & M %% 1 == 0
     kblock >= 5 & kblock <= 30
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
-    margin >= 1
+    margin != 0
   })
 
   if (is.data.table(data)) data <- as.data.frame(data)
@@ -109,9 +109,9 @@ fuse <- function(data,
   dir.create(td)
 
   # Check 'fsd' path and create parent directories, if necessary
-  # 'csv.path' is either NULL, a temporary file (fused.csv), or a user-specified .fsd path
-  csv.path <- if (is.null(fsd)) {
-    file.path(td, "fused.csv")
+  # 'fsd.path' is either NULL, a temporary file (fused.fsd), or a user-specified .fsd path
+  fsd.path <- if (is.null(fsd)) {
+    file.path(td, "fused.fsd")
   } else {
     if (!endsWith(fsd, ".fsd")) stop("Argument 'fsd' must have file suffix '.fsd'")
     dir <- full.path(dirname(fsd), mustWork = FALSE)
@@ -221,7 +221,8 @@ fuse <- function(data,
   n <- floor((mfree + dsize) / (dsize * margin))
   n <- min(n, M)
 
-  nstep <- ceiling(M / n)
+  # The number of steps/chunks can be overridden by negative 'margin' value
+  nstep <- ifelse(margin > 0, ceiling(M / n), min(M, ceiling(-margin)))
   nimp <- rep(floor(M / nstep), nstep)
   delta <- M - sum(nimp)
   if (delta > 0) nimp[1:delta] <- nimp[1:delta] + 1L
@@ -233,7 +234,7 @@ fuse <- function(data,
   }
 
   # Replicate the prediction matrix ('dmat'), if necessary
-  if (n > 1) {
+  if (nimp[1] > 1) {
     dind <- rep(seq.int(N0), nimp[1])
     dmat <- dmat[dind, ]
     rm(dind)
@@ -242,9 +243,9 @@ fuse <- function(data,
   # Report parallel processing to console
   if (cores > 1) cat("Using OpenMP multithreading within LightGBM (", cores, " cores)", "\n", sep = "")
 
-  # If processing single chunk and data.table results requested, set csv.path = NULL
+  # If processing single chunk and data.table results requested, set fsd.path = NULL
   # This causes results to kept in memory rather than written to disk and then re-read
-  if (nstep == 1 & is.null(fsd)) csv.path <- NULL
+  if (nstep == 1 & is.null(fsd)) fsd.path <- NULL
 
   #-----
 
@@ -446,7 +447,7 @@ fuse <- function(data,
     set(dtemp, i = NULL, j = "M", value = rep(m, each = N0))
     setcolorder(dtemp, "M")
 
-    # Assign meta data column names
+    # Assign meta data column names used by 'fsd' file format
     setnames(dtemp, ymeta)
 
     # Update 'dmat' prior to next iteration in 'nstep'
@@ -457,12 +458,12 @@ fuse <- function(data,
       rm(dmat)  # Remove 'dmat' if the loop is complete
     }
 
-    # Write/append 'dtemp' to 'csv.path' file on disk
+    # If necessary, append 'dtemp' to 'fsd.path' file on disk
     # This frees up memory for processing (i.e. larger chunk size), since prior results chunks do not need to be kept in memory
-    if (!is.null(csv.path)) {
-      cat("Writing fusion output to", ifelse(is.null(fsd), "temp file", ".fsd file"), "\n")
+    if (!is.null(fsd.path)) {
+      cat("Writing fusion output to", ifelse(is.null(fsd), "temporary file", ".fsd file"), "\n")
       data.table::fwrite(x = dtemp,
-                         file = csv.path,
+                         file = fsd.path,
                          append = mstep > 1,
                          compress = ifelse(is.null(fsd), "none", "gzip"),
                          nThread = cores)
@@ -476,9 +477,10 @@ fuse <- function(data,
   # If fsd = NULL, load the fusion results into memory and return data.table
   # Otherwise, invisibly return path to .csv file containing results
   out <- if (is.null(fsd)) {
-    read_fsd(if (is.null(csv.path)) dtemp else csv.path)
+    cat("Returning data.table with fusion results\n")
+    fusionModel::read_fsd(if (is.null(fsd.path)) dtemp else fsd.path)
   } else {
-    cat("Fusion results saved to:\n", csv.path, "\n")
+    cat("Fusion results saved to:\n", fsd.path, "\n")
     NULL
   }
 
@@ -490,6 +492,6 @@ fuse <- function(data,
   unlink(td)
 
   # Either return data.table 'out' or invisible path to file on disk
-  return(if(is.null(out)) invisible(csv.path) else out)
+  return(if(is.null(out)) invisible(fsd.path) else out)
 
 }
