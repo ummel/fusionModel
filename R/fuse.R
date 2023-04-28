@@ -376,6 +376,8 @@ fuse <- function(data,
 
         #---
 
+        cat("-- Simulating fused values\n")
+
         simChunk <- function(pchunk) {
 
           # Get the kcenter closest to each observation in 'pred'
@@ -400,12 +402,17 @@ fuse <- function(data,
 
         }
 
-        cat("-- Simulating fused values\n")
-        split.vec <- rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)]
-        pred <- split(pred, f = split.vec)
+        # KU commented out 4/27/23 to allow simChunk() to be run ithout parallel chunking to test memory shrotfall issue with Berkeley server
+        # split.vec <- rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)]
+        # pred <- split(pred, f = split.vec)
 
+        # KU commented out 4/27/23 to allow simChunk() to be run ithout parallel chunking to test memory shrotfall issue with Berkeley server
         # Simulated indices
-        S <- unlist(parallel::mclapply(pred, simChunk, mc.cores = cores))
+        #S <- unlist(parallel::mclapply(pred, simChunk, mc.cores = cores))
+
+        # KU added 4/27/23 to allow simChunk() to be run without parallel chunking to test memory shrotfall issue with Berkeley server
+        S <- simChunk(pred)
+        rm(pred)
 
         # Convert simulated index to donor response values
         S <- ydata[S, v]
