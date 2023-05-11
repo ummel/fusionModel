@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.2.5
+Version: 2.2.6
 Authors@R: c(
     person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "ummel@berkeley.edu"),
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),
@@ -12,6 +12,7 @@ Depends:
 Imports:
     data.table,
     dplyr,
+    collapse,
     fst,
     glmnet,
     lightgbm,
@@ -22,7 +23,9 @@ Imports:
     RANN,
     stats,
     utils,
-    zip
+    zip,
+    rlang,
+    tidyr
 Suggests:
     ggplot2
 Encoding: UTF-8
