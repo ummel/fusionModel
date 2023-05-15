@@ -68,44 +68,22 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Build a fusion model using RECS microdata</span></span></span>
-<span class="r-in"><span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span></span>
-<span class="r-in"><span><span class="op">?</span><span class="va">recs</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.975 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    68.0   143.0   193.0   311.2   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.974 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   141.5   187.7   292.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.32 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Write fusion output directly to disk</span></span></span>
-<span class="r-in"><span><span class="co"># Note that "results.fsd" will be written to working directory</span></span></span>
-<span class="r-in"><span><span class="va">recipient</span> <span class="op">&lt;-</span> <span class="va">recs</span><span class="op">[</span><span class="va">predictor.vars</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span>, csv <span class="op">=</span> <span class="st">"results.fsd"</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in fuse(data = recipient, fsn = fsn.path, M = 5, csv = "results.fsd"):</span> unused argument (csv = "results.fsd")</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Read the fusion output saved to disk</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">read_fsd</span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in eval(expr, envir, enclos):</span> object 'sim' not found</span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in eval(expr, envir, enclos):</span> object 'sim' not found</span>
-<span class="r-in"><span></span></span>
-</code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Build a fusion model using RECS microdata</span></span>
+<span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span>
+<span><span class="op">?</span><span class="va">recs</span></span>
+<span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span>
+<span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span>
+<span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Write fusion output directly to disk</span></span>
+<span><span class="co"># Note that "results.fsd" will be written to working directory</span></span>
+<span><span class="va">recipient</span> <span class="op">&lt;-</span> <span class="va">recs</span><span class="op">[</span><span class="va">predictor.vars</span><span class="op">]</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span>, csv <span class="op">=</span> <span class="st">"results.fsd"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Read the fusion output saved to disk</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">read_fsd</span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

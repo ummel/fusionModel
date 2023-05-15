@@ -107,48 +107,18 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">14</span><span class="op">:</span><span class="fl">16</span>, <span class="fl">20</span><span class="op">:</span><span class="fl">22</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">13</span><span class="op">]</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Fusion variable "blocks" are respected by prepXY()</span></span></span>
-<span class="r-in"><span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span>, <span class="va">y</span><span class="op">[</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Do the prep work...</span></span></span>
-<span class="r-in"><span><span class="va">prep</span> <span class="op">&lt;-</span> <span class="fu">prepXY</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">y</span>, x <span class="op">=</span> <span class="va">x</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Identifying 'x' that pass absolute Spearman correlation threshold</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fitting full models for each 'y'</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Iteratively constructing preferred fusion order</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Retained 12 of 12 predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 1.22 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># The result can be passed to train()</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">y</span>, x <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">x</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 12 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using specified set of predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 5: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 5: square_feet</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.98 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    67.0   178.5   211.4   345.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 5: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.967 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    61.0   138.0   178.4   265.2   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 4 of 5: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.973 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    60.0   136.0   189.4   302.2   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 5 of 5: heat_type, insulation</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 14.3 secs </span>
-<span class="r-in"><span></span></span>
-</code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">14</span><span class="op">:</span><span class="fl">16</span>, <span class="fl">20</span><span class="op">:</span><span class="fl">22</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">13</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># Fusion variable "blocks" are respected by prepXY()</span></span>
+<span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span>, <span class="va">y</span><span class="op">[</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Do the prep work...</span></span>
+<span><span class="va">prep</span> <span class="op">&lt;-</span> <span class="fu">prepXY</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">y</span>, x <span class="op">=</span> <span class="va">x</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># The result can be passed to train()</span></span>
+<span><span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">y</span>, x <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">x</span><span class="op">)</span></span>
+<span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

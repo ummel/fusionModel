@@ -136,149 +136,37 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Build a fusion model using RECS microdata</span></span></span>
-<span class="r-in"><span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span></span>
-<span class="r-in"><span><span class="op">?</span><span class="va">recs</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.974 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    72.0   152.0   197.4   307.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.976 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   152.0   195.2   318.0   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.36 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># When 'y' is a list, it can specify variables to fuse as a block</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"heating_share"</span>, <span class="st">"cooling_share"</span>, <span class="st">"other_share"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[1]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "electricity"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[2]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "natural_gas"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[3]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "heating_share" "cooling_share" "other_share"  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-in"><span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.974 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    70.0   154.0   200.7   324.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.972 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    63.0   146.0   189.9   295.0   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: heating_share, cooling_share, other_share</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 15.8 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># When 'x' is a list, it specifies which predictor variables to use for each 'y'</span></span></span>
-<span class="r-in"><span><span class="va">xlist</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">predictor.vars</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span>, <span class="va">predictor.vars</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">8</span><span class="op">]</span>, <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">xlist</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[1]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "income"    "age"       "race"      "education"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[2]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "age"         "race"        "education"   "employment"  "hh_size"    </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [6] "division"    "urban_rural"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [[3]]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "income"      "age"         "race"        "education"   "employment" </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [6] "hh_size"     "division"    "urban_rural" "climate"     "renter"     </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [11] "home_type"  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-in"><span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">xlist</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using specified set of predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.934 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0   100.0   212.0   236.5   378.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.967 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    62.0   176.5   217.3   377.0   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: heating_share, cooling_share, other_share</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 13.9 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Specify a single set of LightGBM hyperparameters</span></span></span>
-<span class="r-in"><span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span>,</span></span>
-<span class="r-in"><span>      hyper <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>boosting <span class="op">=</span> <span class="st">"goss"</span>,</span></span>
-<span class="r-in"><span>                   feature_fraction <span class="op">=</span> <span class="fl">0.8</span>,</span></span>
-<span class="r-in"><span>                   num_iterations <span class="op">=</span> <span class="fl">300</span></span></span>
-<span class="r-in"><span>      <span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.965 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    70.0   149.0   190.4   288.0   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.964 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    62.5   143.0   186.1   286.5   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: heating_share, cooling_share, other_share</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 19 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Specify a range of LightGBM hyperparameters to search over</span></span></span>
-<span class="r-in"><span><span class="co"># This takes longer, because there are more models to test</span></span></span>
-<span class="r-in"><span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span>,</span></span>
-<span class="r-in"><span>      hyper <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>num_leaves <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">30</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                   feature_fraction <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.9</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                   num_iterations <span class="op">=</span> <span class="fl">50</span></span></span>
-<span class="r-in"><span>      <span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.983 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    78.0   173.0   209.8   333.5   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.983 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   136.0   183.4   277.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: heating_share, cooling_share, other_share</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 36.6 secs </span>
-</code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Build a fusion model using RECS microdata</span></span>
+<span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span>
+<span><span class="op">?</span><span class="va">recs</span></span>
+<span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span>
+<span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span>
+<span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># When 'y' is a list, it can specify variables to fuse as a block</span></span>
+<span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"heating_share"</span>, <span class="st">"cooling_share"</span>, <span class="st">"other_share"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">fusion.vars</span></span>
+<span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># When 'x' is a list, it specifies which predictor variables to use for each 'y'</span></span>
+<span><span class="va">xlist</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">predictor.vars</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span>, <span class="va">predictor.vars</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">8</span><span class="op">]</span>, <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span><span class="va">xlist</span></span>
+<span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">xlist</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Specify a single set of LightGBM hyperparameters</span></span>
+<span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span>,</span>
+<span>      hyper <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>boosting <span class="op">=</span> <span class="st">"goss"</span>,</span>
+<span>                   feature_fraction <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>                   num_iterations <span class="op">=</span> <span class="fl">300</span></span>
+<span>      <span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Specify a range of LightGBM hyperparameters to search over</span></span>
+<span><span class="co"># This takes longer, because there are more models to test</span></span>
+<span><span class="fu">train</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span>,</span>
+<span>      hyper <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>num_leaves <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">30</span><span class="op">)</span>,</span>
+<span>                   feature_fraction <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
+<span>                   num_iterations <span class="op">=</span> <span class="fl">50</span></span>
+<span>      <span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

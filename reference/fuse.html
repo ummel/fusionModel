@@ -91,141 +91,34 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Build a fusion model using RECS microdata</span></span></span>
-<span class="r-in"><span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span></span>
-<span class="r-in"><span><span class="op">?</span><span class="va">recs</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.976 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    69.5   155.0   201.1   330.5   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.976 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    70.0   153.0   196.8   312.2   498.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 7.18 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Generate single implicate of synthetic 'fusion.vars',</span></span></span>
-<span class="r-in"><span><span class="co">#  using original RECS data as the recipient</span></span></span>
-<span class="r-in"><span><span class="va">recipient</span> <span class="op">&lt;-</span> <span class="va">recs</span><span class="op">[</span><span class="va">predictor.vars</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Generating 1 implicate </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Returning data.table with fusion results</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.737 secs </span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       19140         905          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1        9010           0 Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       19840         732          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        6620         584          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        4740         695          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        4870           0 Individual window/wall or portable units</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Calling fuse() again produces different results</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Generating 1 implicate </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Returning data.table with fusion results</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.779 secs </span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                     aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       12250         774            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       25530           0            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       18270           0            Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        6140         443   Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        5090         693 Both a central system and individual units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        1460         248   Individual window/wall or portable units</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Generate multiple implicates</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Generating 5 implicates </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Returning data.table with fusion results</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 1.85 secs </span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1        9730         700          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       12170           0 Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       19500         610          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1       15400         953          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        8490         993          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        2586           0 Individual window/wall or portable units</span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">M</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    1    2    3    4    5 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 5686 5686 5686 5686 </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Optionally, write results directly to disk</span></span></span>
-<span class="r-in"><span><span class="co"># Note that "results.fsd" will be written to working directory</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span>, fsd <span class="op">=</span> <span class="st">"results.fsd"</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Generating 5 implicates </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Writing fusion output to .fsd file </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion results saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/results.fsd </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 2.02 secs </span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="read_fsd.html">read_fsd</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in data.table::fread(file = csv, data.table = TRUE, nThread = cores):</span> To read gz and bz2 files directly, fread() requires 'R.utils' package which cannot be found. Please install 'R.utils' using 'install.packages('R.utils')'.</span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "/home/runner/work/fusionModel/fusionModel/docs/reference/results.fsd"</span>
-<span class="r-in"><span></span></span>
-</code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Build a fusion model using RECS microdata</span></span>
+<span><span class="co"># Note that "fusion_model.fsn" will be written to working directory</span></span>
+<span><span class="op">?</span><span class="va">recs</span></span>
+<span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span>
+<span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span>
+<span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Generate single implicate of synthetic 'fusion.vars',</span></span>
+<span><span class="co">#  using original RECS data as the recipient</span></span>
+<span><span class="va">recipient</span> <span class="op">&lt;-</span> <span class="va">recs</span><span class="op">[</span><span class="va">predictor.vars</span><span class="op">]</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Calling fuse() again produces different results</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Generate multiple implicates</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">M</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Optionally, write results directly to disk</span></span>
+<span><span class="co"># Note that "results.fsd" will be written to working directory</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">fuse</span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">5</span>, fsd <span class="op">=</span> <span class="st">"results.fsd"</span><span class="op">)</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="read_fsd.html">read_fsd</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

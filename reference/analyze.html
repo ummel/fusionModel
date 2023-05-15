@@ -138,141 +138,84 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Build a fusion model using RECS microdata</span></span></span>
-<span class="r-in"><span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span></span>
-<span class="r-in"><span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using all available predictors for each fusion variable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.97 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    70.0   153.0   196.7   308.5   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- R-squared of cluster means: 0.975 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   -- Number of neighbors in each cluster:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    10.0    66.0   147.0   186.8   286.0   499.0 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Training step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion model saved to:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  /home/runner/work/fusionModel/fusionModel/docs/reference/fusion_model.fsn </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 9.27 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Generate 30 implicates of the 'fusion.vars' using original RECS as the recipient</span></span></span>
-<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 fusion variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11 initial predictor variables</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5686 observations</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Generating 30 implicates </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 1 of 3: electricity</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 2 of 3: natural_gas</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Fusion step 3 of 3: aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Predicting LightGBM models</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -- Simulating fused values</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Returning data.table with fusion results</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 10.2 secs </span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    M electricity natural_gas                                   aircon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1       15500         485          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1       11730           0 Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1       16960           0 Individual window/wall or portable units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1        8250         747          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 1        7130        1143          Central air conditioning system</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 1        4440         252 Individual window/wall or portable units</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">#---------</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Multiple types of analyses can be done at once</span></span></span>
-<span class="r-in"><span><span class="co"># This calculates estimates using the full sample</span></span></span>
-<span class="r-in"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                           median <span class="op">=</span> <span class="st">"electricity"</span>,</span></span>
-<span class="r-in"><span>                           sum <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"aircon"</span><span class="op">)</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span></span>
-<span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Assuming uniform sample weights</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.569 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/View.html" class="external-link">View</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>unable to open display</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in .External2(C_dataviewer, x, title):</span> unable to start data viewer</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">#-----</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Mean electricity consumption, by climate zone and urban/rural status</span></span></span>
-<span class="r-in"><span><span class="va">result1</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span></span>
-<span class="r-in"><span>                  static <span class="op">=</span> <span class="va">recs</span>,</span></span>
-<span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span></span>
-<span class="r-in"><span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.0854 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Same as above but including sample weight uncertainty</span></span></span>
-<span class="r-in"><span><span class="co"># Note that only the first 30 replicate weights are used internally</span></span></span>
-<span class="r-in"><span><span class="va">result2</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span></span>
-<span class="r-in"><span>                  static <span class="op">=</span> <span class="va">recs</span>,</span></span>
-<span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span></span>
-<span class="r-in"><span>                  rep_weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"rep_"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">96</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 of 96 replicate weights</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 0.176 secs </span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Helper function for comparison plots</span></span></span>
-<span class="r-in"><span><span class="va">pfun</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span> <span class="op">{</span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">}</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Inclusion of replicate weights does not affect estimates, but it does</span></span></span>
-<span class="r-in"><span><span class="co"># increase margin of error due to uncertainty in RECS sample weights</span></span></span>
-<span class="r-in"><span><span class="fu">pfun</span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">est</span>, <span class="va">result2</span><span class="op">$</span><span class="va">est</span><span class="op">)</span></span></span>
-<span class="r-plt img"><img src="analyze-1.png" alt="" width="700" height="433"></span>
-<span class="r-in"><span><span class="fu">pfun</span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">moe</span>, <span class="va">result2</span><span class="op">$</span><span class="va">moe</span><span class="op">)</span></span></span>
-<span class="r-plt img"><img src="analyze-2.png" alt="" width="700" height="433"></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Notice that relative uncertainty declines with subset size</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">N</span>, <span class="va">result1</span><span class="op">$</span><span class="va">moe</span> <span class="op">/</span> <span class="va">result1</span><span class="op">$</span><span class="va">est</span><span class="op">)</span></span></span>
-<span class="r-plt img"><img src="analyze-3.png" alt="" width="700" height="433"></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">#-----</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Use a custom function to perform more complex analyses</span></span></span>
-<span class="r-in"><span><span class="co"># Custom function should return a data frame with non-standard target variables</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">my_fun</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">data</span><span class="op">)</span> <span class="op">{</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Manipulate 'data' as desired</span></span></span>
-<span class="r-in"><span>  <span class="co"># All variables in 'implicates' and 'static' are available</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Construct electricity consumption per square foot</span></span></span>
-<span class="r-in"><span>  <span class="va">kwh_per_ft2</span> <span class="op">&lt;-</span> <span class="va">data</span><span class="op">$</span><span class="va">electricity</span> <span class="op">/</span> <span class="va">data</span><span class="op">$</span><span class="va">square_feet</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Binary (T/F) indicator if household uses natural gas</span></span></span>
-<span class="r-in"><span>  <span class="va">use_natural_gas</span> <span class="op">&lt;-</span> <span class="va">data</span><span class="op">$</span><span class="va">natural_gas</span> <span class="op">&gt;</span> <span class="fl">0</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Return data.frame of custom variables to be analyzed</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">kwh_per_ft2</span>, <span class="va">use_natural_gas</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Do analysis using variables produced by custom function</span></span></span>
-<span class="r-in"><span><span class="co"># Can included non-custom target variables as well</span></span></span>
-<span class="r-in"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"kwh_per_ft2"</span>, <span class="st">"use_natural_gas"</span>, <span class="st">"electricity"</span><span class="op">)</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span></span>
-<span class="r-in"><span>                  static <span class="op">=</span> <span class="va">recs</span>,</span></span>
-<span class="r-in"><span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span></span>
-<span class="r-in"><span>                  fun <span class="op">=</span> <span class="va">my_fun</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Using 30 implicates</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Applying custom 'fun' to data</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Total processing time: 1.2 secs </span>
-<span class="r-in"><span></span></span>
-</code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># Build a fusion model using RECS microdata</span></span>
+<span><span class="va">fusion.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span></span>
+<span><span class="va">predictor.vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">recs</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="fl">12</span><span class="op">]</span></span>
+<span><span class="va">fsn.path</span> <span class="op">&lt;-</span> <span class="fu"><a href="train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, y <span class="op">=</span> <span class="va">fusion.vars</span>, x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Generate 30 implicates of the 'fusion.vars' using original RECS as the recipient</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recs</span>, fsn <span class="op">=</span> <span class="va">fsn.path</span>, M <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co">#---------</span></span>
+<span></span>
+<span><span class="co"># Multiple types of analyses can be done at once</span></span>
+<span><span class="co"># This calculates estimates using the full sample</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"natural_gas"</span>, <span class="st">"aircon"</span><span class="op">)</span>,</span>
+<span>                           median <span class="op">=</span> <span class="st">"electricity"</span>,</span>
+<span>                           sum <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"electricity"</span>, <span class="st">"aircon"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span>
+<span>                  weight <span class="op">=</span> <span class="st">"weight"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/View.html" class="external-link">View</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co">#-----</span></span>
+<span></span>
+<span><span class="co"># Mean electricity consumption, by climate zone and urban/rural status</span></span>
+<span><span class="va">result1</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span>
+<span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span>
+<span>                  static <span class="op">=</span> <span class="va">recs</span>,</span>
+<span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span>
+<span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Same as above but including sample weight uncertainty</span></span>
+<span><span class="co"># Note that only the first 30 replicate weights are used internally</span></span>
+<span><span class="va">result2</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span>
+<span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span>
+<span>                  static <span class="op">=</span> <span class="va">recs</span>,</span>
+<span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span>
+<span>                  rep_weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"rep_"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">96</span><span class="op">)</span>,</span>
+<span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"climate"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Helper function for comparison plots</span></span>
+<span><span class="va">pfun</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span> <span class="op">{</span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Inclusion of replicate weights does not affect estimates, but it does</span></span>
+<span><span class="co"># increase margin of error due to uncertainty in RECS sample weights</span></span>
+<span><span class="fu">pfun</span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">est</span>, <span class="va">result2</span><span class="op">$</span><span class="va">est</span><span class="op">)</span></span>
+<span><span class="fu">pfun</span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">moe</span>, <span class="va">result2</span><span class="op">$</span><span class="va">moe</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Notice that relative uncertainty declines with subset size</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">result1</span><span class="op">$</span><span class="va">N</span>, <span class="va">result1</span><span class="op">$</span><span class="va">moe</span> <span class="op">/</span> <span class="va">result1</span><span class="op">$</span><span class="va">est</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co">#-----</span></span>
+<span></span>
+<span><span class="co"># Use a custom function to perform more complex analyses</span></span>
+<span><span class="co"># Custom function should return a data frame with non-standard target variables</span></span>
+<span></span>
+<span><span class="va">my_fun</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">data</span><span class="op">)</span> <span class="op">{</span></span>
+<span></span>
+<span>  <span class="co"># Manipulate 'data' as desired</span></span>
+<span>  <span class="co"># All variables in 'implicates' and 'static' are available</span></span>
+<span></span>
+<span>  <span class="co"># Construct electricity consumption per square foot</span></span>
+<span>  <span class="va">kwh_per_ft2</span> <span class="op">&lt;-</span> <span class="va">data</span><span class="op">$</span><span class="va">electricity</span> <span class="op">/</span> <span class="va">data</span><span class="op">$</span><span class="va">square_feet</span></span>
+<span></span>
+<span>  <span class="co"># Binary (T/F) indicator if household uses natural gas</span></span>
+<span>  <span class="va">use_natural_gas</span> <span class="op">&lt;-</span> <span class="va">data</span><span class="op">$</span><span class="va">natural_gas</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span></span>
+<span>  <span class="co"># Return data.frame of custom variables to be analyzed</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">kwh_per_ft2</span>, <span class="va">use_natural_gas</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Do analysis using variables produced by custom function</span></span>
+<span><span class="co"># Can included non-custom target variables as well</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analyze</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"kwh_per_ft2"</span>, <span class="st">"use_natural_gas"</span>, <span class="st">"electricity"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                  implicates <span class="op">=</span> <span class="va">sim</span>,</span>
+<span>                  static <span class="op">=</span> <span class="va">recs</span>,</span>
+<span>                  weight <span class="op">=</span> <span class="st">"weight"</span>,</span>
+<span>                  fun <span class="op">=</span> <span class="va">my_fun</span><span class="op">)</span></span>
+<span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>
