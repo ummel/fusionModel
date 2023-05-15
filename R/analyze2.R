@@ -85,6 +85,20 @@
 #'
 #' @export
 
+#-----
+
+# library(collapse)
+# library(tidyverse)
+# library(data.table)
+# source("R/utils.R")
+
+# result <- analyze2(~sum(electricity > 10e3),
+#                    implicates = sim,
+#                    static = recs,
+#                    weight = "weight",
+#                    rep_weights = paste0("rep_", 1:96),
+#                    by = "division")
+
 #-------------------------------
 #-------------------------------
 
@@ -316,7 +330,7 @@ analyze2 <- function(analyses,
   # Rename any solo-variable inner expression variables
   # This simply changes the original name to the "A__X" convention
   ind <- solo & !duplicated(anames)
-  setnames(sim, old = unlist(ylist[ind]), new = anames[ind])
+  if (any(ind)) setnames(sim, old = unlist(ylist[ind]), new = anames[ind])
 
   # Ensure all categorical analysis variables are factors for memory efficiency
   if (length(cat_vars(sim, return = "names"))) cat_vars(sim) <- dapply(cat_vars(sim), as.factor)
