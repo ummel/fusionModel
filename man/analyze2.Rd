@@ -78,20 +78,20 @@ The use of sum() or mean() with an inner expression that returns a categorical v
 # Build a fusion model using RECS microdata
 fusion.vars <- c("electricity", "natural_gas", "aircon", "insulation")
 predictor.vars <- names(recs)[2:12]
-recipient <- recs[predictor.vars]
 fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 
 # Generate 30 implicates of the 'fusion.vars' using original RECS as the recipient
+recipient <- recs[c(predictor.vars, "weight", paste0("rep_", 1:96))]
 sim <- fuse(data = recipient, fsn = fsn.path, M = 30)
 head(sim)
 
-#---------
+#-----
 
 # Example of custom pre-processing function
 myfun <- function(v1, v2, v3) v1 + v2 + v3
 
-# Various ways to specify the analyses...
-analyses <- list(
+# Various ways to specify analyses...
+my.analyses <- list(
   # Return means for 'electricity' and proportions for 'aircon'
   mean = c("electricity", "aircon"),
   # Identical to mean = "electricity"; duplicate analyses automatically removed
@@ -110,15 +110,31 @@ analyses <- list(
   mycustom ~ median(myfun(electricity, natural_gas, v3 = 100))
 )
 
-# Do the requeted analyses by "division"
-result <- analyze2(analyses,
-                  implicates = sim,
-                  static = recipient,
-                  weight = "weight",
-                  rep_weights = paste0("rep_", 1:96),
-                  by = "division")
+# Do the requeted analyses, by "division"
+result <- analyze2(
+ analyses = my.analyses,
+ implicates = sim,
+ static = recipient,
+ weight = "weight",
+ rep_weights = paste0("rep_", 1:96),
+ by = "division"
+)
 head(result)
 
+#-----
+
+# To calculate a conditional estimate, set unused/ignored observations to NA
+# All outer functions execute with 'na.rm = TRUE'
+# Example: mean natural_gas conditional on natural_gas > 0
+# data.table::fifelse() is much faster than base::ifelse() for large data
+result <- analyze2(
+ analyses = ~mean(data.table::fifelse(natural_gas > 0, natural_gas, NA_real_)),
+ implicates = sim,
+ static = recipient,
+ weight = "weight",
+ rep_weights = paste0("rep_", 1:96),
+ by = "division"
+)
 }
 \references{
 Rubin, D.B. (1987). \emph{Multiple imputation for nonresponse in surveys}. Hoboken, NJ: Wiley.
