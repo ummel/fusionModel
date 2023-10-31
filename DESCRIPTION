@@ -6,7 +6,7 @@ Authors@R: c(
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),
     person(given = "Miguel", family = "Poblete Cazenave", role = "ctb"))
 Description: Data fusion and analysis of synthetic data in R.
-License: GPL-3
+License: GPL (>= 3)
 Depends: 
     R (>= 3.5.0)
 Imports:
