@@ -265,12 +265,11 @@ fuse <- function(data,
       xv <- meta$xpreds[[i]]
 
       # 'dpred' matrix used for LGB prediction
-      # If 'xv' is a subset of the available predictors,
-      # 'dmat' is subsetted once here to avoid multiple (expensive) subsetting below
+      # If 'xv' is a subset of the available predictors, 'dmat' is subsetted once here to avoid multiple (expensive) subsetting below
       dpred <- if (all(suppressWarnings(colnames(dmat) == xv))) {
         dmat
       } else {
-        dmat[, xv]
+        dmat[, xv, drop = FALSE]
       }
 
       # Path to lightGBM model(s) to temp directory
@@ -287,10 +286,11 @@ fuse <- function(data,
         m <- grep("z\\.txt$", mods, value = TRUE)
         if (length(m)) {
           mod <- lightgbm::lgb.load(filename = file.path(td, m))
-          p <- predict(object = mod, data = dpred, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+          #p <- predict(object = mod, data = dpred, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+          p <- predict(object = mod, newdata = dpred, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
 
           # TEMP CHECK: To confirm that prediction is accurate when using 'predict_disable_shape_check = TRUE', above
-          # p2 <- predict(object = mod, data = dpred, reshape = TRUE, params = list(num_threads = cores))
+          # p2 <- predict(object = mod, newdata = dpred, params = list(num_threads = cores))
           # stopifnot(all.equal(p, p2))
 
           zind <- p > runif(n = nrow(dmat)) # Row indices where a zero has been simulated (TRUE for a zero)
@@ -311,11 +311,12 @@ fuse <- function(data,
         mod <- lightgbm::lgb.load(filename = file.path(td, m))
 
         # It is more memory efficient (and often faster) to simply predict for all observations and then subset for 'zind' afterwards
-        p <- predict(object = mod, data = dpred, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+        #p <- predict(object = mod, data = dpred, reshape = TRUE, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
+        p <- predict(object = mod, newdata = dpred, params = list(num_threads = cores, predict_disable_shape_check = TRUE))
         if (any(zind)) p <- p[!zind]
 
         # TEMP CHECK: To confirm that prediction is accurate when using 'predict_disable_shape_check = TRUE', above
-        # p2 <- predict(object = mod, data = dpred[!zind, ], reshape = TRUE, params = list(num_threads = cores))
+        # p2 <- predict(object = mod, newdata = dpred[!zind, ], params = list(num_threads = cores))
         # stopifnot(identical(p, p2))
 
         if (!is.matrix(p)) p <- matrix(p)
@@ -403,20 +404,31 @@ fuse <- function(data,
 
         }
 
-        # KU commented out 4/27/23 to allow simChunk() to be run ithout parallel chunking to test memory shrotfall issue with Berkeley server
+        # KU commented out 4/27/23 to allow simChunk() to be run without parallel chunking to test memory shortfall issue with Berkeley server
         # split.vec <- rep(1:cores, each = ceiling(nrow(pred) / cores))[1:nrow(pred)]
         # pred <- split(pred, f = split.vec)
 
-        # KU commented out 4/27/23 to allow simChunk() to be run ithout parallel chunking to test memory shrotfall issue with Berkeley server
+        # KU commented out 4/27/23 to allow simChunk() to be run without parallel chunking to test memory shortfall issue with Berkeley server
         # Simulated indices
         #S <- unlist(parallel::mclapply(pred, simChunk, mc.cores = cores))
 
-        # KU added 4/27/23 to allow simChunk() to be run without parallel chunking to test memory shrotfall issue with Berkeley server
+        # KU added 4/27/23 to allow simChunk() to be run without parallel chunking to test memory shortfall issue with Berkeley server
+        # TO DO: Figure out how to do the simulation step in parallel without blowing up memory
         S <- simChunk(pred)
         rm(pred)
 
         # Convert simulated index to donor response values
         S <- ydata[S, v]
+
+        #---
+        # NOTE: Initial testing suggest this does not help with consistency of multivariate models fit to fusion output
+        # !!!TESTING: Optionally, force the non-zero simulated values to take the overall empirical distribution in 'ydata'
+        # q <- data.table::frank(S, ties.method = "random") / length(S)
+        # Sy <- ydata[, v]
+        # Sy <- Sy[Sy != 0]  # NOT SAFE
+        # m <- findInterval(q, seq(0, 1, by = 1 / length(Sy)), left.open = TRUE)
+        # S <- sort(Sy)[m]
+        #---
 
         # If zeros are simulated separately, integrate them into 'S'
         # This is only relevant when fusing a single continuous variable

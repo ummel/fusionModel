@@ -151,7 +151,7 @@ train <- function(data,
     length(intersect(y, x)) == 0
     is.character(fsn) & endsWith(fsn, ".fsn")
     is.null(weight) | (length(weight) == 1 & weight %in% names(data) & !weight %in% c(y, x))
-    nfolds > 0
+    nfolds >= 0
     nquantiles > 0
     nclusters >= 0
     all(krange >= 5) & length(krange) == 2
@@ -314,19 +314,22 @@ train <- function(data,
   # If forking, LightGBM uses single core internally
   hyper$num_threads <- ifelse(fork, 1L, cores)
 
-  # The 'dataset' parameters 'max_bin', 'min_data_in_bin', and 'max_cat_threshold' can only have a single value (they are not eligible to be varied within fitLGB)
-  # Note that 'feature_pre_filter' is forced to FALSE if there are multiple 'min_data_in_leaf' values within 'hyper'
+  # The 'dataset' parameters 'min_data_in_leaf', 'max_bin', 'min_data_in_bin', and 'max_cat_threshold' can only have a single value (they are not eligible to be varied within fitLGB)
   # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
-  for (v in c("max_bin", "min_data_in_bin", "max_cat_threshold")) {
+  for (v in c("min_data_in_leaf", "max_bin", "min_data_in_bin", "max_cat_threshold")) {
     if (length(hyper[[v]]) > 1) {
       hyper[[v]] <- hyper[[v]][1]
       cat("Only one", v, "value allowed. Using:", hyper[[v]], "\n")
     }
   }
+  # Note that 'feature_pre_filter' is forced to TRUE (for speed), which means only one 'min_data_in_leaf' value is allowed in 'hyper'
   dparams <- list(max_bin = hyper$max_bin,
                   min_data_in_bin = hyper$min_data_in_bin,
                   max_cat_threshold = hyper$max_cat_threshold,
-                  feature_pre_filter = length(hyper$min_data_in_leaf) == 1)
+                  min_data_in_leaf = hyper$min_data_in_leaf,
+                  feature_pre_filter = TRUE)
+  # Remove 'dparams' hyperparamters from 'hyper' object
+  hyper$min_data_in_leaf <- NULL
   hyper$max_bin <- NULL
   hyper$min_data_in_bin <- NULL
   hyper$max_cat_threshold <- NULL
@@ -391,10 +394,14 @@ train <- function(data,
 
         # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
         # List indicating random assignment of folds
-        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
+        cv.folds <- if (nfolds == 0) {
+          NULL
+        } else {
+          stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
+        }
 
         # Create full LGB training dataset with all available observations
-        dfull <- lightgbm::lgb.Dataset(data = dmat[, xv],
+        dfull <- lightgbm::lgb.Dataset(data = dmat[, xv, drop = FALSE],
                                        label = as.integer(Y == 0),
                                        weight = W.lgb,
                                        categorical_feature = intersect(xv, nominal),
@@ -402,16 +409,16 @@ train <- function(data,
           lightgbm::lgb.Dataset.construct()
 
         # Create 'dtrain' and 'dvalid' sets, if requested
-        if (nfolds <= 1) {
+        if (nfolds > 0 & nfolds <= 1) {
           ind <- which(cv.folds)
-          dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
+          dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
                                           label = as.integer(Y == 0)[ind],
                                           weight = W.lgb[ind],
                                           categorical_feature = intersect(xv, nominal),
                                           params = dparams) %>%
             lightgbm::lgb.Dataset.construct()
 
-          dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
+          dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv, drop = FALSE],
                                           label = as.integer(Y == 0)[-ind],
                                           weight = W.lgb[-ind],
                                           categorical_feature = intersect(xv, nominal),
@@ -439,7 +446,8 @@ train <- function(data,
         # Conditional probability of zero for the non-zero training observations
         # Note that 'zc' will be NULL in case of single continuous variables (zeros are simulated directly by 'zmod')
         if (block) {
-          zc <- matrix(predict(object = zmod, data = dmat[pi, xv], reshape = TRUE))
+          #zc <- matrix(predict(object = zmod, data = dmat[pi, xv], reshape = TRUE))
+          zc <- matrix(predict(object = zmod, newdata = dmat[pi, xv]))
           colnames(zc) <- paste0(y, "_z")
         }
 
@@ -452,10 +460,14 @@ train <- function(data,
       # Build LightGBM datasets for mean and quantile models
 
       # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
-      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
+      cv.folds <- if (nfolds == 0) {
+        NULL
+      } else {
+        stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
+      }
 
       # Create full LGB training dataset with all available observations
-      dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv],
+      dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv, drop = FALSE],
                                      label = Y[ti],
                                      weight = W.lgb[ti],
                                      categorical_feature = intersect(xv, nominal),
@@ -463,16 +475,16 @@ train <- function(data,
         lightgbm::lgb.Dataset.construct()
 
       # Create 'dtrain' and 'dvalid' sets, if requested
-      if (nfolds <= 1) {
+      if (nfolds > 0 & nfolds <= 1) {
         ind <- which(ti)[cv.folds]
-        dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv],
+        dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
                                         label = Y[ind],
                                         weight = W.lgb[ind],
                                         categorical_feature = intersect(xv, nominal),
                                         params = dparams) %>%
           lightgbm::lgb.Dataset.construct()
 
-        dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv],
+        dvalid <- lightgbm::lgb.Dataset(data = dmat[-ind, xv, drop = FALSE],
                                         label = Y[-ind],
                                         weight = W.lgb[-ind],
                                         categorical_feature = intersect(xv, nominal),
@@ -511,7 +523,8 @@ train <- function(data,
 
       # Predict conditional mean/probabilities for the training observations
       if (block | type == "continuous") {
-        mc <- predict(object = mmod, data = dmat[pi, xv], reshape = TRUE)
+        #mc <- predict(object = mmod, data = dmat[pi, xv, drop = FALSE], reshape = TRUE)
+        mc <- predict(object = mmod, newdata = dmat[pi, xv, drop = FALSE])
         if (!is.matrix(mc)) mc <- matrix(mc)
         colnames(mc) <- paste0(y, "_m", 1:ncol(mc))
       }
@@ -538,7 +551,7 @@ train <- function(data,
 
         # Predict conditional quantiles for full dataset
         qc <- matrix(data = NA, nrow = sum(pi), ncol = length(ptiles))
-        for (k in 1:length(ptiles)) qc[, k] <- predict(object = qmods[[k]], data = dmat[pi, xv])
+        for (k in 1:length(ptiles)) qc[, k] <- predict(object = qmods[[k]], newdata = dmat[pi, xv, drop = FALSE])
         colnames(qc) <- paste0(y, "_", names(qmods))
 
         # Save LightGBM quantile models (q**.txt) to disk
