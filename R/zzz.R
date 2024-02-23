@@ -2,7 +2,7 @@
 #' @import collapse
 #' @import dplyr
 #' @rawNamespace import(stats, except = c(filter, lag, D))
-#' @rawNamespace import(data.table, except = c(first, last, between))
+#' @rawNamespace import(data.table, except = c(first, last, between, fdroplevels))
 NULL
 
 #-----
