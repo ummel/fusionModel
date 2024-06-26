@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.2.7
+Version: 2.2.8
 Authors@R: c(
     person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "ummel@berkeley.edu"),
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),
@@ -27,7 +27,8 @@ Imports:
     rlang,
     tidyr
 Suggests:
-    ggplot2
+    ggplot2,
+    scam
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
