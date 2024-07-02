@@ -8,7 +8,7 @@
 #' @param N Integer. Size of random sample to use (if necessary) to reduce computation time.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
-#' @details The smoothing is accomplished via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, eliminates any observations with outlier derivative values (i.e. unusually small or large "jumps"), and then fits a monotonic spline to derive the final relationship. If the SCAM model fails to fit, the function falls back to \code{\link[stats]{loess}} with predictions coerced to monotonic. If LOESS fails, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
+#' @details The smoothing is accomplished via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, removes points with zero or outlier derivative values (i.e. flat spots or unusually steep jumps), and then fits a monotonic spline to the remaining points to derive the final relationship. If the SCAM model fails to fit, the function falls back to \code{\link[stats]{loess}} with predictions coerced to monotonic. If LOESS fails, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
 #' @examples
 #' y <- makeMonotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
@@ -111,14 +111,18 @@ makeMonotonic <- function(x,
 
     # Set observations with zero-value or outlier derivatives to NA
     spd <- spf(xu, deriv = 1)
-    spd[spd == 0] <- NA
+    spd[spd == 0] <- NA  # Zero-derivative (flat) points set to NA
     z <- (spd - median(spd, na.rm = TRUE)) / mad(spd, na.rm = TRUE)
-    spd[abs(z) > 3.5] <- NA
+    spd[abs(z) > 3.5] <- NA  # Outlier derivatives (unusually steep) set to NA
+    spd[c(1, length(spd))] <- 1 # First and last points are not allowed to be NA
 
-    # Re-fit monotonic spline, interpolating over any initially "flat" (zero derivative) or unusually steep locales
-    xu2 <- xu[!is.na(spd)]
-    p2 <- p[!is.na(spd)]
-    spf <- splinefun(xu2, p2, method = "monoH.FC")
+    # Re-fit monotonic spline, interpolating over remaining non-NA points
+    # Skip this step if the number of finite points remaining is small
+    if (sum(is.finite(spd)) >= 10) {
+      xu2 <- xu[!is.na(spd)]
+      p2 <- p[!is.na(spd)]
+      spf <- splinefun(xu2, p2, method = "monoH.FC")
+    }
 
     # Make 'y' predictions for all 'x'
     yout <- if (length(xu) < 1000) {
