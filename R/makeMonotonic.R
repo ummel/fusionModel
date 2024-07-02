@@ -7,8 +7,8 @@
 #' @param w Numeric. Optional observation weights.
 #' @param N Integer. Size of random sample to use (if necessary) to reduce computation time.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
-#' @param plot Logical. Plot the original data points and returned monotonic relationship?
-#' @details The smoothing is accomplished via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, eliminates any observations with outlier derivative values (i.e. unusually small or large "jumps"), and then fits a monotonic spline to derive the final relationship. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is simply forced in the result.
+#' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
+#' @details The smoothing is accomplished via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, eliminates any observations with outlier derivative values (i.e. unusually small or large "jumps"), and then fits a monotonic spline to derive the final relationship. If the SCAM model fails to fit, the function falls back to \code{\link[stats]{loess}} with predictions coerced to monotonic. If LOESS fails, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
 #' @examples
 #' y <- makeMonotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
@@ -21,16 +21,17 @@
 # TEST
 # library(dplyr)
 # library(data.table())
+#
 # d <- fusionModel::read_fsd("~/Downloads/RECS_2020_2019_fused_UP.fsd")
-# acs <- fst::read_fst("survey-processed/ACS/2019/ACS_2019_H_processed.fst")
+# acs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/ACS/2019/ACS_2019_H_processed.fst")
 #
 # test <- d %>%
 #   filter(M == 1) %>%
 #   cbind(acs) %>%
-#   filter(state == 25, puma10 == "04303") %>%
+#   filter(state == 25) %>%
 #   as.data.table()
 #
-# microbenchmark(test[, dollarlp_z :=  makeMonotonic(x = btulp, y = dollarlp, w = weight), by = .(state, puma10)])
+# test[, dollarlp_z :=  makeMonotonic(x = btulp, y = dollarlp, w = weight), by = .(state, puma10)]
 
 #---------
 
@@ -78,43 +79,57 @@ makeMonotonic <- function(x,
     w <- w[i]
   }
 
+  # Wrapper around tryCatch() that traps warnings as well as errors
+  try2 <- function(...) tryCatch(..., error = function(e) e, warning = function(w) w)
+
   # Is y decreasing or increasing with x?
-  inc <- cor(x, y) > 0
+  inc <- suppressWarnings(cor(x, y) > 0)
 
   # Fit monotonic SCAM model
-  try(m <- scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
-
-  # If the SCAM model fits without error, use the scam model to predict 'y' for unique 'x' values
+  m <- try2(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w))
+  # If the SCAM model is successful, use the model to predict 'y' for unique 'x' values
   if (inherits(m, "scam")) {
     p <- as.vector(predict(m, newdata = data.frame(x = xu), type = "response"))
   } else {
     # If SCAM model fails, fall back to LOESS model and coerce the predictions to monotonic
-    m <- stats::loess(y ~ x, weights = w, control = loess.control(surface = "direct"))
-    p <- predict(m, newdata = data.frame(x = xu))
-    p <- sort(p) # Force monotonic predictions
-    if (!inc) p <- rev(p)
+    m <- try2(stats::loess(y ~ x, weights = w, control = loess.control(surface = "direct")))
+    if (inherits(m, "loess")) {
+      p <- predict(m, newdata = data.frame(x = xu))
+      p <- sort(p) # Force monotonic predictions
+      if (!inc) p <- rev(p)
+    } else {
+      # If LOESS model fails, fall back to OLS model and make simple linear predictions
+      m <- stats::lm(y ~ x, weights = w)
+      p <- as.vector(suppressWarnings(predict(m, newdata = data.frame(x = xu))))
+    }
   }
 
-  # Fit monotonic spline to the predictions
-  spf <- splinefun(xu, p, method = "monoH.FC")
+  if (length(p) > 1) {
 
-  # Set observations with zero-value or outlier derivatives to NA
-  spd <- spf(xu, deriv = 1)
-  spd[spd == 0] <- NA
-  z <- (spd - median(spd, na.rm = TRUE)) / mad(spd, na.rm = TRUE)
-  spd[abs(z) > 3.5] <- NA
+    # Fit monotonic spline to the predictions
+    spf <- splinefun(xu, p, method = "monoH.FC")
 
-  # Re-fit monotonic spline, interpolating over any initially "flat" (zero derivative) or unusually steep locales
-  xu2 <- xu[!is.na(spd)]
-  p2 <- p[!is.na(spd)]
-  spf <- splinefun(xu2, p2, method = "monoH.FC")
+    # Set observations with zero-value or outlier derivatives to NA
+    spd <- spf(xu, deriv = 1)
+    spd[spd == 0] <- NA
+    z <- (spd - median(spd, na.rm = TRUE)) / mad(spd, na.rm = TRUE)
+    spd[abs(z) > 3.5] <- NA
 
-  # Make 'y' predictions for all 'x'
-  you <- if (length(xu) < 1000) {
-    yout <- spf(x0)  # Exact but comparatively slow
+    # Re-fit monotonic spline, interpolating over any initially "flat" (zero derivative) or unusually steep locales
+    xu2 <- xu[!is.na(spd)]
+    p2 <- p[!is.na(spd)]
+    spf <- splinefun(xu2, p2, method = "monoH.FC")
+
+    # Make 'y' predictions for all 'x'
+    yout <- if (length(xu) < 1000) {
+      spf(x0)  # Exact but comparatively slow
+    } else {
+      # Linear approximation is faster for large 'xu'
+      approx(xu, spf(xu), xout = x0)$y
+    }
+
   } else {
-    # Linear approximation is faster for large 'x0'
-    approx(xu, spf(xu), xout = x0)$y
+    yout <- rep(p, length(x0))
   }
 
   # If necessary, set values to zero when 'x' is zero
@@ -134,10 +149,18 @@ makeMonotonic <- function(x,
 
   # Optional plot of transformation
   if (plot) {
-    plot(x, y, col = "#00000033", xlim = range(xu), ylim = yrng)
-    yp <- spf(xu)
-    if (force.zero) yp[xu == 0] <- 0
-    lines(xu, yp * yadj, xlab = "x", ylab = "y", col = "red")
+    plot(x, y, col = "#00000033", xlim = range(xu), ylim = yrng, xlab = "x", ylab = "y")
+    if (length(x0) > 100) {
+      yp <- spf(xu)
+      if (force.zero) yp[xu == 0] <- 0
+      lines(xu, yp * yadj, col = "red")
+    } else {
+      if (length(x0) == 1) {
+        points(x0, yout, col = "red")
+      } else {
+        lines(x0, yout, col = "red")
+      }
+    }
   }
 
   # Return transformed y-values
