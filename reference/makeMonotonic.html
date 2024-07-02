@@ -68,7 +68,7 @@
 
 
 <dt>plot</dt>
-<dd><p>Logical. Plot the original data points and returned monotonic relationship?</p></dd>
+<dd><p>Logical. Plot the (sampled) data points and derived monotonic relationship?</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -79,7 +79,7 @@
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The smoothing is accomplished via a <code><a href="https://rdrr.io/pkg/scam/man/scam.html" class="external-link">scam</a></code> model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, eliminates any observations with outlier derivative values (i.e. unusually small or large "jumps"), and then fits a monotonic spline to derive the final relationship. If <code>y = 0</code> when <code>x = 0</code> (as typical for consumption-expenditure variables), then that outcome is simply forced in the result.</p>
+    <p>The smoothing is accomplished via a <code><a href="https://rdrr.io/pkg/scam/man/scam.html" class="external-link">scam</a></code> model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, eliminates any observations with outlier derivative values (i.e. unusually small or large "jumps"), and then fits a monotonic spline to derive the final relationship. If the SCAM model fails to fit, the function falls back to <code><a href="https://rdrr.io/r/stats/loess.html" class="external-link">loess</a></code> with predictions coerced to monotonic. If LOESS fails, the function falls back to <code><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></code> with simple linear predictions. If <code>y = 0</code> when <code>x = 0</code> (as typical for consumption-expenditure variables), then that outcome is enforced in the result.</p>
     </div>
 
     <div class="section level2">
