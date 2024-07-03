@@ -2,7 +2,7 @@ pandoc: 3.1.11
 pkgdown: 2.0.9
 pkgdown_sha: ~
 articles: {}
-last_built: 2024-07-03T02:58Z
+last_built: 2024-07-03T14:38Z
 urls:
   reference: https://ummel.github.io/fusionModel/reference
   article: https://ummel.github.io/fusionModel/articles
