@@ -1,14 +1,13 @@
 #' Ensure a monotonic relationship between two variables
 #'
 #' @description
-#' \code{makeMonotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned (\code{y}) values is forced to equal the original mean value (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not necessarily limited to consumption and expenditure variables.
+#' \code{makeMonotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned values is forced to equal the original mean of \code{y} (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not limited to consumption and expenditure variables.
 #' @param x Numeric.
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
-#' @param N Integer. Size of random sample to use to reduce computation time.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
-#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
+#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than 10,000 observations, if necessary, for speed.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
 #' @examples
 #' y <- makeMonotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
@@ -23,44 +22,43 @@
 # library(data.table())
 #
 # d <- fusionModel::read_fsd("~/Downloads/RECS_2020_2019_fused_UP.fsd")
-# acs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/ACS/2019/ACS_2019_H_processed.fst")
-#
-# test <- d %>%
-#   filter(M == 1) %>%
-#   cbind(acs) %>%
-#   filter(state == 25) %>%
-#   as.data.table()
-#
-# test[, dollarlp_z :=  makeMonotonic(x = btung, y = dollarng, w = weight), by = .(state, puma10)]
+# acs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/ACS/2019/ACS_2019_H_processed.fst", columns = c('weight', 'state', 'puma10'))
+# d <- cbind(d, acs)
+# system.time(
+#   d[, `:=`(dollarel_z =  makeMonotonic(x = btuel, y = dollarel, w = weight),
+#            dollarng_z =  makeMonotonic(x = btung, y = dollarng, w = weight),
+#            dollarlp_z =  makeMonotonic(x = btulp, y = dollarlp, w = weight),
+#            dollarfo_z =  makeMonotonic(x = btufo, y = dollarfo, w = weight)),
+#     by = .(state, puma10)]
+# )
 
 #---------
 
 makeMonotonic <- function(x,
                           y,
                           w = NULL,
-                          N = 5000,
                           preserve = TRUE,
                           plot = FALSE) {
 
-  stopifnot({
+  stopifnot(exprs = {
     length(x) == length(y)
     is.numeric(x) & !anyNA(x)
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
-    N >= 100
     is.logical(preserve)
     is.logical(plot)
   })
 
   if (is.null(w)) w <- rep.int(1L, length(x))
-  x0 <- x; w0 <- w
   ymean <- weighted.mean(y, w)
+  x0 <- x
+  w0 <- w
 
   # If zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
   force.zero <- FALSE
   if (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.999) {
     force.zero <- TRUE
-    i <- x != 0
+    i <- c(which(x != 0), match(0, x))  # Retains first instance of zero in 'x'
     x <- x[i]
     y <- y[i]
     w <- w[i]
@@ -68,8 +66,9 @@ makeMonotonic <- function(x,
 
   # Sample the data for speed, if necessary
   n <- length(x)
-  if (n > N) {
-    i <- sample.int(n = n, size = N)
+  if (n > 10e3) {
+    i <- match(range(x), x)  # Retains first instance of min and max 'x'
+    i <- c(i, sample.int(n = n, size = N - 2))
     x <- x[i]
     y <- y[i]
     w <- w[i]
@@ -77,9 +76,11 @@ makeMonotonic <- function(x,
 
   m <- stats::supsmu(x, y, wt = w)
   xu <- m$x
-  inc <- cor(m$x, m$y) > 0
+  inc <- suppressWarnings(cor(m$x, m$y) >= 0)
+  if (is.na(inc)) inc <- TRUE
   p <- sort(m$y, decreasing = !inc) # Force monotonic predictions
   delta <- mean(abs((p - m$y) / m$y))
+  if (is.na(delta)) delta <- 0
   if (delta > 0.005) {
     m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
     if (inherits(m, "scam")) {
@@ -92,9 +93,7 @@ makeMonotonic <- function(x,
   }
 
   # Make 'y' predictions for all original 'x'
-  #yout <- approx(xu, p, xout = x0, rule = 2)$y
-  #yout <- approx(xu, p, xout = x0, rule = 1)$y
-  yout <- p[match(x0, xu)]
+  yout <- if (length(xu) == 1) rep(p, length(x0)) else approx(xu, p, xout = x0, rule = 2)$y
 
   # If necessary, set values to zero when 'x' is zero
   if (force.zero) yout[x0 == 0] = 0
@@ -106,6 +105,7 @@ makeMonotonic <- function(x,
   yadj <- 1  # Defined for use in plotting code, below, if 'preserve = FALSE'
   if (preserve) {
     yadj <- ymean / weighted.mean(yout, w0)
+    if (is.na(yadj)) yadj <- 1  # Catch divide by zero case
     yout <- yout * yadj
   }
 
