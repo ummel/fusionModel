@@ -13,7 +13,7 @@ makeMonotonic(x, y, w = NULL, N = 5000, preserve = TRUE, plot = FALSE)
 
 \item{w}{Numeric. Optional observation weights.}
 
-\item{N}{Integer. Size of random sample to use (if necessary) to reduce computation time.}
+\item{N}{Integer. Size of random sample to use to reduce computation time.}
 
 \item{preserve}{Logical. Preserve the original mean of the \code{y} values in the returned values?}
 
@@ -26,7 +26,7 @@ A numeric vector of modified \code{y} values. Optionally, a plot showing the ret
 \code{makeMonotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned (\code{y}) values is forced to equal the original mean value (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not necessarily limited to consumption and expenditure variables.
 }
 \details{
-The smoothing is accomplished via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint, depending on the correlation of the input data. An additional step checks the derivative of the smoothed predictions, removes points with zero or outlier derivative values (i.e. flat spots or unusually steep jumps), and then fits a monotonic spline to the remaining points to derive the final relationship. If the SCAM model fails to fit, the function falls back to \code{\link[stats]{loess}} with predictions coerced to monotonic. If LOESS fails, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
+The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result.
 }
 \examples{
 y <- makeMonotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
