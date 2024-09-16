@@ -4,10 +4,12 @@
 \alias{read_fsd}
 \title{Read fusion output from disk}
 \usage{
-read_fsd(fsd, cores = data.table::getDTthreads())
+read_fsd(fsd, columns = NULL, cores = data.table::getDTthreads())
 }
 \arguments{
 \item{fsd}{Character. File path ending in \code{.fsd} as produced by call to \code{\link{fuse}}.}
+
+\item{columns}{Character. Column names to read. The default is to read all columns.}
 
 \item{cores}{Integer. Number of cores used by \code{\link[data.table]{fread}}.}
 }
@@ -18,7 +20,7 @@ A \code{\link[data.table]{data.table}} with integer column "M" indicating the im
 Read fusion output that was written directly to disk via \code{\link{fuse}}.
 }
 \details{
-The file written by \code{\link{fuse}} includes specially formatted metadata in the column names that \code{read_fsd} uses to construct the appropriate output values and classes. Reading \code{fsd} with a different file reader function will not give correct results.
+As of version 3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) produced by \code{\link{fuse}} are actually native \code{\link[fst]{fst}} files under the hood.
 }
 \examples{
 # Build a fusion model using RECS microdata

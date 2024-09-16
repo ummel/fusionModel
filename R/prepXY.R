@@ -38,12 +38,12 @@
 # library(dplyr)
 # source("R/utils.R")
 #
-# data <- recs
-# y <- y <- names(recs)[c(13:16, 20:22)]
-# x <- names(recs)[2:12]
-# weight = NULL
+# data <- select(recs, -starts_with("rep_"))
+# y <- names(recs)[c(13:16, 20:22)]
+# x <- setdiff(names(data), c(y, "weight"))
+# weight = "weight"
 # fraction = 1
-# cor_thresh = 0.025
+# cor_thresh = 0.05
 # lasso_thresh = 0.95
 # cores = 1
 # xmax = 5
@@ -85,25 +85,22 @@ prepXY <- function(data,
     all(lengths(ylist) > 0)
     is.null(weight) | weight %in% names(data)
     is.null(xforce) | all(xforce %in% x)
-    xmax >= 5
+    xmax >= 1
     fraction > 0 & fraction <= 1
     cor_thresh > 0 & cor_thresh <= 1
     lasso_thresh > 0 & lasso_thresh <= 1
     cores >= 1 & cores %% 1 == 0
   })
 
+  # TO DO: Make operations data.table for efficiency
   if (is.data.table(data)) data <- as.data.frame(data)
 
   # Check for character-type variables; stop with error if any detected
   # Check for no-variance (constant) variables
   # Detect and impute any missing values in 'x' variables
-  # Note that checkData() is hard-coded to ensure enough non-zero observations for 5-fold cross-validation; default value in train()
-  # Note that train() runs its own checkData() with nfolds set to user value
-  data <- checkData(data = data, y = y, x = x, nfolds = 5)
-  x <- intersect(x, names(data))
-  xforce <- intersect(xforce, x)
-  for (i in 1:length(ylist)) ylist[[i]] <- intersect(ylist[[i]], names(data))
-  ylist <- purrr::compact(ylist)
+  data <- checkData(data = data, y = y, x = x, nfolds = NULL, impute = TRUE)
+  #for (i in 1:length(ylist)) ylist[[i]] <- intersect(ylist[[i]], names(data))  # NECeSSARY?
+  #ylist <- purrr::compact(ylist)  # NECESSARY?
 
   #---
 
@@ -116,6 +113,7 @@ prepXY <- function(data,
   } else {
     data[[weight]] / mean(data[[weight]])
   }
+  set(data, j = weight, value = NULL)
 
   #-----
 
@@ -140,7 +138,7 @@ prepXY <- function(data,
 
     # Update the zero-inflated variables in data to have NA instead of zero values
     data <- data %>%
-      #mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%
+      #mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%  # Prefer to turn this on...
       cbind(dinf)
 
     # Update 'ylist' to include '*_zero' versions in block with original zero-inflated variables
@@ -170,6 +168,35 @@ prepXY <- function(data,
   rm(data)
   Z <- as.matrix(cbind(Y, X))  # Could make sparse?
   rm(X, Y)
+
+  #-----
+
+  # TO DO: Switch to using this code instead of 'X' and 'Y' blocks above
+  # 8/9/24:TEST ALT
+  # MOVE this could into separate function? It is also in impute()
+  # d2 <- copy(data)
+  #
+  # # Convert 'd2' to plausible ranks for correlation screening
+  # # All output columns should be NA, integer, or logical
+  # # NA's in input are preserved in output
+  # for (i in 1:ncol(d2)) {
+  #   z <- d2[[i]]
+  #   if (is.numeric(z)) {
+  #     # Ties method 'dense' ensures integer output with minimum of 1 and maximum of length(na.omit(z))
+  #     z <- frank(z, ties.method = "dense", na.last = "keep")
+  #   } else {
+  #     if (is.ordered(z)) {
+  #       z <- as.integer(z)
+  #     } else {
+  #       if (!is.logical(z)) {
+  #         # Converts character and un-ordered factors to TRUE for the most-common (non-NA) value and FALSE otherwise
+  #         zt <- table2(z, na.rm = TRUE)
+  #         z <- z == names(which.max(zt))
+  #       }
+  #     }
+  #   }
+  #   set(d2, j = i, value = z)
+  # }
 
   #-----
 
@@ -320,8 +347,10 @@ prepXY <- function(data,
 
     # Extract the predictor variables to be used for 'best' fusion variable
     keep <- out[[best]]$xk
-    i <- keep %in% xlink$dummy
-    keep[i] <- filter(xlink, dummy %in% keep[i])$original
+    if (!is.null(xlink)) {
+      i <- keep %in% xlink$dummy
+      keep[i] <- filter(xlink, dummy %in% keep[i])$original
+    }
     keep <- unique(keep)
     keep <- setdiff(keep, ycols)  # Remove any fusion variables from the preferred predictor set
     xpred <- c(xpred, list(keep))

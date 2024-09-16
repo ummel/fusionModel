@@ -51,8 +51,8 @@ convertInteger <- function(x) {
 
 #------------------
 
-# Function returns TRUE if 'x' has only one non-NA value
-novary <- function(x) length(unique(na.omit(x))) == 1
+# Function returns TRUE if 'x' has only one non-NA value OR is entirely NA
+novary <- function(x) data.table::uniqueN(x, na.rm = TRUE) <= 1
 
 #------------------
 
@@ -292,7 +292,7 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
 # Detects character columns, no-variance columns, and missing data columns (imputes as needed)
 # This simply wraps a code chunk that was present in train() and prepXY()
 
-checkData <- function(data, y, x, nfolds = NULL) {
+checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
 
   # Check for character-type variables; stop with error if any detected
   xc <- sapply(data[c(x, y)], is.character)
@@ -306,8 +306,8 @@ checkData <- function(data, y, x, nfolds = NULL) {
     warning("Removed zero-variance 'y' variable(s):\n", paste(constant, collapse = ", "), immediate. = TRUE)
   }
 
-  # Remove (with warning) any inflated 'y' variables with fewer than 10*nfolds non-zero values
-  if (!is.null(nfolds)) {
+  # Remove (with warning) any zero-inflated 'y' variables with fewer than 10*nfolds non-zero values
+  if (all(!is.null(nfolds), nfolds > 0)) {
     toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds * 10 else FALSE)))
     if (length(toofew)) {
       data <- select(data, -all_of(toofew))
@@ -324,13 +324,16 @@ checkData <- function(data, y, x, nfolds = NULL) {
   }
 
   # Detect and impute any missing values in 'x' variables
-  na.cols <- names(which(sapply(data[x], anyNA)))
-  if (length(na.cols) > 0) {
-    cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
-    for (j in na.cols) {
-      xj <- data[[j]]
-      ind <- is.na(xj)
-      data[ind, j] <-  imputationValue(xj, ind)
+  if (impute) {
+    na.cols <- names(which(sapply(data[x], anyNA)))
+    if (length(na.cols) > 0) {
+      # Turned off to suppress message when running prepXY()
+      #cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
+      for (j in na.cols) {
+        xj <- data[[j]]
+        ind <- is.na(xj)
+        data[ind, j] <-  imputationValue(xj, ind)
+      }
     }
   }
 
@@ -957,4 +960,19 @@ match.call.defaults <- function(..., exclude = NULL) {
 # Return normalized path using the '.Platform$file.sep' separator
 full.path <- function(path, mustWork = NA) {
   normalizePath(path = path, winslash = .Platform$file.sep, mustWork = mustWork)
+}
+
+#-------------------
+
+# Much faster version of table()
+# Returns number of NA observations; i.e. equivalent to table(..., useNA = 'always')
+# https://stackoverflow.com/questions/17374651/find-the-n-most-common-values-in-a-vector
+table2 <- function(x, na.rm = FALSE) {
+  require(data.table)
+  stopifnot(is.atomic(x))
+  ds <- data.table(x)
+  setkey(ds, x)
+  ds <- ds[, .N, by = "x"]
+  if (na.rm) ds <- na.omit(ds)
+  setNames(ds$N, ds$x)
 }

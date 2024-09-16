@@ -11,7 +11,7 @@ train(
   fsn = "fusion_model.fsn",
   weight = NULL,
   nfolds = 5,
-  nquantiles = 3,
+  nquantiles = 2,
   nclusters = 2000,
   krange = c(10, 500),
   hyper = NULL,
@@ -32,7 +32,7 @@ train(
 
 \item{nfolds}{Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).}
 
-\item{nquantiles}{Numeric. Number of quantile models to train for continuous \code{y} variables (along with the conditional mean). \code{nquantiles} evenly-distributed percentiles are used. The default \code{nquantiles = 3} is usually sufficient and yields quantile models for the 16.6th, 50th, and 83.3rd percentiles.}
+\item{nquantiles}{Numeric. Number of quantile models to train for continuous \code{y} variables, in addition to the conditional mean. \code{nquantiles} evenly-distributed percentiles are used. For example, the default \code{nquantiles = 2} yields quantile models for the 25th and 75th percentiles. Higher values may produce more accurate conditional distributions at the expense of computation time. Even \code{nquantiles} is recommended since the conditional mean tends to capture the central tendency, making a median model superfluous.}
 
 \item{nclusters}{Numeric. Maximum number of k-means clusters to use. Higher is better but at computational cost. \code{nclusters = 0} or \code{nclusters = Inf} turn off clustering.}
 
@@ -57,21 +57,22 @@ When \code{y} is a list, each slot indicates either a single variable or, altern
 
 The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
 
-The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
+The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used with the following default values:
 
 \itemize{
-\item boosting
-\item num_leaves
-\item bagging_fraction
-\item feature_fraction
-\item max_depth
-\item min_data_in_leaf
-\item num_iterations
-\item learning_rate
-\item max_bin
-\item min_data_in_bin
-\item max_cat_threshold
+\item boosting = "gbdt"
+\item data_sample_strategy = "goss"
+\item num_leaves = 31
+\item feature_fraction = 0.8
+\item max_depth = 5
+\item min_data_in_leaf = max(10, round(0.001 * nrow(data)))
+\item num_iterations = 2500
+\item learning_rate= 0.1
+\item max_bin = 255
+\item min_data_in_bin = 3
+\item max_cat_threshold = 32
 }
+Typical users will only have reason to modify the hyperparameters listed above. Note that \code{num_iterations} only imposes a ceiling, since early stopping will typically result in models with a lower number of iterations. See Examples.
 
 Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
 }
@@ -94,17 +95,17 @@ xlist
 train(data = recs, y = fusion.vars, x = xlist)
 
 # Specify a single set of LightGBM hyperparameters
+# Here we use Random Forests instead of the default Gradient Boosting Decision Trees
 train(data = recs, y = fusion.vars, x = predictor.vars,
-      hyper = list(boosting = "goss",
-                   feature_fraction = 0.8,
-                   num_iterations = 300
+      hyper = list(boosting = "rf",
+                   feature_fraction = 0.6,
+                   max_depth = 10
       ))
 
 # Specify a range of LightGBM hyperparameters to search over
 # This takes longer, because there are more models to test
 train(data = recs, y = fusion.vars, x = predictor.vars,
-      hyper = list(num_leaves = c(10, 30),
-                   feature_fraction = c(0.7, 0.9),
-                   num_iterations = 50
+      hyper = list(max_depth = c(5, 10),
+                   feature_fraction = c(0.7, 0.9)
       ))
 }

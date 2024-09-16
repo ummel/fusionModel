@@ -9,7 +9,7 @@
 #' @param fsn Character. File path where fusion model will be saved. Must use \code{.fsn} suffix.
 #' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
 #' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
-#' @param nquantiles Numeric. Number of quantile models to train for continuous \code{y} variables (along with the conditional mean). \code{nquantiles} evenly-distributed percentiles are used. The default \code{nquantiles = 3} is usually sufficient and yields quantile models for the 16.6th, 50th, and 83.3rd percentiles.
+#' @param nquantiles Numeric. Number of quantile models to train for continuous \code{y} variables, in addition to the conditional mean. \code{nquantiles} evenly-distributed percentiles are used. For example, the default \code{nquantiles = 2} yields quantile models for the 25th and 75th percentiles. Higher values may produce more accurate conditional distributions at the expense of computation time. Even \code{nquantiles} is recommended since the conditional mean tends to capture the central tendency, making a median model superfluous.
 #' @param nclusters Numeric. Maximum number of k-means clusters to use. Higher is better but at computational cost. \code{nclusters = 0} or \code{nclusters = Inf} turn off clustering.
 #' @param krange Numeric. Minimum and maximum number of nearest neighbors to use for construction of continuous conditional distributions. Higher \code{max(krange)} is better but at computational cost.
 #' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
@@ -19,20 +19,21 @@
 #' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
 #' @details `y` variables that exhibit no variance or continuous `y` variables with less than `10 * nfolds` non-zero observations (minimum required for cross-validation) are automatically removed with a warning.
 #' @details The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
-#' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used LightGBM default values. Typically, users will only have reason to specify the following parameters via \code{hyper}:
+#' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used with the following default values:
 #' @details \itemize{
-#'   \item boosting
-#'   \item num_leaves
-#'   \item bagging_fraction
-#'   \item feature_fraction
-#'   \item max_depth
-#'   \item min_data_in_leaf
-#'   \item num_iterations
-#'   \item learning_rate
-#'   \item max_bin
-#'   \item min_data_in_bin
-#'   \item max_cat_threshold
+#'   \item boosting = "gbdt"
+#'   \item data_sample_strategy = "goss"
+#'   \item num_leaves = 31
+#'   \item feature_fraction = 0.8
+#'   \item max_depth = 5
+#'   \item min_data_in_leaf = max(10, round(0.001 * nrow(data)))
+#'   \item num_iterations = 2500
+#'   \item learning_rate= 0.1
+#'   \item max_bin = 255
+#'   \item min_data_in_bin = 3
+#'   \item max_cat_threshold = 32
 #'  }
+#'  Typical users will only have reason to modify the hyperparameters listed above. Note that \code{num_iterations} only imposes a ceiling, since early stopping will typically result in models with a lower number of iterations. See Examples.
 #' @details Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
 #'
 #' @return A fusion model object (.fsn) is saved to \code{fsn}.
@@ -56,18 +57,18 @@
 #' train(data = recs, y = fusion.vars, x = xlist)
 #'
 #' # Specify a single set of LightGBM hyperparameters
+#' # Here we use Random Forests instead of the default Gradient Boosting Decision Trees
 #' train(data = recs, y = fusion.vars, x = predictor.vars,
-#'       hyper = list(boosting = "goss",
-#'                    feature_fraction = 0.8,
-#'                    num_iterations = 300
+#'       hyper = list(boosting = "rf",
+#'                    feature_fraction = 0.6,
+#'                    max_depth = 10
 #'       ))
 #'
 #' # Specify a range of LightGBM hyperparameters to search over
 #' # This takes longer, because there are more models to test
 #' train(data = recs, y = fusion.vars, x = predictor.vars,
-#'       hyper = list(num_leaves = c(10, 30),
-#'                    feature_fraction = c(0.7, 0.9),
-#'                    num_iterations = 50
+#'       hyper = list(max_depth = c(5, 10),
+#'                    feature_fraction = c(0.7, 0.9)
 #'       ))
 #' @export
 
@@ -88,7 +89,7 @@
 # weight <- "weight"
 # x <- setdiff(names(recipient), weight)
 # fsn = "fusion_model.fsn"
-# nfolds = 5
+# nfolds = 0.75
 # nquantiles = 3
 # nclusters = 2000
 # hyper = NULL
@@ -109,7 +110,7 @@ train <- function(data,
                   fsn = "fusion_model.fsn",
                   weight = NULL,
                   nfolds = 5,
-                  nquantiles = 3,
+                  nquantiles = 2,
                   nclusters = 2000,
                   krange = c(10, 500),
                   hyper = NULL,
@@ -119,6 +120,7 @@ train <- function(data,
   t0 <- Sys.time()
 
   # TO DO: Make data.table operations throughout (just applies to pre-loop checks)
+  # TO DO: Make collapse operations where possible
   if (is.data.table(data)) data <- as.data.frame(data)
 
   # Create correct 'y' and 'ylist', depending on input type
@@ -151,7 +153,7 @@ train <- function(data,
     length(intersect(y, x)) == 0
     is.character(fsn) & endsWith(fsn, ".fsn")
     is.null(weight) | (length(weight) == 1 & weight %in% names(data) & !weight %in% c(y, x))
-    nfolds >= 0
+    nfolds > 0 & nfolds != 0
     nquantiles > 0
     nclusters >= 0
     all(krange >= 5) & length(krange) == 2
@@ -181,16 +183,16 @@ train <- function(data,
   #-----
 
   # Create and/or check observation weights
-  # LightGBM can handel numeric weights; ctree() requires integer weights
-  # A different version is created for each
   W.lgb <- if (is.null(weight)) {
     rep(1L, nrow(data))
   } else {
     if (anyNA(data[[weight]])) stop("Missing (NA) values are not allowed in 'weight'")
+    if (any(data[[weight]] < 0)) cat("Setting negative observation weights to zero\n")
+    set(data, j = weight, value = pmax(0, data[[weight]]))
     data[[weight]] / mean(data[[weight]]) # Scaled weights to avoid numerical issues
   }
 
-  # Integerized version of the observation weights
+  # Integerized version of the observation weights (requires less space when saved to .fsn object)
   W.int <- integerize(W.lgb, mincor = 0.999)
 
   #-----
@@ -206,9 +208,8 @@ train <- function(data,
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # Check for no-variance (constant) variables
-  # Detect and impute any missing values in 'x' variables
-  data <- checkData(data, y, x, nfolds)
+  # Check 'data' for type consistency and remove no-variance (constant) variables
+  data <- checkData(data, y, x, nfolds = nfolds, impute = FALSE)
   x <- intersect(x, names(data))
   n <- length(xlist)
   for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
@@ -286,13 +287,13 @@ train <- function(data,
   # More details: https://sites.google.com/view/lauraepp/parameters
   hyper.default <- list(
     boosting = "gbdt",
+    data_sample_strategy = "goss",
     num_leaves = 31,
-    bagging_fraction = 1,
-    feature_fraction = 1,
-    min_data_in_leaf = 20,
-    num_iterations = 100,
+    feature_fraction = 0.8,
+    min_data_in_leaf = max(10, round(0.001 * nrow(dmat))),
+    num_iterations = 2500,
     learning_rate = 0.1,
-    max_depth = -1,
+    max_depth = 5,
     max_bin = 255,
     min_data_in_bin = 3,
     max_cat_threshold = 32
@@ -303,11 +304,6 @@ train <- function(data,
     if (!v %in% names(hyper)) {
       hyper[[v]] <- hyper.default[[v]]
     }
-  }
-
-  # Check for bagging in presence of GOSS (not possible)
-  if (hyper$bagging_fraction < 1 & hyper$boosting == "goss") {
-    warning("LightGBM 'goss' method is not compatible with 'bagging_fraction' < 1; bagging was disabled to prevent error.")
   }
 
   # Set the number of LightGBM threads
@@ -329,18 +325,11 @@ train <- function(data,
                   min_data_in_leaf = hyper$min_data_in_leaf,
                   feature_pre_filter = TRUE)
   # Remove 'dparams' hyperparamters from 'hyper' object
-  hyper$min_data_in_leaf <- NULL
-  hyper$max_bin <- NULL
-  hyper$min_data_in_bin <- NULL
-  hyper$max_cat_threshold <- NULL
+  hyper[names(dparams)] <- NULL
 
   # Create hyperparameter grid to search
   hyper.grid <- hyper %>%
     expand.grid() %>%
-    mutate(
-      bagging_fraction = ifelse(boosting == "goss", 1, bagging_fraction),  # Bagging not possible with 'goss'
-      bagging_freq = ifelse(bagging_fraction == 1, 0, 1)  # Turn on bagging if indicated by 'bagging_fraction'
-    ) %>%
     distinct() %>%
     split(seq(nrow(.)))
 
@@ -379,6 +368,9 @@ train <- function(data,
       zc <- mc <- qc <- dtrain <- dvalid <- NULL
       ti <- pi <- rep(TRUE, length(Y))
 
+      # TEST
+      hyper.results <- list()
+
       #-----
 
       # Build zero model, if necessary
@@ -394,11 +386,7 @@ train <- function(data,
 
         # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
         # List indicating random assignment of folds
-        cv.folds <- if (nfolds == 0) {
-          NULL
-        } else {
-          stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
-        }
+        cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
 
         # Create full LGB training dataset with all available observations
         dfull <- lightgbm::lgb.Dataset(data = dmat[, xv, drop = FALSE],
@@ -409,7 +397,7 @@ train <- function(data,
           lightgbm::lgb.Dataset.construct()
 
         # Create 'dtrain' and 'dvalid' sets, if requested
-        if (nfolds > 0 & nfolds <= 1) {
+        if (is.logical(cv.folds)) {
           ind <- which(cv.folds)
           dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
                                           label = as.integer(Y == 0)[ind],
@@ -439,6 +427,8 @@ train <- function(data,
                        hyper.grid = hyper.grid,
                        params.obj = params.obj,
                        cv.folds = cv.folds)
+        # TEMP
+        hyper.results$z <- zmod$record_evals
 
         # Save LightGBM mean model (m.txt) to disk
         lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
@@ -460,11 +450,7 @@ train <- function(data,
       # Build LightGBM datasets for mean and quantile models
 
       # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
-      cv.folds <- if (nfolds == 0) {
-        NULL
-      } else {
-        stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
-      }
+      cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
 
       # Create full LGB training dataset with all available observations
       dfull <- lightgbm::lgb.Dataset(data = dmat[ti, xv, drop = FALSE],
@@ -474,8 +460,8 @@ train <- function(data,
                                      params = dparams) %>%
         lightgbm::lgb.Dataset.construct()
 
-      # Create 'dtrain' and 'dvalid' sets, if requested
-      if (nfolds > 0 & nfolds <= 1) {
+      # Create 'dtrain' and 'dvalid' sets, if requested (only necessary when nfolds < 1)
+      if (is.logical(cv.folds)) {
         ind <- which(ti)[cv.folds]
         dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
                                         label = Y[ind],
@@ -515,6 +501,9 @@ train <- function(data,
                      params.obj = params.obj,
                      cv.folds = cv.folds)
 
+      # TEMP
+      hyper.results$m <- mmod$record_evals
+
       # Save LightGBM mean model (m.txt) to disk
       # NOTE: mmod$best_iter and mmod$best_score custom attributes are not retained in save
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
@@ -549,9 +538,12 @@ train <- function(data,
                                cv.folds = cv.folds)
         }
 
+        # TEMP
+        for (k in seq_along(ptiles)) hyper.results[[names(qmods)[k]]] <- qmods[[k]]$record_evals
+
         # Predict conditional quantiles for full dataset
         qc <- matrix(data = NA, nrow = sum(pi), ncol = length(ptiles))
-        for (k in 1:length(ptiles)) qc[, k] <- predict(object = qmods[[k]], newdata = dmat[pi, xv, drop = FALSE])
+        for (k in seq_along(ptiles)) qc[, k] <- predict(object = qmods[[k]], newdata = dmat[pi, xv, drop = FALSE])
         colnames(qc) <- paste0(y, "_", names(qmods))
 
         # Save LightGBM quantile models (q**.txt) to disk
@@ -566,7 +558,7 @@ train <- function(data,
       # Conditional expectations for each training observation
       # Note that 'zc' only exists if 'y' is part of a block; NULL otherwise
       if (block | type == "continuous") {
-        cd <- cbind(cd, data.table(zc, mc, qc)) # Add conditonal expectations to retained 'cd' object
+        cd <- cbind(cd, data.table(zc, mc, qc)) # Add conditional expectations to retained 'cd' object
         yi <- cbind(yi, Y[pi])  # Observed values associated with 'cd'
         wi <- cbind(wi, W.int[pi]) # Observed weights associated with 'cd'
       }
@@ -654,6 +646,7 @@ train <- function(data,
         # Create 'm' and 'w' matrices with the nearest-neighbor values and weights
         m <- nn; m[] <- yi[m]  # Neighbor values matrix
         w <- nn; w[] <- wi[w]  # Neighbor weights matrix
+        w <- w / mean(w)  # Prevents integer overflow in cumulative sum below
 
         # Cumulative weighted means
         denom <- matrixStats::rowCumsums(w)
@@ -785,7 +778,8 @@ train <- function(data,
                 yscale = yscale,
                 kcenters = kcenters,
                 kneighbors = nn,
-                cluster_mean_r2 = r2)
+                cluster_mean_r2 = r2,
+                hyper_results = hyper.results)
 
     return(out)
 
@@ -794,7 +788,7 @@ train <- function(data,
   #-----
 
   # Apply buildFun() to each index in 'ylist', using forked parallel processing or serial (depending on 'fork' variable)
-  # NOTE: pblapply() was imposed significant overhead, so using straight mclapply for the time being
+  # NOTE: pblapply() has significant overhead, so using straight mclapply for the time being
   if (fork) {
     cat("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)", "\n", sep = "")
     out <- parallel::mclapply(X = 1:length(ylist),

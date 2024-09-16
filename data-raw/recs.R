@@ -60,6 +60,7 @@ recs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/RECS/201
     propane_expend = dollarlp
   ) |>
   dplyr::mutate(
+    electricity = as.integer(round(electricity)),  # Make integer for testing purposes
     heating_share = round(totalbtusph / totalbtu, 3),
     cooling_share = round((btuelahucol + btuelcol) / totalbtu, 3),
     other_share = 1 - heating_share - cooling_share,

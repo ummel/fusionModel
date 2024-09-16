@@ -55,12 +55,11 @@ fsn.path <- train(data = recs,
 # Fuse back onto the donor data (multiple implicates)
 sim <- fuse(data = recs,
             fsn = fsn.path,
-            M = 40)
+            M = 20)
 
 # Calculate validation results
 valid <- validate(observed = recs,
                   implicates = sim,
-                  subset_vars = c("income", "education", "race", "urban_rural"),
-                  weight = "weight")
+                  subset_vars = c("income", "education", "race", "urban_rural"))
 
 }

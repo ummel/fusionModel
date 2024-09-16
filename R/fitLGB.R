@@ -1,46 +1,67 @@
-
 fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.grid, params.obj) {
 
-  perf <- if (is.null(dvalid)) {
-
-    # If full cross-validation is requested...
-    lapply(hyper.grid, FUN = function(x) {
+  # If full cross-validation is requested...
+  if (is.list(cv.folds)) {
+    perf <-  lapply(hyper.grid, FUN = function(x) {
       sink <- utils::capture.output({
         mod <- lightgbm::lgb.cv(
           params = c(as.list(x), params.obj),
           data = dfull,
           folds = cv.folds,
-          early_stopping_rounds = 1L,
+          early_stopping_rounds = 2L,
           verbose = -1L
         )
       })
-      c(mod$best_score, mod$best_iter)
+      data.frame(best_score = mod$best_score, best_iter = mod$best_iter)
     })
+  }
 
-  } else {
-
-    # If training/test-set validation is requested...
-    lapply(hyper.grid, FUN = function(x) {
+  # If training/test-set validation is requested...
+  if (is.logical(cv.folds)) {
+    perf <- lapply(hyper.grid, FUN = function(x) {
       p <- c(as.list(x), params.obj)
       sink <- utils::capture.output({
         mod <- lightgbm::lgb.train(
           params = p,
           data = dtrain,
           valids = list(valid = dvalid),
-          early_stopping_rounds = 1L,
+          early_stopping_rounds = 2L,
           verbose = -1L
         )
       })
-      c(mod$best_score, mod$best_iter)
+      data.frame(best_score = mod$best_score, best_iter = mod$best_iter)
     })
-
   }
 
+  # # If no validation is requested; i.e. over-fitting scenario
+  # if (is.null(dvalid) & is.null(cv.folds)) {
+  #   perf <- lapply(hyper.grid, FUN = function(x) {
+  #     p <- c(as.list(x), params.obj)
+  #     sink <- utils::capture.output({
+  #       mod <- lightgbm::lgb.train(
+  #         params = p,
+  #         data = dfull,
+  #         verbose = -1L
+  #       )
+  #     })
+  #     # Can't get it to return training loss
+  #     # Return the training log-loss at the maximum number of iterations
+  #     #train.evals <- unlist(mod$record_evals$train)
+  #     #c(min(train.evals), which.min(train.evals))
+  #     c(NA, NA)
+  #   })
+  # }
+
   # Compare validation set performance across hyper-parameter sets
-  comp <- do.call(rbind, perf)
-  opt <- which.min(comp[, 1])
-  params.opt <- hyper.grid[[opt]]
-  params.opt$num_iterations <- as.integer(comp[opt, 2])
+  comp <- bind_rows(perf)
+  opt <- which.min(comp$best_score)
+  # This is not ideal -- overfitting process should return training loss and work with multiple hypergrid options (instead of just choosing #1)
+  if (length(opt) == 0) {
+    params.opt <- hyper.grid[[1]]
+  } else {
+    params.opt <- hyper.grid[[opt]]
+    params.opt$num_iterations <- as.integer(comp$best_iter[[opt]])
+  }
 
   # Fit final model using full dataset and optimal parameter values
   mod <- lightgbm::lgb.train(
@@ -50,9 +71,14 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
   )
 
   # Add the optimal validation score and number of iterations to the 'mod' object
-  # This are NA and -1, by default, which doesn't provide any useful information
-  mod$best_score <- as.numeric(comp[opt, 1])
+  # These are NA and -1, by default, which doesn't provide any useful information
+  mod$best_score <- as.numeric(comp$best_score[opt])
   mod$best_iter <- params.opt$num_iterations
+
+  # Storing hyper results in 'record_evals' slot, since adding a custom slot is not allowed
+  hyper.results <- cbind(bind_rows(hyper.grid), comp, final_model = FALSE)
+  hyper.results$final_model[opt] <- TRUE
+  mod$record_evals <- hyper.results
 
   # Plot the evolution of the loss function
   #plot(unlist(mod$record_evals[[2]]))
