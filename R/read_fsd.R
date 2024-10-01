@@ -3,8 +3,8 @@
 #' @description Read fusion output that was written directly to disk via \code{\link{fuse}}.
 #' @param fsd Character. File path ending in \code{.fsd} as produced by call to \code{\link{fuse}}.
 #' @param columns Character. Column names to read. The default is to read all columns.
-#' @param cores Integer. Number of cores used by \code{\link[data.table]{fread}}.
-#' @details As of version 3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) produced by \code{\link{fuse}} are actually native \code{\link[fst]{fst}} files under the hood.
+#' @param cores Integer. Number of cores used by \code{\link[fst]{read_fst}}.
+#' @details As of version 2.3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) are actually native \code{\link[fst]{fst}} files under the hood.
 #' @return A \code{\link[data.table]{data.table}} with integer column "M" indicating the implicate assignment of each observation. Note that the ordering of recipient observations is consistent within implicates, so do not change the row order if using with \code{\link{analyze}} or \code{\link{validate}}.
 #' @examples
 #' # Build a fusion model using RECS microdata
@@ -27,7 +27,7 @@
 
 read_fsd <- function(fsd,
                      columns = NULL,
-                     cores = data.table::getDTthreads()) {
+                     cores = max(1, parallel::detectCores(logical = FALSE) - 1)) {
 
   stopifnot({
     endsWith(fsd, ".fsd")

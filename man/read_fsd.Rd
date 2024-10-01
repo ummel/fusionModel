@@ -4,14 +4,18 @@
 \alias{read_fsd}
 \title{Read fusion output from disk}
 \usage{
-read_fsd(fsd, columns = NULL, cores = data.table::getDTthreads())
+read_fsd(
+  fsd,
+  columns = NULL,
+  cores = max(1, parallel::detectCores(logical = FALSE) - 1)
+)
 }
 \arguments{
 \item{fsd}{Character. File path ending in \code{.fsd} as produced by call to \code{\link{fuse}}.}
 
 \item{columns}{Character. Column names to read. The default is to read all columns.}
 
-\item{cores}{Integer. Number of cores used by \code{\link[data.table]{fread}}.}
+\item{cores}{Integer. Number of cores used by \code{\link[fst]{read_fst}}.}
 }
 \value{
 A \code{\link[data.table]{data.table}} with integer column "M" indicating the implicate assignment of each observation. Note that the ordering of recipient observations is consistent within implicates, so do not change the row order if using with \code{\link{analyze}} or \code{\link{validate}}.
@@ -20,7 +24,7 @@ A \code{\link[data.table]{data.table}} with integer column "M" indicating the im
 Read fusion output that was written directly to disk via \code{\link{fuse}}.
 }
 \details{
-As of version 3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) produced by \code{\link{fuse}} are actually native \code{\link[fst]{fst}} files under the hood.
+As of version 2.3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) are actually native \code{\link[fst]{fst}} files under the hood.
 }
 \examples{
 # Build a fusion model using RECS microdata
