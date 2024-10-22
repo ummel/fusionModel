@@ -254,7 +254,7 @@ fusionOutput <- function(donor,
 
   # If respondent locations are provided, replace the imputed state and PUMA with the known values
   if (is.data.frame(rlocation)) {
-    cat("Updating donor imputed respondent location with known/disclosed location\n")
+    cat("Updating donor imputed respondent location with disclosed location\n")
     geo <- fst::read_fst("geo-processed/concordance/geo_concordance.fst")
     rlocation <- geo %>%
       select(state, puma10, any_of(names(rlocation))) %>%
@@ -268,7 +268,7 @@ fusionOutput <- function(donor,
     if (nrow(rlocation) > 0) {
       N0 <- nrow(train.data)
       pct <- 100 * signif(nrow(rlocation) / nrow(train.data), 3)
-      cat("Known location provided for ", nrow(rlocation), " donor respondents (", pct, "% of households)\n", sep = "")
+      cat("Disclosed location provided for ", nrow(rlocation), " donor respondents (", pct, "% of households)\n", sep = "")
       train.data <- train.data %>%
         mutate_at(vars(state, puma10), as.character) %>%
         rows_update(rlocation, by = "hid")
@@ -364,7 +364,6 @@ fusionOutput <- function(donor,
                                 cor_thresh = 0.025,
                                 lasso_thresh = 0.975,
                                 xmax = 100,
-                                #xforce = xforce,
                                 fraction = pfrac,
                                 cores = ncores)
 
@@ -372,7 +371,7 @@ fusionOutput <- function(donor,
     xfile <- paste0(stub, "prep.rds")
     saveRDS(prep, file = xfile)
     fsize <- signif(file.size(xfile) / 1e6, 3)
-    cat("\nResults of prepXY() saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+    cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
 
   }
 
@@ -433,6 +432,10 @@ fusionOutput <- function(donor,
                                  cores = ncores,
                                  ...)
 
+  xfile <- paste0(stub, "model.fsn")
+  fsize <- signif(file.size(xfile) / 1e6, 3)
+  cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+
   #-----
 
   # NEW: Extract variable importance
@@ -470,6 +473,11 @@ fusionOutput <- function(donor,
                                   M = M,
                                   fsd = paste0(stub, "valid.fsd"),
                                   cores = ncores)
+
+    xfile <- paste0(stub, "valid.fsd")
+    fsize <- signif(file.size(xfile) / 1e6, 3)
+    cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+
   }
 
   #-----
@@ -517,6 +525,10 @@ fusionOutput <- function(donor,
                     fsd = paste0(stub, "fused.fsd"),
                     retain = idvars,  # Retain the ACS household ID (and possible 'pid') in the output
                     cores = ncores)
+
+  xfile <- paste0(stub, "fused.fsd")
+  fsize <- signif(file.size(xfile) / 1e6, 3)
+  cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
 
   #-----
 

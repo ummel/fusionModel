@@ -385,11 +385,17 @@ freeMemory <- function() {
       x <- gsub(".", "", x, fixed = TRUE)
       as.numeric(x) * as.numeric(pagesize) / (1024 ^ 2)
     } else {
-      # Linux system assumed as backstop
-      # See output of 'cat /proc/meminfo'
-      x <- system('grep MemAvailable /proc/meminfo', intern = TRUE)
-      x <- strsplit(x, "\\s+")[[1]][2]
-      as.numeric(x) / 1024
+      ncores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))
+      if (is.na(ncores)) {
+        # Linux system assumed as backstop
+        # See output of 'cat /proc/meminfo'
+        x <- system('grep MemAvailable /proc/meminfo', intern = TRUE)
+        x <- strsplit(x, "\\s+")[[1]][2]
+        as.numeric(x) / 1024
+      } else {
+        # Yale HPC setting
+        ncores * as.integer(Sys.getenv("SLURM_MEM_PER_CPU"))
+      }
     }
   }
 }
