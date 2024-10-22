@@ -135,9 +135,13 @@ train <- function(data,
   if (is.list(x)) {
     xlist <- x
     x <- unique(unlist(x))
+    cat("Using specified set of predictors for each fusion variable\n")
   } else {
-    xlist <- rep(list(x), length(ylist))
+    #xlist <- rep(list(x), length(ylist))
+    xlist <- lapply(1:length(ylist), function(i) c({if (i == 1) NULL else unlist(ylist[1:(i - 1)])}, x))
+    cat("Using all available predictors for each fusion variable\n")
   }
+  x <- setdiff(x, y)
 
   #---
 
@@ -148,7 +152,8 @@ train <- function(data,
     !any(c("M", "W..", "R..") %in% y)  # Reserved variable names
     all(lengths(ylist) > 0)
     all(x %in% names(data))
-    length(xlist[[1]]) > 0  # Technically, only the first 'xlist' slot is required to have variables specified (others can be NULL/empty)
+    #length(xlist[[1]]) > 0  # Technically, only the first 'xlist' slot is required to have variables specified (others can be NULL/empty)
+    all(lengths(xlist) > 0)
     length(ylist) == length(xlist)
     length(intersect(y, x)) == 0
     is.character(fsn) & endsWith(fsn, ".fsn")
@@ -161,6 +166,8 @@ train <- function(data,
     is.logical(fork)
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
   })
+
+  if (!any(x %in% xlist[[1]])) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
 
   #---
 
@@ -210,10 +217,10 @@ train <- function(data,
 
   # Check 'data' for type consistency and remove no-variance (constant) variables
   data <- checkData(data, y, x, nfolds = nfolds, impute = FALSE)
-  x <- intersect(x, names(data))
+  x <- intersect(x, names(data))  # To account for possible removal of zero-variance variables
   n <- length(xlist)
-  for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
-  if (length(xlist[[1]]) == 0) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
+  #for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
+  #if (length(xlist[[1]]) == 0) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
   y <- intersect(y, names(data))
   for (i in 1:n) ylist[[i]] <- intersect(ylist[[i]], y)
   keep <- setdiff(1:n, which(lengths(ylist) == 0))
@@ -249,15 +256,15 @@ train <- function(data,
 
   # Print variable information to console
   cat(length(y), "fusion variables\n")
-  cat(length(x), "initial predictor variables\n")
+  cat(length(x), "predictor variables\n")
   cat(nrow(data), "observations\n")
 
   # Report if using different sets of predictor variables across the fusion variables
-  if (all(lengths(xlist) == length(x))) {
-    cat("Using all available predictors for each fusion variable\n")
-  } else {
-    cat("Using specified set of predictors for each fusion variable\n")
-  }
+  # if (all(lengths(xlist) == length(x))) {
+  #   cat("Using all available predictors for each fusion variable\n")
+  # } else {
+  #   cat("Using specified set of predictors for each fusion variable\n")
+  # }
 
   # Limit 'data' to the necessary variables
   data <- data[c(x, y)]
@@ -347,8 +354,9 @@ train <- function(data,
     # 'y' variables from prior clusters to be included as predictors
     yv <- if (i == 1) NULL else unlist(ylist[1:(i - 1)])
 
-    # Full set of predictor variables, including 'y' from clusters earlier in sequence
-    xv <- c(xlist[[i]], yv)
+    # Full set of predictor variables, including possible 'y' variables from earlier in the sequence
+    #xv <- c(xlist[[i]], yv)
+    xv <- xlist[[i]]
 
     path <- file.path(td, pfixes[i])
     dir.create(path)

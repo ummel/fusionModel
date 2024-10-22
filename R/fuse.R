@@ -122,6 +122,7 @@ fuse <- function(data,
 
   # Convert input data to data.table for efficiency
   data <- as.data.table(data)
+  dkey <- key(data)  # Store original data.table key(s); if present, enforced in final output
 
   # Temporary directory to unzip .fsn contents to and possible save .fst result chunks
   td <- tempfile()
@@ -514,9 +515,8 @@ fuse <- function(data,
   setcolorder(dtemp, c("M", retain, yvars))
   rm(dretain)
 
-  # Not sure if this is a good idea or necessary?
-  # Set data.table key for 'M' column
-  #setkey(dtemp, M)
+  # Set data.table key for 'M' column and any original data.table keys still present in output
+  setkeyv(dtemp, cols = intersect(names(dtemp), c('M', dkey)))
 
   # Final result to return or write to disk
   out <- if (is.null(fsd)) {

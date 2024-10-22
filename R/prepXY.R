@@ -105,7 +105,7 @@ prepXY <- function(data,
   #---
 
   # Create 'y'; all individual y variables, in case 'ylist' has blocked variables
-  y <- unlist(ylist)
+  #y <- unlist(ylist)  # Necessary?
 
   # Observation weights vector
   W <- if (is.null(weight)) {
@@ -165,6 +165,7 @@ prepXY <- function(data,
   yfactor <- names(which(sapply(data[y], is.factor)))
   ycols <- names(Y)
 
+  xylink <- rbind(xlink, ylink)
   rm(data)
   Z <- as.matrix(cbind(Y, X))  # Could make sparse?
   rm(X, Y)
@@ -347,37 +348,46 @@ prepXY <- function(data,
 
     # Extract the predictor variables to be used for 'best' fusion variable
     keep <- out[[best]]$xk
-    if (!is.null(xlink)) {
-      i <- keep %in% xlink$dummy
-      keep[i] <- filter(xlink, dummy %in% keep[i])$original
+    # if (!is.null(xlink)) {
+    #   i <- keep %in% xlink$dummy
+    #   keep[i] <- filter(xlink, dummy %in% keep[i])$original
+    if (!is.null(xylink)) {
+      # i <- keep %in% xylink$dummy
+      # keep[i] <- filter(xylink, dummy %in% keep[i])$original
+      i <- xylink$original[match(keep, xylink$dummy)]
+      i[is.na(i)] <- keep[is.na(i)]
+      keep <- i
     }
     keep <- unique(keep)
-    keep <- setdiff(keep, ycols)  # Remove any fusion variables from the preferred predictor set
+    #keep <- setdiff(keep, ycols)  # Remove any fusion variables from the preferred predictor set
     xpred <- c(xpred, list(keep))
 
   }
 
   #---
 
-  # Remove any "*_zero" variables from the y 'ord' result
+  # Remove any "*_zero" variables from the 'ord' result or 'xpred' results
   ord <- lapply(ord, function(v) setdiff(v, paste0(yinf, "_zero")))
+  xpred <- lapply(xpred, function(v) setdiff(v, paste0(yinf, "_zero")))
 
   # Force inclusion of 'xforce' predictor variables
   xpred <- lapply(xpred, function(v) unique(c(v, xforce)))
 
   # Nicely name and order the x-predictors list in order of original 'x'
-  names(xpred) <- sapply(ord, paste, collapse = " | ")
-  xpred <- lapply(xpred, function(v) v[order(match(v, x))])
+  # names(xpred) <- sapply(ord, paste, collapse = " | ")
+  # xpred <- lapply(xpred, function(v) v[order(match(v, x))])
 
   # Results list
   result <- list(y = ord, x = xpred)
 
   # The full set of variables being retained, stored as attribute
   pvars <- unique(unlist(xpred))
-  stopifnot(all(pvars %in% x))
-  attr(result, "xpredictors") <- pvars[order(match(pvars, x))]
+  #stopifnot(all(pvars %in% x))
+  attr(result, "xpredictors") <- intersect(x, pvars)
   attr(result, "xforce") <- xforce
-  cat("Retained", length(pvars), "of", length(x), "predictor variables\n")
+  attr(result, "xoriginal") <- x  # Original, full set of potential predictor variables
+  #cat("Retained", length(pvars), "of", length(x), "potential predictor variables\n")
+  cat("Retained", length(intersect(x, pvars)), "of", length(x), "potential predictor variables\n")
 
   # Report processing time
   tout <- difftime(Sys.time(), t0)
@@ -386,4 +396,3 @@ prepXY <- function(data,
   return(result)
 
 }
-

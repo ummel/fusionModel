@@ -196,57 +196,67 @@ denormalize <- function(z, center, scale, eps = 0.001) {
 
 # Function to efficiently one-hot encode factor variables in a data frame
 # Based on suggestion here: https://stackoverflow.com/questions/39905820/how-to-one-hot-encode-factor-variables-with-data-table
-# If dt = TRUE, a data.table is returned; otherwise, data.frame
+# Note that original class of input 'data' is returned (data.frame or data.table)
 # If dropOriginal = TRUE, the original factor columns are dropped
 # If dropUnusedLevels = TRUE, unused factor levels are dropped
-# Adds attribute "one_hot_link" to output data.frame/table
+# Adds attribute "one_hot_link" to output data.frame
 
-one_hot <- function(data, y = NULL, dt = TRUE, dropOriginal = TRUE, dropUnusedLevels = FALSE) {
+one_hot <- function(data, dropOriginal = TRUE, dropUnusedLevels = FALSE) {
 
   stopifnot(is.data.frame(data))
-  if (dt) data <- as.data.table(data)
+  dt <- inherits(data, "data.table")
+  data <- as.data.table(data)
 
-  # If no 'y' provided, one-hot encode all factors in 'data'
-  if (is.null(y)) y <- names(which(sapply(data, is.factor)))
+  # Identify factor variables in 'data' to hot encode
+  y <- names(which(sapply(data, is.factor)))
 
   # Proceed only if there are factors to one-hot encode
   if (length(y) > 0) {
 
-    # Subset variables depending on input type
-    if (class(data)[1] == "data.frame") {
-      dy <- data[y]
-      if (dropOriginal) data <- data[setdiff(names(data), y)]
-    } else {
-      dy <- data[, ..y]
-      if (dropOriginal) data[, c(y) := NULL]
-    }
+    dy <- data[, ..y]
+    if (dropOriginal) data[, c(y) := NULL]
 
     # Construct levels linkage
-    # Must be consistent with how Matrix::sparse.model.matrix names the dummy variables
+    # Must be consistent with how Matrix::sparse.model.matrix (or data.table) names the dummy variables
     dlink <- lapply(y, function(v) {
       lev <- levels(dy[[v]])
-      data.frame(original = v, dummy = paste(v, lev, sep = ""), level = lev)
+      data.frame(original = v, dummy = paste(v, lev, sep = ""), level = lev)  # If using Matrix::sparse.model.matrix
+      #data.frame(original = v, dummy = paste(v, lev, sep = "_"), level = lev)  # If using data.table implementation
     })
     dlink <- do.call(rbind, dlink)
 
+    #---
+
+    # Pure data.table implementation
+    # dy[, ID__ := .I]
+    # for (i in y) set(dy, j = i, value = factor(paste(i, dy[[i]], sep = "_"), levels = paste(i, levels(dy[[i]]), sep = "_")))
+    # dy <- dcast(melt(dy, id = 'ID__', value.factor = TRUE), ID__ ~ value, drop = dropUnusedLevels, fun = length)
+    # dy[, ID__ := NULL]
+
+    #---
+
+    # ALT: Matrix package implementation (somewhat faster than data.table)
     # One-hot encode to sparse matrix (requires Matrix package for speed; faster than pure data.table implementation)
     # https://stackoverflow.com/questions/4560459/all-levels-of-a-factor-in-a-model-matrix-in-r
     dy <- Matrix::sparse.model.matrix(~ 0 + .,
                                       data = dy,
                                       contrasts.arg = lapply(dy, contrasts, contrasts = FALSE),
                                       drop.unused.levels = FALSE)
-    #drop.unused.levels = dropUnusedLevels)
 
     # Could return sparse matrix, but appending to original data frame by default
     dy <- as.matrix(dy)
 
+    #---
+
     # Drop dummy columns with no 1's
     if (dropUnusedLevels) {
-      keep <- colSums(dy != 0) > 0
+      keep <- colSums(dy) > 0
+      #dy <- dy[, ..keep]  # data.table implementation
       dy <- dy[, keep]
     }
 
     data <- cbind(data, dy)
+    if (!dt) data <- as.data.frame(data)
     attr(data, "one_hot_link") <- dlink
   }
   return(data)
@@ -964,15 +974,20 @@ full.path <- function(path, mustWork = NA) {
 
 #-------------------
 
-# Much faster version of table()
-# Returns number of NA observations; i.e. equivalent to table(..., useNA = 'always')
+# Much faster version of table() and can accommodate weights
+# Returns number of NA observations if na.rm = FALSE (default); i.e. equivalent to table(..., useNA = 'always')
 # https://stackoverflow.com/questions/17374651/find-the-n-most-common-values-in-a-vector
-table2 <- function(x, na.rm = FALSE) {
+table2 <- function(x, w = NULL, na.rm = FALSE) {
   require(data.table)
   stopifnot(is.atomic(x))
-  ds <- data.table(x)
-  setkey(ds, x)
-  ds <- ds[, .N, by = "x"]
+  if (is.null(w)) {
+    ds <- setDT(list(x = x), key = "x")
+    ds <- ds[, .N, by = "x"]
+  } else {
+    stopifnot(is.numeric(w) & length(w) == length(x))
+    ds <- setDT(list(x = x, w = w), key = "x")
+    ds <- ds[, .(N = sum(w)), by = "x"]
+  }
   if (na.rm) ds <- na.omit(ds)
-  setNames(ds$N, ds$x)
+  return(setNames(ds$N, ds$x))
 }

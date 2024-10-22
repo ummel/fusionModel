@@ -69,12 +69,12 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
   y <- names(miss)[miss > 0 & miss < nrow(d)]
   x <- setdiff(names(d), c(y, weight))
   temp.fsn <- paste0(tempfile(), ".fsn")
-  if (length(y) == 0) stop("No variables with missing values to impute!")
 
   #---
 
   # Predictor prescreen step if 'd' is sufficiently large
-  if (length(x) & (nrow(d) > 10e3 | ncol(d) > 10)) {
+  #if (length(x) & (nrow(d) > 10e3 | ncol(d) > 10)) {
+  if ((nrow(d) > 10e3 | ncol(d) > 20)) {
 
     d2 <- copy(d)
     d2[, (weight) := NULL]
@@ -105,7 +105,8 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
     if (nrow(d2) > 100e3) d2 <- d2[sample.int(nrow(d2), 100e3), ]
 
     # Correlation matrix
-    cmat <- suppressWarnings(cor(d2[, ..y], d2[, ..x], use = "pairwise.complete.obs"))
+    ok <- setdiff(names(d2), ignore)
+    cmat <- suppressWarnings(cor(d2[, ..y], d2[, ..ok], use = "pairwise.complete.obs"))
     cmat[is.na(cmat)] <- 0
 
     # Initial correlation screening, based on absolute correlation value
@@ -113,27 +114,30 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
 
       p <- cmat[v, ]
       names(p) <- colnames(cmat)
+      p <- p[names(p) != v]
       p <- sort(abs(p), decreasing = TRUE)
 
-      # Predictors that meet arbitrary correlation threshold
-      # Limit to max 50 potential x-predictors for each model (hard cap)
-      xv <- names(p[p > 0.05])
-      xv <- xv[1:min(50, length(xv))]
+      # Restrict to predictors that meet arbitrary absolute correlation threshold (> 0.025)
+      # Limit to maximum 30 potential predictors for each model (hard cap)
+      # Attempt to retain minimum 5 potential predictors regardless of correlation
+      xv <- names(p[p > 0.025])
+      xv <- xv[1:min(30, length(xv))]
+      if (length(xv) < 5) xv <- names(p)[1:min(5, length(p))]
 
-      # If necessary, attempt to retain minimum 10 potential x-predictors
-      if (length(xv) < 10) xv <- names(p)[1:min(10, length(p))]
       return(xv)
 
-    }) %>%
-      setNames(y)
+    })
 
     rm(d2)
 
   } else {
 
-    xlist <- rep(list(x), length(y))
+    #xlist <- rep(list(x), length(y))
+    xlist <- lapply(y, function(v) setdiff(names(d), c(v, ignore, weight)))
 
   }
+
+  setNames(xlist, y)
 
   #---
 
@@ -143,8 +147,9 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
 
     # Response and predictor variables
     v <- y[i]
-    xv <- c(xlist[[i]], setdiff(y, v))
-    xv <- setdiff(xv, ignore)
+    #xv <- c(xlist[[i]], setdiff(y, v))
+    #xv <- setdiff(xv, ignore)
+    xv <- xlist[[i]]
     vtrain <- c(weight, v, xv)
 
     # Observations to impute
@@ -154,8 +159,8 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
     dtrain <- d[!imp, ..vtrain]
 
     # If sample size is large, use a stratified sample of the training data
-    # Restricts training sample to no more than 100k observations
-    maxn <- min(max(10e3, 10 * sum(imp)), 100e3)
+    # Restricts training sample to no more than 20k observations
+    maxn <- min(max(5e3, 10 * sum(imp)), 20e3)
     if (nrow(dtrain) > maxn) {
       keep <- stratify(y = dtrain[[v]],
                        ycont = is.numeric(dtrain[[v]]),
