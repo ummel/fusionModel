@@ -16,6 +16,7 @@ Imports:
     fst,
     glmnet,
     lightgbm,
+    Matrix,
     matrixStats,
     mgcv,
     purrr,
