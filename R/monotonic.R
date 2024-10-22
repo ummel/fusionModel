@@ -68,7 +68,7 @@ monotonic <- function(x,
   n <- length(x)
   if (n > 10e3) {
     i <- match(range(x), x)  # Retains first instance of min and max 'x'
-    i <- c(i, sample.int(n = n, size = N - 2))
+    i <- c(i, sample.int(n = n, size = n - 2))
     x <- x[i]
     y <- y[i]
     w <- w[i]
