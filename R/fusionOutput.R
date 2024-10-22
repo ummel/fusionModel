@@ -472,7 +472,8 @@ fusionOutput <- function(donor,
                                   fsn = fsn.path,
                                   M = M,
                                   fsd = paste0(stub, "valid.fsd"),
-                                  cores = ncores)
+                                  cores = ncores,
+                                  margin = margin)
 
     xfile <- paste0(stub, "valid.fsd")
     fsize <- signif(file.size(xfile) / 1e6, 3)
@@ -524,7 +525,8 @@ fusionOutput <- function(donor,
                     M = M,
                     fsd = paste0(stub, "fused.fsd"),
                     retain = idvars,  # Retain the ACS household ID (and possible 'pid') in the output
-                    cores = ncores)
+                    cores = ncores,
+                    margin = margin)
 
   xfile <- paste0(stub, "fused.fsd")
   fsize <- signif(file.size(xfile) / 1e6, 3)

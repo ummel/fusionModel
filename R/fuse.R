@@ -195,18 +195,19 @@ fuse <- function(data,
 
   #-----
 
-  # Allocate columns in 'data' for the fusion variables
+  # Allocate columns in 'data' for the fusion/response variables
   N0 <- nrow(data)
   rmat <- matrix(data = NA_real_, nrow = N0, ncol = length(yvars), dimnames = list(NULL, yvars))
   rsize <- objectSize(rmat)
-  data <- cbind(as.data.table(data), rmat)
+  data <- cbind(data, rmat)
   setcolorder(data, meta$dnames)  # This ensures that 'dmat' has columns in correct/original order for purposes of LightGBM prediction
   rm(rmat)
 
   # Coerce 'data' to matrix compatible with input to LightGBM
   # Ensure that 'dmat' is double precision; LightGBM enforces this internally
   dmat <- to_mat(data)
-  if (storage.mode(dmat) != "double") storage.mode(dmat) <- "double"
+  storage.mode(dmat) <- "double"
+  #if (storage.mode(dmat) != "double") storage.mode(dmat) <- "double"
   dsize <- objectSize(dmat)
   rm(data)
 
@@ -216,13 +217,16 @@ fuse <- function(data,
   # Resulting vector 'nimp' gives the integer number of implicates to process in each of 'nstep' chunks
   # The implicates are spread as evenly as possible across chunks
   mfree <- freeMemory()
-  if (rsize * M > mfree) stop("Insufficient memory. Try making 'M' be smaller.")
+  if (rsize * M > mfree) stop("Insufficient memory. Try making 'M' smaller.")
 
   # Number of implicates that can be safely processed at once in memory
   # The 'margin' factor effectively provides working memory for operations on top of primary data storage
   #n <- floor(mfree / (rsize + dsize * margin))
   n <- floor((mfree + dsize) / (dsize * margin))
   n <- min(n, M)
+
+  # Report on the memory situation
+  cat("Detected", mfree / 1e3, "GB of free memory\n")
 
   # The number of steps/chunks can be overridden by negative 'margin' value (for testing)
   nstep <- ifelse(margin > 0, ceiling(M / n), min(M, ceiling(-margin)))
@@ -240,7 +244,9 @@ fuse <- function(data,
   if (nimp[1] > 1) {
     dind <- rep(seq.int(N0), nimp[1])
     dmat <- dmat[dind, ]
+    if (storage.mode(dmat) != "double") storage.mode(dmat) <- "double"
     rm(dind)
+    gc(verbose = FALSE)
   }
 
   # Report parallel processing to console
