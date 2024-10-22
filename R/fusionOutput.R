@@ -371,6 +371,7 @@ fusionOutput <- function(donor,
     # Save output from prepXY()
     xfile <- paste0(stub, "prep.rds")
     saveRDS(prep, file = xfile)
+    fsize <- signif(file.size(xfile) / 1e6, 3)
     cat("\nResults of prepXY() saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
 
   }
