@@ -95,7 +95,7 @@ fusionOutput <- function(donor,
                          test_mode = TRUE,
                          validation = TRUE,
                          ncores = 1,
-                         margin = 2,
+                         margin = 4,
                          ...) {
 
   tstart <- Sys.time()
@@ -138,39 +138,14 @@ fusionOutput <- function(donor,
     })
   }
 
-  # # Construct the file path 'stub' for the output files
-  # stub <- if (is.null(output)) {
-  #   b <- strsplit(input, .Platform$file.sep, fixed = TRUE)[[1]]
-  #   i <- which(b == "fusionData")
-  #   if (length(i) == 0) {
-  #     input
-  #   } else {
-  #     paste(b[1:i], collapse = .Platform$file.sep)
-  #   }
-  # } else {
-  #   if (!dir.exists(output)) stop("'output' directory does not exist.")
-  #   full.path(output)
-  # }
-
-  # Set number of implicates automatically, if not specified
-  #if (is.null(M)) M <- ifelse(test_mode, 2, 30)
+  # Set number of cores for 'fst' and 'data.table' packages to use
+  data.table::setDTthreads(ncores)
+  fst::threads_fst(ncores)
 
   # Create log file
   log.temp <- tempfile()
   log.txt <- file(log.temp, open = "wt")
   sink(log.txt, split = TRUE, type = "output")
-
-  # Detect if 'fork = TRUE' is passed in the optional ... arguments
-  # In this case, we need to turn off data.table and fst multi-threaded until after train() has executed
-  #temp <- list(...)
-  #fork <- if ("fork" %in% names(temp)) temp$fork else FALSE
-
-  # Set cores for 'fst' and 'data.table' packages to use
-  # fork <- FALSE ## TEMP!
-  # data.table::setDTthreads(ifelse(fork, 1L, ncores))
-  # fst::threads_fst(ifelse(fork, 1L, ncores))
-  data.table::setDTthreads(ncores)
-  fst::threads_fst(ncores)
 
   #-----
 
@@ -181,10 +156,18 @@ fusionOutput <- function(donor,
   cat("Platform:", R.Version()$platform, "\n")
   cat("fusionModel v", as.character(utils::packageVersion("fusionModel")), "\n\n", sep = "")
 
+  # Report number of CPU cores and available memory
+  gc(verbose = FALSE)
+  cat("Using", ncores, "of", max(parallel::detectCores(logical = FALSE), as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK")), na.rm = TRUE), "available CPU cores\n")
+  cat("Detected", signif(freeMemory() / 1e3, 3), "GB of available memory at the start\n\n")
+
   # Print the original function arguments
   # Excludes 'note', if present, since it is printed separately to log, below
   print(match.call.defaults(exclude = if (is.null(note)) NULL else "note"))
   cat("\n")
+
+  # Print message indicating 'test_mode' value
+  cat("Running in", ifelse(test_mode, "TEST", "PRODUCTION"), "mode\n\n")
 
   # Report the fusion directory or fail with error message
   if (dir.exists(dir)) {
@@ -193,62 +176,40 @@ fusionOutput <- function(donor,
     stop("Requested fusion directory does not exist. Input files not located at: ", dir)
   }
 
-  # TEMP
-  # Print message indicating 'test_mode' value
-  cat("fusionOutput() is running in", ifelse(test_mode, "TEST", "PRODUCTION"), "mode.\n")
-
   # Write 'note' argument to log file (and console), if requested
   if (!is.null(note)) cat("User-supplied note:\n", note, "\n\n")
 
   #-----
 
   # Check for presence of training dataset
-  tfile <- list.files(dir, paste0(respondent, "_donor\\.fst$"), full.names = TRUE)
+  tfile <- full.path(list.files(dir, pattern = paste0(respondent, "_donor\\.fst$"), full.names = TRUE))
   if (length(tfile) == 0) stop("Cannot locate 'donor.fst' file at: ", tfile)
-  if (length(tfile) > 1) stop("Located more than one valid 'donor.fst' file...")
-
-  # RETAIN?
-  # Check for presence of prepXY() results
-  # pfile <- sub("donor.fst$", "prep.rds", tfile)
-  # if (length(pfile) == 0) stop("Cannot locate 'prep.rds' file in 'input'")
-  # if (length(pfile) > 1) stop("There is more than one 'prep.rds' file in 'input'...")
 
   # Check for presence of ACS prediction dataset
-  pfile <- sub("donor.fst$", "recipient.fst", tfile)
-  if (length(pfile) == 0) stop("Cannot locate 'recipient.fst' file at: ", pfile)
-  if (length(pfile) > 1) stop("Located more than one 'recipient.fst' file...")
+  rfile <- sub("donor.fst", "recipient.fst", tfile)
+  if (!file.exists(rfile)) stop("Cannot locate 'recipient.fst' file at: ", rfile)
 
   # Check for presence of donor processed microdata
-  dfile <- list.files(path = "survey-processed", pattern = paste(c(donor, respondent, "processed.fst"), collapse = "_"), recursive = TRUE, full.names = TRUE)
-  dfile <- full.path(dfile)
+  dfile <- full.path(list.files(path = "survey-processed", pattern = paste(c(donor, respondent, "processed.fst"), collapse = "_"), recursive = TRUE, full.names = TRUE))
   if (length(dfile) == 0) stop("Cannot locate donor processed microdata in /survey-processed")
-  if (length(dfile) > 1) stop("There is more than one valid donor processed microdata in /survey-processed")
 
   # Check for presence of 'geo_predictors.fst' file
   gfile <- full.path("geo-processed/geo_predictors.fst")
-  if (length(gfile) == 0) stop("Cannot locate 'geo_predictors.fst' file")
-  if (length(gfile) > 1) stop("There is more than one 'geo_predictors.fst' file in /geo-processed")
-
-  # Construct full output path for results files and create the directory if necessary
-  # dir <- dirname(file.path(stub, ifelse(test_mode, "fusion_", "fusion"), gsub("_", .Platform$file.sep, basename(tfile), fixed = TRUE)))
-  # dir <- file.path(dir, "output")
-  # cat("Result files will be saved to:\n", dir, "\n\n")
-  # if (dir.exists(dir)) {
-  #   cat("The local /output directory already exists.\n")
-  # } else {
-  #   dir.create(dir, recursive = TRUE)
-  #   cat("The local /output directory was created.\n")
-  # }
+  if (!file.exists(gfile)) stop("Cannot locate 'geo_predictors.fst' file")
 
   # Update 'stub' used for output files
   stub <- file.path(dir, sub("donor.fst", "", basename(tfile), fixed = TRUE))
 
+  # Log file paths
+  log.path <- paste0(stub, "outputlog.txt")
+  log.path0 <- paste0(stub, "outputlog0.txt") # Possible copy location when training step is skipped
+
   #-----
 
-  cat("\n|=== Load training data inputs ===|\n\n")
+  cat("|=== Assemble training data ===|\n\n")
 
   # Load the training data - TO DO: ADD fusion variables via merge with processed donor microdata
-  cat("Loading donor microdata:", basename(tfile), "\n")
+  cat("Loading donor harmonized predictors:", basename(tfile), "\n")
   train.data <- fst::read_fst(tfile, as.data.table = TRUE)
   hvars <- grep("__", names(train.data), fixed = TRUE, value = TRUE)  # Harmonized predictor variables
 
@@ -282,21 +243,21 @@ fusionOutput <- function(donor,
   idvars <- intersect(names(train.data), c('hid', 'pid'))
   dvars <- names(fst::fst(dfile))
   miss <- setdiff(fvars, dvars)
-  if (length(miss)) stop("The following fusion variables are not present in the donor microdata:", paste(miss, collapse = ","), "\n")
+  if (length(miss)) stop("The following fusion variables are not present in the donor microdata:\n", paste(miss, collapse = ","), "\n")
   fuse.data <- fst::read_fst(dfile, as.data.table = TRUE, columns = c(idvars, fvars)) %>%
     setkeyv(idvars)
 
-  # Load spatial predictors data
+  # Load spatial predictors data (always needed)
   cat("Loading spatial predictors from", basename(gfile), "\n")
   # Survey vintage (year); returns approximate midpoint year in case of range (e.g. "2014-2016" returns 2015)
   svintage <- ceiling(median(eval(parse(text = donor[2]))))
   spatial.data <- fst::read_fst(gfile, as.data.table = TRUE) %>%
-    setkey(state, puma10) %>%   # TEMP -- remove 'vintage' as key in gfile
+    setkey(state, puma10) %>%   # TEMP -- should remove 'vintage' as key in gfile
     filter(vintage == svintage) %>%
     select(-vintage)
 
   # Assemble full dataset needed for model training
-  cat("Assembling full dataset for training\n")
+  cat("Assembling full training dataset\n")
   full.data <- train.data %>%
     merge(spatial.data, all.x = TRUE, sort = FALSE) %>%
     setkeyv(key(fuse.data)) %>%
@@ -304,80 +265,112 @@ fusionOutput <- function(donor,
     select(-all_of(c(idvars, key(spatial.data)))) %>%
     select(weight, all_of(fvars), everything())
 
+  # Safety check for excessive number of factor levels
+  drop <- names(which(sapply(full.data, nlevels) > 255))
+  if (length(drop)) {
+    full.data <- select(full.data, -all_of(drop))
+    cat("Removed the following variables due to excessive (>255) number of factor levels:\n", paste(drop, collapse = ", "), "\n")
+  }
+
+  cat("Number of training observations:", nrow(full.data), "\n")
   rm(train.data, fuse.data)
 
   #-----
 
-  # Load results of prepXY() with fusion and predictor variable details
-  # cat("Loading prepXY() results:", basename(pfile), "\n")
-  # prep <- readRDS(pfile)
+  # Check for presence of existing '*_model.fsn' object
+  # If requested, attempt to bypass fusionModel::train() step
+  mfile <- sub("donor.fst", "model.fsn", tfile)
+  if (file.exists(mfile) & is.null(fsn)) {
+    skip.train <- TRUE
+    fsn <- fsn.path <- mfile
+  } else {
+    skip.train <- FALSE
+  }
 
-  # NEW: If a 'fsn' object is provided, use those results to create 'prep' list instead of running prepXY()
-
+  # If a 'fsn' object/template is provided (or existing .fsn model already present), use those results to create 'prep' list instead of running prepXY()
   if (is.character(fsn)) {
 
-    cat("\n|=== Existing .fsn model used to select predictors ===|\n\n")
-
-    # Original harmonized predictors in training data of existing 'fsn' model
-    hvars0 <- names(fst::fst(sub("_model.fsn", "_donor.fst", fsn, fixed = TRUE)))
-    hvars0 <- grep("__", hvars0, fixed = TRUE, value = TRUE)
-
-    # Variable importance results for existing 'fsn' model
-    vimp <- fusionModel::importance(fsn)$detailed %>%
-      distinct(y, x) %>%
-      filter(x %in% names(full.data))
-    if (!all(fvars %in% vimp$y)) stop("Not all 'fusion_vars' are present in the existing 'fsn' model")
-
-    # Harmonized predictors in current training data that were not present for 'fsn' creation and, therefore, should always be included
-    hvars <- grep("__", names(full.data), fixed = TRUE, value = TRUE)
-    force <- setdiff(hvars, hvars0)
-
-    # Extract metadata from 'fsn' and build associated 'prep' object
-    fsn.files <- zip::zip_list(fsn)
+    # Extract metadata from 'fsn'
     td <- tempfile()
     zip::unzip(zipfile = fsn, exdir = td)
     meta <- readRDS(file.path(td, "metadata.rds"))
     unlink(td)
-    ylist <- lapply(meta$ylist, function(v) intersect(v, fvars))  # Restricts 'fsn' y-ordering to the requested fusion variables, in case only a subset of the 'fsn' fusion variables is requested
-    ylist <- ylist[lengths(ylist) > 0]
-    prep <- list(y = ylist)
-    prep$x <- lapply(prep$y, function(v) {
-      filter(vimp, y %in% v) %>%
-        pull(x) %>%
-        unique() %>%
-        c(force)
-    })
 
-    xunique <- setdiff(unique(unlist(prep$x)), fvars)
-    cat("Retained", length(xunique), "of", ncol(full.data) - length(fvars) - 1, "potential predictor variables\n")
+    if (skip.train) {
+
+      # Build 'prep' object
+      prep <- list(y = meta$ylist, x = meta$xpreds)
+
+    } else {
+
+      cat("\n|=== Existing .fsn model used as training template ===|\n\n")
+
+      # Original harmonized predictors in training data of existing 'fsn' model
+      hvars0 <- names(fst::fst(sub("_model.fsn", "_donor.fst", fsn)))
+      hvars0 <- grep("__", hvars0, fixed = TRUE, value = TRUE)
+
+      # Variable importance results for existing 'fsn' model
+      vimp <- fusionModel::importance(fsn)$detailed %>%
+        distinct(y, x) %>%
+        filter(x %in% names(full.data))
+
+      if (!all(fvars %in% vimp$y)) stop("Not all requested 'fusion_vars' are present in the existing 'fsn' model")
+      if (!all(fvars %in% vimp$y)) stop("Not all requested 'fusion_vars' are present in the existing 'fsn' model")
+
+      # Harmonized predictors in current training data that were not present for 'fsn' creation and, therefore, should always be included
+      hvars <- grep("__", names(full.data), fixed = TRUE, value = TRUE)
+      force <- setdiff(hvars, hvars0)
+
+      # Build 'prep' object
+      ylist <- lapply(meta$ylist, function(v) intersect(v, fvars))  # Restricts 'fsn' y-ordering to the requested fusion variables, in case only a subset of the 'fsn' fusion variables is requested
+      ylist <- ylist[lengths(ylist) > 0]
+      prep <- list(y = ylist)
+      prep$x <- lapply(prep$y, function(v) {
+        filter(vimp, y %in% v) %>%
+          pull(x) %>%
+          unique() %>%
+          c(force)
+      })
+
+      xunique <- setdiff(unique(unlist(prep$x)), fvars)
+      cat("Retained", length(xunique), "of", ncol(full.data) - length(fvars) - 1, "potential predictor variables\n")
+
+    }
 
   } else {
 
-    cat("\n|=== Run fusionModel::prepXY() ===|\n\n")
+    # Check for presence of existing '_prep.rds' file
+    pfile <- sub("donor.fst", "prep.rds", tfile)
+    if (file.exists(pfile) & !skip.train) {
 
-    n0 <- nrow(full.data)
-    pfrac <- min(1, ifelse(test_mode, 5e3, max(10e3, n0 * 0.1)) / n0)
-    prep <- fusionModel::prepXY(data = full.data,
-                                y = fusion_vars,
-                                x = setdiff(names(full.data), c(fvars, "weight")),
-                                weight = "weight",
-                                cor_thresh = 0.025,
-                                lasso_thresh = 0.975,
-                                xmax = 100,
-                                fraction = pfrac,
-                                cores = ncores)
+      cat("Detected existing '_prep.rds' object; bypassing fusionModel::prepXY() step\n")
+      prep <- readRDS(pfile)
 
-    # Save output from prepXY()
-    xfile <- paste0(stub, "prep.rds")
-    saveRDS(prep, file = xfile)
-    fsize <- signif(file.size(xfile) / 1e6, 3)
-    cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+    } else {
+
+      cat("\n|=== Run fusionModel::prepXY() ===|\n\n")
+
+      n0 <- nrow(full.data)
+      pfrac <- min(1, ifelse(test_mode, 5e3, max(10e3, n0 * 0.1)) / n0)
+      prep <- fusionModel::prepXY(data = full.data,
+                                  y = fusion_vars,
+                                  x = setdiff(names(full.data), c(fvars, "weight")),
+                                  weight = "weight",
+                                  cor_thresh = 0.025,
+                                  lasso_thresh = 0.975,
+                                  xmax = 100,
+                                  fraction = pfrac,
+                                  cores = ncores)
+
+      # Save output from prepXY()
+      xfile <- paste0(stub, "prep.rds")
+      saveRDS(prep, file = xfile)
+      fsize <- signif(file.size(xfile) / 1e6, 3)
+      cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+
+    }
 
   }
-
-  #---
-
-
 
   # Update 'full.data' to reflect results in 'prep'; removes unnecessary predictor variables
   full.data <- full.data %>%
@@ -385,84 +378,78 @@ fusionOutput <- function(donor,
 
   #-----
 
-  cat("\n|=== Run fusionModel::train() ===|\n\n")
 
-  # LightGBM hyper-parameter settings
-  hyper.params <- if (test_mode) {
-    cat("Running in TEST mode using fast(er) hyper-parameter settings\n")
-    list(
-      boosting = "gbdt",
-      data_sample_strategy = "goss",
-      num_leaves = 7,
-      min_data_in_leaf = max(20, ceiling(nrow(full.data) * 0.01)),
-      num_iterations = 50,
-      feature_fraction = 0.5,
-      learning_rate = 0.2,
-      max_depth = 3,
-      max_bin = 255,
-      min_data_in_bin = ceiling(nrow(full.data) * 0.01),
-      max_cat_threshold = 32
-    )
+  if (skip.train) {
+
+    cat("\n|=== Detected existing fusion model (.fsn) object; bypassing fusionModel::train() step ===|\n\n")
+
+    # When training is skipped, copy the existing output log file to 'outputlog0.txt'
+    # This allows the "0" version to retain the original training step console output
+    # If the "0" version already exists, the copying is skipped (i.e. the "0" version should always contain original training output)
+    if (!file.exists(log.path0)) file.copy(from = log.path, to = log.path0)
+    cat("See", basename(log.path0), "for console output from original model training step\n")
+
   } else {
-    cat("Running in PRODUCTION mode using the following hyper-parameter settings:\n")
-    hyper.params <- list(
-      boosting = "gbdt",
-      data_sample_strategy = "goss",
-      num_leaves = 31,
-      min_data_in_leaf = max(10, ceiling(nrow(full.data) * 0.001)),
-      num_iterations = 2500,
-      feature_fraction = 0.7,
-      learning_rate = 0.1,
-      max_depth = 5,
-      max_bin = 255,
-      min_data_in_bin = 3,
-      max_cat_threshold = 32
-    )
-    print(hyper.params)
+
+    cat("\n|=== Run fusionModel::train() ===|\n\n")
+
+    # If there is a "0" version of the output log file, remove it
+    # Since train() is called below, the new log file will contain appropriate training console output
+    if (file.exists(log.path0)) unlink(log.path0)
+
+    # LightGBM hyper-parameter settings
+    hyper.params <- if (test_mode) {
+      cat("Running in TEST mode using fast(er) hyper-parameter settings\n")
+      list(
+        boosting = "gbdt",
+        data_sample_strategy = "goss",
+        num_leaves = 7,
+        min_data_in_leaf = max(20, ceiling(nrow(full.data) * 0.01)),
+        num_iterations = 50,
+        feature_fraction = 0.5,
+        learning_rate = 0.2,
+        max_depth = 3,
+        max_bin = 255,
+        min_data_in_bin = ceiling(nrow(full.data) * 0.01),
+        max_cat_threshold = 32
+      )
+    } else {
+      cat("Running in PRODUCTION mode using the following hyper-parameter settings:\n\n")
+      hyper.params <- list(
+        boosting = "gbdt",
+        data_sample_strategy = "goss",
+        num_leaves = 31,
+        min_data_in_leaf = max(10, ceiling(nrow(full.data) * 0.001)),
+        num_iterations = 2500,
+        feature_fraction = 0.75,
+        learning_rate = 0.1,
+        max_depth = 5,
+        max_bin = 255,
+        min_data_in_bin = 3,
+        max_cat_threshold = 32
+      )
+      print(hyper.params)
+    }
+
+    # Train fusion model
+    cat("Training fusion model\n\n")
+    fsn.path <- fusionModel::train(data = full.data,
+                                   y = prep$y,
+                                   x = prep$x,
+                                   fsn = paste0(stub, "model.fsn"),
+                                   weight = "weight",
+                                   hyper = hyper.params,
+                                   cores = ncores,
+                                   ...)
+
+    xfile <- paste0(stub, "model.fsn")
+    fsize <- signif(file.size(xfile) / 1e6, 3)
+    cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
+
   }
 
-  # Train fusion model
-  cat("Training fusion model\n")
-  fsn.path <- fusionModel::train(data = full.data,
-                                 y = prep$y,
-                                 x = prep$x,
-                                 fsn = paste0(stub, "model.fsn"),
-                                 weight = "weight",
-                                 hyper = hyper.params,
-                                 cores = ncores,
-                                 ...)
-
-  xfile <- paste0(stub, "model.fsn")
-  fsize <- signif(file.size(xfile) / 1e6, 3)
-  cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
-
   #-----
 
-  # NEW: Extract variable importance
-  # TO DO: Save results? Generate plot?
-  # TO DO: Use the results to skip prepXY() step for other acs_year values
-  #vimp <- fusionModel::importance(fsn.path)
-
-  #-----
-
-  # # (?) Update 'prep' object based on the importance results from initial training
-  # #prep2 <- prep
-  # for (yvar in prep$y) prep$x[[yvar]] <- filter(vimp$detailed, y == yvar, gain > 0.001)$x
-  #
-  # # TO DO: This will need to safely adjust for possibility that DIFFERENT harmonized variables are introduced for other acs_years -- these should be included by default for safety
-  # attr(prep, "xpredictors") <- setdiff(names(full.data), c(fusion_vars, "weight"))
-
-  #-----
-
-  # If train() was forked, reset number of threads allowed in data.table and fst
-  # if (fork) {
-  #   data.table::setDTthreads(ncores)
-  #   fst::threads_fst(ncores)
-  # }
-
-  #-----
-
-  #if (validation | validation %in% 1:2) {
   if (validation) {
 
     cat("\n|=== Fuse onto donor microdata for internal validation ===|\n\n")
@@ -483,7 +470,7 @@ fusionOutput <- function(donor,
 
   #-----
 
-  # # WORK ON THIS...
+  # # WHAT TO DO WITH THIS?
   # # TO DO: Skip this step for now??? Or run at very end using combined results from all acs_years?
   # if (validation | validation == 2) {
   #
@@ -507,24 +494,28 @@ fusionOutput <- function(donor,
 
   cat("\n|=== Fuse onto recipient microdata ===|\n\n")
 
-  # UPDATE
-  # Remove unnecessary objects in memory prior to fuse()
-  #suppressWarnings(rm(full.data, validfsd, validresults))
-
   # Load the prediction data and merge spatial predictors
-  cat("Loading recipient microdata:", basename(pfile), "\n")
-  predict.data <- fst::read_fst(pfile, as.data.table = TRUE) %>%
+  cat("Loading recipient harmonized predictors:", basename(rfile), "\n\n")
+  predict.data <- fst::read_fst(rfile, as.data.table = TRUE) %>%
     merge(spatial.data, all.x = TRUE, sort = FALSE) %>%
-    select(any_of(c(idvars, names(full.data)))) %>%
-    setkeyv(idvars)
+    select(any_of(c(idvars, names(full.data))))
 
-  # Fuse multiple implicates to ACS and save results to disk as compressed .csv
-  cat("Fusing to ACS ", acs_year, " microdata (", M, " implicates)\n\n", sep = "")
+  # Add 'year' column and set keys
+  set(predict.data, j = 'year', value = as.integer(acs_year))
+  setkeyv(predict.data, cols = c('year', idvars))
+
+  # Remove unnecessary objects in memory prior to fuse()
+  rm(full.data)
+  gc(verbose = FALSE)
+
+  # Fuse multiple implicates to ACS and save results to disk
+  cat("Fusing to ACS ", acs_year, " microdata (", M, " ", ifelse(M == 1, "implicate", "implicates"), ")\n\n", sep = "")
+
   fusionModel::fuse(data = predict.data,
                     fsn = fsn.path,
                     M = M,
                     fsd = paste0(stub, "fused.fsd"),
-                    retain = idvars,  # Retain the ACS household ID (and possible 'pid') in the output
+                    retain = key(predict.data),  # Retain the ACS year, household ID, and possibly 'pid' in the output
                     cores = ncores,
                     margin = margin)
 
@@ -557,7 +548,7 @@ fusionOutput <- function(donor,
 
   #-----
 
-  # Clean up and remove the temporary directory
+  # Clean up
   rm(predict.data, spatial.data)
   gc(verbose = FALSE)
 
@@ -568,7 +559,6 @@ fusionOutput <- function(donor,
   cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
 
   # Finish logging and copy log file to /input
-  log.path <- paste0(stub, "outputlog.txt")
   cat("\nLog file saved to:\n", log.path, "\n")
   sink(type = "output")
   close(log.txt)

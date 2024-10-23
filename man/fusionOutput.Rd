@@ -16,7 +16,7 @@ fusionOutput(
   test_mode = TRUE,
   validation = TRUE,
   ncores = 1,
-  margin = 2,
+  margin = 4,
   ...
 )
 }

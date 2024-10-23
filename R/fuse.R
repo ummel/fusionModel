@@ -226,7 +226,7 @@ fuse <- function(data,
   n <- min(n, M)
 
   # Report on the memory situation
-  cat("Detected", mfree / 1e3, "GB of free memory\n")
+  cat("Detected", signif(mfree / 1e3, 3), "GB of free memory\n")
 
   # The number of steps/chunks can be overridden by negative 'margin' value (for testing)
   nstep <- ifelse(margin > 0, ceiling(M / n), min(M, ceiling(-margin)))
@@ -528,7 +528,8 @@ fuse <- function(data,
   out <- if (is.null(fsd)) {
     dtemp
   } else {
-    fst::write_fst(dtemp, path = fsd.path, compress = 80)
+    fst::write_fst(dtemp, path = fsd.path, compress = 90)
+    cat("Fusion output saved to:\n", fsd.path, "\n")
     invisible(fsd.path)
   }
 
