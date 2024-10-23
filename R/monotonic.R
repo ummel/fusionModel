@@ -1,11 +1,12 @@
 #' Ensure a monotonic relationship between two variables
 #'
 #' @description
-#' \code{monotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned values is forced to equal the original mean of \code{y} (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not limited to consumption and expenditure variables.
+#' \code{monotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned values is forced to equal the original mean of \code{y} (\code{preserve_mean = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not limited to consumption and expenditure variables.
 #' @param x Numeric.
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
-#' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
+#' @param preserve_mean Logical. Preserve the original mean of the \code{y} values in the returned values?
+#' @param preserve_type Logical. Preserve the original data type of the \code{y} values in the returned values?
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
 #' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than 10,000 observations, if necessary, for speed.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
@@ -35,22 +36,25 @@
 #---------
 
 monotonic <- function(x,
-                          y,
-                          w = NULL,
-                          preserve = TRUE,
-                          plot = FALSE) {
+                      y,
+                      w = NULL,
+                      preserve_mean = TRUE,
+                      preserve_type = TRUE,
+                      plot = FALSE) {
 
   stopifnot(exprs = {
     length(x) == length(y)
     is.numeric(x) & !anyNA(x)
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
-    is.logical(preserve)
+    is.logical(preserve_mean)
+    is.logical(preserve_type)
     is.logical(plot)
   })
 
   if (is.null(w)) w <- rep.int(1L, length(x))
   ymean <- weighted.mean(y, w)
+  ytype <- storage.mode(y)
   x0 <- x
   w0 <- w
 
@@ -101,13 +105,16 @@ monotonic <- function(x,
   # Safety check
   if (anyNA(yout)) stop("NA values in result vector")
 
-  # Adjustment factor to ensure mean of transformed 'y' matches original mean value
-  yadj <- 1  # Defined for use in plotting code, below, if 'preserve = FALSE'
-  if (preserve) {
+  # If requested, adjustment factor to ensure mean of transformed 'y' matches original mean value
+  yadj <- 1  # Defined for use in plotting code, below, if 'preserve_mean = FALSE'
+  if (preserve_mean) {
     yadj <- ymean / weighted.mean(yout, w0)
     if (is.na(yadj)) yadj <- 1  # Catch divide by zero case
     yout <- yout * yadj
   }
+
+  # If requested, force output type to match input type
+  if (preserve_type) storage.mode(yout) <- ytype
 
   # Optional plot of transformation
   if (plot) {
