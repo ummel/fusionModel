@@ -16,8 +16,6 @@ monotonic(x, y, w = NULL, preserve = TRUE, plot = FALSE)
 \item{preserve}{Logical. Preserve the original mean of the \code{y} values in the returned values?}
 
 \item{plot}{Logical. Plot the (sampled) data points and derived monotonic relationship?}
-
-\item{preserve_type}{Logical. Preserve the original data type of the \code{y} values in the returned values?}
 }
 \value{
 A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.

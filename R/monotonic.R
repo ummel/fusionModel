@@ -6,7 +6,6 @@
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
-#' @param preserve_type Logical. Preserve the original data type of the \code{y} values in the returned values?
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
 #' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than 10,000 observations, if necessary, for speed.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
@@ -47,7 +46,6 @@ monotonic <- function(x,
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
     is.logical(preserve)
-    is.logical(preserve_type)
     is.logical(plot)
   })
 
