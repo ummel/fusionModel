@@ -470,20 +470,21 @@ fuse <- function(data,
 
     # Update 'dmat' prior to next iteration in 'nstep'
     if (mstep < nstep) {
-      if (nimp[mstep + 1] < nimp[mstep]) dmat <- dmat[-seq.int(N0), ]
+      if (nimp[mstep + 1] < nimp[mstep]) dmat <- dmat[-seq.int(N0), ]  # If the next chunk step has 1 less implicate, remove 1 implicate worth of rows
       dmat[, yvars] <- NA_real_  # Not strictly necessary, since the values are all overwritten, anyway
     } else {
       rm(dmat)  # Remove 'dmat' if the loop is complete
+      gc(verbose = FALSE)
     }
 
-    # If necessary, append 'dtemp' to 'fsd.path' file on disk
+    # If necessary, write 'dtemp' to temporary file (uncompressed .fst file)
     # This frees up memory for processing (i.e. larger chunk size), since prior results chunks do not need to be kept in memory
     if (nstep > 1) {
-      #cat("Writing fusion output to", ifelse(is.null(fsd), "temporary file", ".fsd file"), "\n")
       fst::write_fst(x = dtemp,
                      path = chunk.paths[mstep],
                      compress = 0)
       rm(dtemp)
+      gc(verbose = FALSE)
     }
 
   }
@@ -501,6 +502,7 @@ fuse <- function(data,
 
   # Remove temporary directory
   unlink(td)
+  gc(verbose = FALSE)
 
   # Coerce simulated fusion variables to correct class and factor labels
   # This is necessary because the raw output in 'dtemp' is integer for factors
@@ -528,6 +530,7 @@ fuse <- function(data,
   out <- if (is.null(fsd)) {
     dtemp
   } else {
+    gc(verbose = FALSE)
     fst::write_fst(dtemp, path = fsd.path, compress = 90)
     cat("Fusion output saved to:\n", fsd.path, "\n")
     invisible(fsd.path)
