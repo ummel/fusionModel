@@ -997,3 +997,27 @@ table2 <- function(x, w = NULL, na.rm = FALSE) {
   if (na.rm) ds <- na.omit(ds)
   return(setNames(ds$N, ds$x))
 }
+
+#-------------------
+
+# Lumps smallest factor levels into "Other", similar to forcats::fct_lump_n()
+# x: factor (see note about ordered factors)
+# nmax: maximum number of factor levels to return in result
+# w: optional numeric weights
+# other_level: Name of the 'other' level to assign
+# Note that ordered factor input is coerced to un-ordered in output!
+# Since assumed use is in prepXY() where ordered factor predictors are converted to integer, this isn't expected to be a problem
+lumpFactor <- function(x, nmax = 5, w = NULL, other_level = "_Other_") {
+  stopifnot(is.factor(x))
+  if (is.null(w)) w <- rep.int(1L, length(x))
+  stopifnot(is.numeric(w))
+  if (data.table::uniqueN(x, na.rm = TRUE) >= nmax) {
+    p <- table2(x, w = w, na.rm = TRUE)
+    p <- sort(p, decreasing = TRUE) / sum(p)
+    keep <- intersect(levels(x), names(p)[1:(nmax - 1)])  # Retains original factor ordering
+    x <- as.character(x)
+    x[!x %in% keep] <- other_level
+    x <- factor(x, levels = c(keep, other_level))
+  }
+  return(x)
+}

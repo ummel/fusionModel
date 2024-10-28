@@ -138,7 +138,6 @@ prepXY <- function(data,
 
     # Update the zero-inflated variables in data to have NA instead of zero values
     data <- data %>%
-      #mutate_at(yinf, ~ replace(.x, .x == 0, NA)) %>%  # Prefer to turn this on...
       cbind(dinf)
 
     # Update 'ylist' to include '*_zero' versions in block with original zero-inflated variables
@@ -154,12 +153,14 @@ prepXY <- function(data,
   X <- data[x] %>%
     mutate_if(is.ordered, as.integer) %>%
     mutate_if(is.logical, as.integer) %>%
+    mutate_if(is.factor, lumpFactor, nmax = 5) %>%
     one_hot(dropUnusedLevels = TRUE)
   xlink <- attr(X, "one_hot_link")
   xcols <- names(X)
 
   Y <- data[y] %>%
     mutate_if(is.logical, as.integer) %>%
+    mutate_if(is.factor, lumpFactor, nmax = 5) %>%
     one_hot(dropOriginal = TRUE, dropUnusedLevels = TRUE)
   ylink <- attr(Y, "one_hot_link")
   yfactor <- names(which(sapply(data[y], is.factor)))
@@ -228,7 +229,7 @@ prepXY <- function(data,
 
     # Ensure some minimum number of predictors are passed to glmnet()
     # If there are too few predictors, glmnet() may fail
-    if (length(vx) < 10) vx <- order(p, decreasing = TRUE)[1:min(10, length(p))]
+    if (length(vx) < 20) vx <- order(p, decreasing = TRUE)[1:min(20, length(p))]
 
     return(xcols[vx])
 
@@ -302,11 +303,14 @@ prepXY <- function(data,
       out2 <- lapply(yvar, function(v) {
         V <- vc[[v]]
         fits <- lapply(V, function(yv) {
-          m <-  gfit(y = yv, x = c(xok[[yv]], unlist(vc[unlist(ord)])))
+          xx <- xok[[yv]]  # x-predictors that pass minimum correlation threshold (or best-n to meet minimum number of predictors)
+          m <-  gfit(y = yv, x = c(xx, unlist(vc[unlist(ord)])))
           i <- which(m$dev.ratio / max(m$dev.ratio) >= ifelse(m$jerr == 0, lasso_thresh, 1))[1] # Preferred lambda index value for each model fit, based on supplied lasso threshold
           r2 <- m$dev.ratio[i]
           cf <- coef(m, s = m$lambda[i])
-          xk <- names(which(Matrix::rowSums(cf != 0) > 0)[-1])
+          xk <- names(which(Matrix::rowSums(cf != 0) > 0)[-1])  # Predictors with non-zero coefficients
+          xx <- setdiff(xx, xk)  # Remaining zero-coefficient x-predictors, in order of correlation preference
+          if (length(xk) < 20 & length(xx) > 0) xk <- c(xk, xx[1:min(20 - length(xk), length(xx))])  # Adds zero-coefficient predictors to achieve some minimum number
           list(r2 = r2, xk = xk)
         })
 

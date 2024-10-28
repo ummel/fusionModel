@@ -158,7 +158,8 @@ fusionOutput <- function(donor,
 
   # Report number of CPU cores and available memory
   gc(verbose = FALSE)
-  cat("Using", ncores, "of", max(parallel::detectCores(logical = FALSE), as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK")), na.rm = TRUE), "available CPU cores\n")
+  freecores <-
+  cat("Using", ncores, "of", ifelse(Sys.getenv("SLURM_CPUS_PER_TASK") == "", parallel::detectCores(logical = FALSE), as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))), "available CPU cores\n")
   cat("Detected", signif(freeMemory() / 1e3, 3), "GB of available memory at the start\n\n")
 
   # Print the original function arguments
@@ -351,13 +352,13 @@ fusionOutput <- function(donor,
       cat("\n|=== Run fusionModel::prepXY() ===|\n\n")
 
       n0 <- nrow(full.data)
-      pfrac <- min(1, ifelse(test_mode, 5e3, max(10e3, n0 * 0.1)) / n0)
+      pfrac <- min(1, ifelse(test_mode, 5e3, max(20e3, n0 * 0.1)) / n0)
       prep <- fusionModel::prepXY(data = full.data,
                                   y = fusion_vars,
                                   x = setdiff(names(full.data), c(fvars, "weight")),
                                   weight = "weight",
                                   cor_thresh = 0.025,
-                                  lasso_thresh = 0.975,
+                                  lasso_thresh = 0.99,
                                   xmax = 100,
                                   fraction = pfrac,
                                   cores = ncores)
