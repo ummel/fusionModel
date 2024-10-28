@@ -80,10 +80,12 @@ monotonic <- function(x,
   inc <- suppressWarnings(cor(m$x, m$y) >= 0)
   if (is.na(inc)) inc <- TRUE
   p <- sort(m$y, decreasing = !inc) # Force monotonic predictions
-  delta <- mean(abs((p - m$y) / m$y))
-  if (is.na(delta)) delta <- 0
-  if (delta > 0.005) {
-    m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
+  #delta <- mean(abs((p - m$y) / m$y))
+  fail <- sum(abs((p - m$y) / m$y) > 0.05) / length(p)  # Percent of observations with more than 5% absolute error
+  if (is.na(fail)) fail <- Inf
+  if (fail > 0.05) {
+    dfs <- slice_sample(data.frame(x, y, w), n = min(length(x), 1000))
+    m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = dfs, weights = w), silent = TRUE)
     if (inherits(m, "scam")) {
       p <- as.vector(predict(m, newdata = data.frame(x = xu), type = "response", newdata.guaranteed = TRUE))
     } else {
