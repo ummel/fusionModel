@@ -1,4 +1,4 @@
-#' Ensure a monotonic relationship between two variables
+#' Create a monotonic relationship between two variables
 #'
 #' @description
 #' \code{monotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned values is forced to equal the original mean of \code{y} (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not limited to consumption and expenditure variables.
@@ -6,9 +6,10 @@
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
+#' @param fast Logical. If \code{TRUE}, only \code{\link[scam]{supsmu}} is used with coercion of result to monotone.
 #' @param nmax Integer. Maximum number of observations to use for smoothing. Set lower for faster computation. \code{nmax = Inf} eliminates sampling.
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
-#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than \code{nmax} observations, if necessary, for speed.
+#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If \code{fast = FALSE} and the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than \code{nmax} observations, if necessary, for speed.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
 #' @examples
 #' y <- monotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
@@ -39,7 +40,8 @@ monotonic <- function(x,
                       y,
                       w = NULL,
                       preserve = TRUE,
-                      nmax = 2500,
+                      fast = FALSE,
+                      nmax = 5000,
                       plot = FALSE) {
 
   stopifnot(exprs = {
@@ -48,6 +50,7 @@ monotonic <- function(x,
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
     is.logical(preserve)
+    is.logical(fast)
     nmax > 1
     is.logical(plot)
   })
@@ -101,7 +104,7 @@ monotonic <- function(x,
   # Ideally, coercion to monotonic via sort() does not cause significant difference between 'p' and m$y
   fail <- sum(abs((p - m$y) / m$y) > 0.05) / length(p)  # Percent of observations with more than 5% absolute error
   if (is.na(fail)) fail <- Inf
-  if (fail > 0.05 & length(p) >= 100) {
+  if (fail > 0.05 & length(p) >= 100 & !fast) {
     # Attempt to fit SCAM model with monotonic constraint
     m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
     if (inherits(m, "scam")) {
