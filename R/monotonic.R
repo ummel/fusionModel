@@ -6,8 +6,9 @@
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
+#' @param nmax Integer. Maximum number of observations to use for smoothing. Set lower for faster computation. \code{nmax = Inf} eliminates sampling.
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
-#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than 10,000 observations, if necessary, for speed.
+#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than \code{nmax} observations, if necessary, for speed.
 #' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
 #' @examples
 #' y <- monotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
@@ -38,6 +39,7 @@ monotonic <- function(x,
                       y,
                       w = NULL,
                       preserve = TRUE,
+                      nmax = 5000,
                       plot = FALSE) {
 
   stopifnot(exprs = {
@@ -46,6 +48,7 @@ monotonic <- function(x,
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
     is.logical(preserve)
+    nmax > 1
     is.logical(plot)
   })
 
@@ -59,33 +62,45 @@ monotonic <- function(x,
   force.zero <- FALSE
   if (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.999) {
     force.zero <- TRUE
-    i <- c(which(x != 0), match(0, x))  # Retains first instance of zero in 'x'
+    i <- c(match(0, x), which(x != 0))  # Retains first instance of zero in 'x'
     x <- x[i]
     y <- y[i]
     w <- w[i]
   }
 
-  # Sample the data for speed, if necessary
+  # Remove outliers in 'x' and 'y'
+  # ok <- abs(x - median(x)) / mad(x) < 3.5 & abs(y - median(y)) / mad(y) < 3.5
+  # ok[is.na(ok)] <- TRUE
+  # if (!all(ok)) {
+  #   i <- match(range(x), x)  # Retains first instance of min and max 'x'
+  #   i <- unique(c(i, which(ok)))
+  #   x <- x[i]
+  #   y <- y[i]
+  #   w <- w[i]
+  # }
+
+  # If necessary, sample the data for speed
   n <- length(x)
-  if (n > 10e3) {
+  if (n > nmax) {
     i <- match(range(x), x)  # Retains first instance of min and max 'x'
-    i <- c(i, sample.int(n = n, size = n - 2))
+    i <- c(i, sample.int(n = n, size = nmax - 2))  # Downsample to 'nmax' observations
     x <- x[i]
     y <- y[i]
     w <- w[i]
   }
 
-  m <- stats::supsmu(x, y, wt = w)
+  # Initial smooth via stats::supsmu()
+  # 'span' set based on recommendation in ?supsmu
+  m <- stats::supsmu(x, y, wt = w, span = ifelse(length(x) < 40, 0.3, "cv"))
   xu <- m$x
   inc <- suppressWarnings(cor(m$x, m$y) >= 0)
   if (is.na(inc)) inc <- TRUE
   p <- sort(m$y, decreasing = !inc) # Force monotonic predictions
-  #delta <- mean(abs((p - m$y) / m$y))
   fail <- sum(abs((p - m$y) / m$y) > 0.05) / length(p)  # Percent of observations with more than 5% absolute error
   if (is.na(fail)) fail <- Inf
-  if (fail > 0.05) {
-    dfs <- slice_sample(data.frame(x, y, w), n = min(length(x), 1000))
-    m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = dfs, weights = w), silent = TRUE)
+  if (fail > 0.05 & length(p) >= 100) {
+    # Attempt to fit SCAM model with monotonic constraint
+    m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
     if (inherits(m, "scam")) {
       p <- as.vector(predict(m, newdata = data.frame(x = xu), type = "response", newdata.guaranteed = TRUE))
     } else {
