@@ -4,7 +4,7 @@
 \alias{monotonic}
 \title{Ensure a monotonic relationship between two variables}
 \usage{
-monotonic(x, y, w = NULL, preserve = TRUE, nmax = 5000, plot = FALSE)
+monotonic(x, y, w = NULL, preserve = TRUE, nmax = 2500, plot = FALSE)
 }
 \arguments{
 \item{x}{Numeric.}

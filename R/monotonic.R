@@ -39,7 +39,7 @@ monotonic <- function(x,
                       y,
                       w = NULL,
                       preserve = TRUE,
-                      nmax = 5000,
+                      nmax = 2500,
                       plot = FALSE) {
 
   stopifnot(exprs = {
@@ -96,6 +96,9 @@ monotonic <- function(x,
   inc <- suppressWarnings(cor(m$x, m$y) >= 0)
   if (is.na(inc)) inc <- TRUE
   p <- sort(m$y, decreasing = !inc) # Force monotonic predictions
+
+  # Check if supsmu() smoothed and monotonic output is sufficient
+  # Ideally, coercion to monotonic via sort() does not cause significant difference between 'p' and m$y
   fail <- sum(abs((p - m$y) / m$y) > 0.05) / length(p)  # Percent of observations with more than 5% absolute error
   if (is.na(fail)) fail <- Inf
   if (fail > 0.05 & length(p) >= 100) {
