@@ -7,7 +7,7 @@
 #' Efficiently computes means, proportions, sums, counts, medians, standard deviations, and variances, optionally across population subgroups.
 #'
 #' @param analyses List. Specifies the desired analyses. See Details and Examples. Variables referenced in `analyses` must be in `implicates` or associated ACS microdata.
-#' @param implicates Data frame or file path. Implicates of synthetic (fused) variables; typically the output from \link{fuse}. The implicates should be row-stacked and identified by integer column "M". If a file path to a ".fst" file, only the necessary columns are read into memory.
+#' @param implicates Data frame or file path. Implicates of synthetic (fused) variables; typically the output from \link{fuse}. Can be more than one file path to use multiple implicates.
 #' @param urbanpop File path to UrbanPop synthetic population data.
 #' @param by Character. Optional column name(s) in \code{implicates} or \code{static} (typically factors) that collectively define the set of population subgroups for which each analysis is executed. If \code{NULL}, analysis is done for the whole sample.
 #' @param area Specify a geographic area within which to perform the \code{analyses}. Useful for restricting the study area to a manageable size given local computing resources.

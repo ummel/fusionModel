@@ -9,7 +9,7 @@ analyze3(analyses, implicates, by = NULL, area = NULL, cores = 1)
 \arguments{
 \item{analyses}{List. Specifies the desired analyses. See Details and Examples. Variables referenced in \code{analyses} must be in \code{implicates} or associated ACS microdata.}
 
-\item{implicates}{Data frame or file path. Implicates of synthetic (fused) variables; typically the output from \link{fuse}. The implicates should be row-stacked and identified by integer column "M". If a file path to a ".fst" file, only the necessary columns are read into memory.}
+\item{implicates}{Data frame or file path. Implicates of synthetic (fused) variables; typically the output from \link{fuse}. Can be more than one file path to use multiple implicates.}
 
 \item{by}{Character. Optional column name(s) in \code{implicates} or \code{static} (typically factors) that collectively define the set of population subgroups for which each analysis is executed. If \code{NULL}, analysis is done for the whole sample.}
 
