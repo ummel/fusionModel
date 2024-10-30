@@ -2,6 +2,7 @@
 
 export(analyze)
 export(analyze2)
+export(analyze3)
 export(fuse)
 export(fuseCART)
 export(fusionOutput)
