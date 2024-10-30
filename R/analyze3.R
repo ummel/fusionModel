@@ -174,6 +174,13 @@ analyze3 <- function(analyses,
   fst::threads_fst(nr_of_threads = cores)
   setDTthreads(threads = cores)
 
+  # Check validity of the working directory path
+  # Checks if "/fusionData" is part of the path, as this is required
+  b <- strsplit(full.path(getwd()), .Platform$file.sep, fixed = TRUE)[[1]]
+  i <- which(b == "fusionData")
+  if (length(i) == 0) stop("'/fusionData' is not part of the working directory path; this is required.")
+  dir <- paste(b[1:i], collapse = .Platform$file.sep)
+
   # Check the 'area' expression to determine how to parse it
   # If 'area' is passed a 'call', it is not modified
   # This is useful for special user input like: area = str2lang(paste0("state == '", st.obj, "'"))
@@ -207,7 +214,8 @@ analyze3 <- function(analyses,
   # TEMPORARY: Hard-coded path to UrbanPop synthetic population dataset'
   # Parquet dataset directory
   #urbanpop <- "~/Documents/Projects/fusionModel/ORNL Concept Paper/urbanpop/2015-2019/"  # For original Concept paper
-  urbanpop <- "~/Documents/Projects/fusionData/urbanpop/weights"  # For RECS 2020 testing
+  #urbanpop <- "~/Documents/Projects/fusionData/urbanpop/weights"  # For RECS 2020 testing
+  urbanpop <- file.path(dir, "urbanpop/weights")
 
   #---
 
@@ -314,7 +322,7 @@ analyze3 <- function(analyses,
 
   # Crosswalk linking block groups to the target geography ('gtarget'), possibly subsetted by 'area' filter argument
   area.vars <- if(is.null(area)) NULL else all.vars(area)
-  geocon <- fst::read_fst("~/Documents/Projects/fusionData/geo-processed/concordance/geo_concordance.fst",
+  geocon <- fst::read_fst(path = file.path(dir, "geo-processed/concordance/geo_concordance.fst"),
                           columns = unique(c(area.vars, 'region', 'division', 'state_name', 'state', 'puma10', 'county10', 'tract10', 'bg10', 'zcta10'))) %>%
     mutate(keep = eval(area)) %>%  # Adds 'keep' column only if area is non-NULL
     filter(bg10 != "None") %>%  # Not sure why there are some entries with "None" for 'bg10' variable
@@ -380,7 +388,7 @@ analyze3 <- function(analyses,
 
   sim.years <- implicates %>%
     strsplit(split = "_", fixed = TRUE) %>%
-    map_chr(~rev(.)[3]) %>%
+    purrr::map_chr(~rev(.)[3]) %>%
     as.integer() %>%
     unique()
 
@@ -390,7 +398,8 @@ analyze3 <- function(analyses,
 
   # TO DO: Auto-detect ACS years and H or P based on 'implicates'
   #acs.paths <- list.files("ORNL Concept Paper/acs", pattern = ".parquet", recursive = TRUE, full.names = TRUE)
-  acs.paths <- "~/Documents/Projects/fusionData/survey-processed/ACS"
+  #acs.paths <- "~/Documents/Projects/fusionData/survey-processed/ACS"
+  acs.paths <- file.path(dir, "survey-processed/ACS")
 
   # If using native ACS weights...
   # Determine if analysis can be done using PUMA-level ACS replicate weights only (UrbanPop NOT required)
