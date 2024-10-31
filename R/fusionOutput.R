@@ -251,7 +251,7 @@ fusionOutput <- function(donor,
   # Load spatial predictors data (always needed)
   cat("Loading spatial predictors from", basename(gfile), "\n")
   # Survey vintage (year); returns approximate midpoint year in case of range (e.g. "2014-2016" returns 2015)
-  svintage <- ceiling(median(eval(parse(text = donor[2]))))
+  svintage <- ceiling(median(eval(parse(text = sub("-", ":", donor[2])))))
   spatial.data <- fst::read_fst(gfile, as.data.table = TRUE) %>%
     setkey(state, puma10) %>%   # TEMP -- should remove 'vintage' as key in gfile
     filter(vintage == svintage) %>%
