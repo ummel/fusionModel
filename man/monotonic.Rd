@@ -9,7 +9,8 @@ monotonic(
   y,
   w = NULL,
   preserve = TRUE,
-  fast = FALSE,
+  expend = TRUE,
+  fast = TRUE,
   nmax = 5000,
   plot = FALSE
 )
@@ -22,6 +23,8 @@ monotonic(
 \item{w}{Numeric. Optional observation weights.}
 
 \item{preserve}{Logical. Preserve the original mean of the \code{y} values in the returned values?}
+
+\item{expend}{Logical. Assume \code{y} is an expenditure variable? If \code{TRUE}, a safety check is implemented to ensure \code{y > 0} when \code{x = 0}.}
 
 \item{fast}{Logical. If \code{TRUE}, only \code{\link[scam]{supsmu}} is used with coercion of result to monotone.}
 

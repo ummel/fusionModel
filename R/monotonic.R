@@ -6,6 +6,7 @@
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
+#' @param expend Logical. Assume \code{y} is an expenditure variable? If \code{TRUE}, a safety check is implemented to ensure \code{y > 0} when \code{x = 0}.
 #' @param fast Logical. If \code{TRUE}, only \code{\link[scam]{supsmu}} is used with coercion of result to monotone.
 #' @param nmax Integer. Maximum number of observations to use for smoothing. Set lower for faster computation. \code{nmax = Inf} eliminates sampling.
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
@@ -40,7 +41,8 @@ monotonic <- function(x,
                       y,
                       w = NULL,
                       preserve = TRUE,
-                      fast = FALSE,
+                      expend = TRUE,
+                      fast = TRUE,
                       nmax = 5000,
                       plot = FALSE) {
 
@@ -50,6 +52,7 @@ monotonic <- function(x,
     is.numeric(y) & !anyNA(y)
     is.null(w) | length(w) == length(x)
     is.logical(preserve)
+    is.logical(expend)
     is.logical(fast)
     nmax > 1
     is.logical(plot)
@@ -58,12 +61,14 @@ monotonic <- function(x,
   if (is.null(w)) w <- rep.int(1L, length(x))
   ymean <- weighted.mean(y, w)
   yint <- is.integer(y)
+  ymin <- min(y[y != 0])
   x0 <- x
   w0 <- w
+  if (expend & any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
 
   # If zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
   force.zero <- FALSE
-  if (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.999) {
+  if (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.995) {
     force.zero <- TRUE
     i <- c(match(0, x), which(x != 0))  # Retains first instance of zero in 'x'
     x <- x[i]
@@ -104,7 +109,7 @@ monotonic <- function(x,
   # Ideally, coercion to monotonic via sort() does not cause significant difference between 'p' and m$y
   fail <- sum(abs((p - m$y) / m$y) > 0.05) / length(p)  # Percent of observations with more than 5% absolute error
   if (is.na(fail)) fail <- Inf
-  if (fail > 0.05 & length(p) >= 100 & !fast) {
+  if (!fast & fail > 0.05 & length(p) >= 100) {
     # Attempt to fit SCAM model with monotonic constraint
     m <- try(scam::scam(y ~ s(x, bs = ifelse(inc, "mpi", "mpd")), data = data.frame(x, y), weights = w), silent = TRUE)
     if (inherits(m, "scam")) {
@@ -115,6 +120,10 @@ monotonic <- function(x,
       p <- as.vector(suppressWarnings(predict(m, newdata = data.frame(x = xu))))
     }
   }
+
+  # If 'y' is assumed to be expenditure, ensure that 'p' values meet some minimum positive value
+  # This is to prevent possibility of zero values for 'y' where x > 0
+  if (expend) p <- pmax(p, ymin)
 
   # Make 'y' predictions for all original 'x'
   yout <- if (length(xu) == 1) rep(p, length(x0)) else approx(xu, p, xout = x0, rule = 2)$y
