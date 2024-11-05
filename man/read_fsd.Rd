@@ -5,26 +5,29 @@
 \title{Read fusion output from disk}
 \usage{
 read_fsd(
-  fsd,
+  path,
   columns = NULL,
+  df = NULL,
   cores = max(1, parallel::detectCores(logical = FALSE) - 1)
 )
 }
 \arguments{
-\item{fsd}{Character. File path ending in \code{.fsd} as produced by call to \code{\link{fuse}}.}
+\item{path}{Character. Path to a \code{.fsd} (or \code{.fst}) file, typically produced by \code{\link{fuse}}.}
 
-\item{columns}{Character. Column names to read. The default is to read all columns.}
+\item{columns}{Character. Column names to read. The default is to return all columns.}
 
-\item{cores}{Integer. Number of cores used by \code{\link[fst]{read_fst}}.}
+\item{df}{Data frame. Data frame used to identify a subset of rows to return. Default is to return all rows.}
+
+\item{cores}{Integer. Number of cores used by \code{\link[fst]{fst}}.}
 }
 \value{
-A \code{\link[data.table]{data.table}} with integer column "M" indicating the implicate assignment of each observation. Note that the ordering of recipient observations is consistent within implicates, so do not change the row order if using with \code{\link{analyze}} or \code{\link{validate}}.
+A \code{\link[data.table]{data.table}}; keys are preserved if present in the on-disk data. When \code{path} points to a \code{.fsd} file, it includes an integer column "M" indicating the implicate assignment of each observation (unless explicitly ignored by \code{columns}).
 }
 \description{
-Read fusion output that was written directly to disk via \code{\link{fuse}}.
+Efficiently read fusion output that was written to disk, optionally returning a subset of rows and/or columns. Since a \code{.fsd} file is simply a \code{\link[fst]{fst}} file under the hood, this function also works on any \code{.fst} file.
 }
 \details{
-As of version 2.3.0, this is simply a convenient wrapper around \code{\link[fst]{read_fst}}, since fusion output data files (.fsd) are actually native \code{\link[fst]{fst}} files under the hood.
+If \code{df} is provided and the file size on disk is less than 250 MB, then a full read and inner \code{\link[collapse]{join}} is performed. For larger files, a manual read of the required rows is performed, using \code{\link[collapse]{fmatch}} for the matching operation.
 }
 \examples{
 # Build a fusion model using RECS microdata
@@ -37,7 +40,7 @@ fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 # Write fusion output directly to disk
 # Note that "results.fsd" will be written to working directory
 recipient <- recs[predictor.vars]
-sim <- fuse(data = recipient, fsn = fsn.path, M = 5, csv = "results.fsd")
+sim <- fuse(data = recipient, fsn = fsn.path, M = 5, fsd = "results.fsd")
 
 # Read the fusion output saved to disk
 sim <- read_fsd(sim)
