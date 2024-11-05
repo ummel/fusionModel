@@ -54,15 +54,16 @@ read_fsd <- function(path,
       d <- fst::read_fst(path, columns = columns, as.data.table = TRUE)
       d <- collapse::join(d, df, how = "inner", verbose = FALSE)
     } else {
-      if (is.null(columns)) columns <- meta$columnNames else stopifnot(all(columns %in% meta$columnNames))
+      if (is.null(columns)) columns <- meta$columnNames
+      stopifnot(all(columns %in% meta$columnNames))
       d <- fst::fst(path)
       m <- qDT(d[names(df)])
       i <- m %iin% df  # Collapse equivalent of which(x %in% table) using fmatch()
-      d <- qDT(d[i, setdiff(columns, names(m))])
+      d <- qDT(d[i, setdiff(columns, names(m)), drop = FALSE])
       j <- intersect(names(m), columns)
       if (length(j)) d <- cbind(d, m[i, ..j])
       setcolorder(d, neworder = columns)
-      setkeyv(d, cols = meta$keys)
+      setkeyv(d, cols = intersect(meta$keys, columns))
     }
   }
 
