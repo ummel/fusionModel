@@ -59,8 +59,9 @@ read_fsd <- function(path,
       m <- qDT(d[names(df)])
       i <- m %iin% df  # Collapse equivalent of which(x %in% table) using fmatch()
       d <- qDT(d[i, setdiff(columns, names(m))])
-      d <- cbind(d, m[i, ])
-      setcolorder(d, columns)
+      j <- intersect(names(m), columns)
+      if (length(j)) d <- cbind(d, m[i, ..j])
+      setcolorder(d, neworder = columns)
       setkeyv(d, cols = meta$keys)
     }
   }
