@@ -35,7 +35,7 @@
 
 # library(fusionModel)
 # library(data.table)
-# library(dplyr)
+# library(tidyverse)
 # source("R/utils.R")
 #
 # data <- select(recs, -starts_with("rep_"))
@@ -99,13 +99,14 @@ prepXY <- function(data,
   # Check for no-variance (constant) variables
   # Detect and impute any missing values in 'x' variables
   data <- checkData(data = data, y = y, x = x, nfolds = NULL, impute = TRUE)
-  #for (i in 1:length(ylist)) ylist[[i]] <- intersect(ylist[[i]], names(data))  # NECeSSARY?
-  #ylist <- purrr::compact(ylist)  # NECESSARY?
+
+  # In case any variables are removed by checkData(), update 'x', 'y', and 'ylist'
+  x <- intersect(x, names(data))
+  for (i in 1:length(ylist)) ylist[[i]] <- intersect(ylist[[i]], names(data))
+  ylist <- purrr::compact(ylist)
+  y <- unlist(y)
 
   #---
-
-  # Create 'y'; all individual y variables, in case 'ylist' has blocked variables
-  #y <- unlist(ylist)  # Necessary?
 
   # Observation weights vector
   W <- if (is.null(weight)) {
@@ -114,15 +115,6 @@ prepXY <- function(data,
     data[[weight]] / mean(data[[weight]])
   }
   set(data, j = weight, value = NULL)
-
-  #-----
-
-  # Sample 'data', if requested
-  if (fraction < 1) {
-    samp <- sample.int(n = nrow(data), size = round(nrow(data) * fraction))
-    data <- data[samp, ]
-    W <- W[samp]
-  }
 
   #-----
 
@@ -144,6 +136,15 @@ prepXY <- function(data,
     ylist <- lapply(ylist, function(v) if (any(v %in% yinf)) c(v, paste0(intersect(v, yinf), "_zero")) else v)
     y <- unlist(ylist)
 
+  }
+
+  #-----
+
+  # Sample 'data', if requested
+  if (fraction < 1) {
+    samp <- sample.int(n = nrow(data), size = round(nrow(data) * fraction))
+    data <- data[samp, ]
+    W <- W[samp]
   }
 
   #-----

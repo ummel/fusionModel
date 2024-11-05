@@ -360,6 +360,7 @@ fusionOutput <- function(donor,
                                   cor_thresh = 0.025,
                                   lasso_thresh = 0.99,
                                   xmax = 100,
+                                  xforce = NULL,
                                   fraction = pfrac,
                                   cores = ncores)
 
