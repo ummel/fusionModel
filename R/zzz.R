@@ -1,4 +1,5 @@
 # Specify package imports
+#' @import stringr
 #' @import collapse
 #' @import dplyr
 #' @rawNamespace import(stats, except = c(filter, lag, D))

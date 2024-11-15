@@ -2,20 +2,35 @@
 % Please edit documentation in R/assemble.R
 \name{assemble}
 \alias{assemble}
-\title{Assemble microdata across surveys}
+\title{Assemble fusionACS microdata across surveys}
 \usage{
-assemble(year, var, respondent = "household", M = 1, cores = 1)
+assemble(
+  year,
+  var,
+  respondent = "household",
+  M = 1,
+  df = NULL,
+  cores = 1,
+  source = "all",
+  silent = FALSE
+)
 }
 \arguments{
 \item{year}{Integer. One or more years for which to return results (i.e. the ACS recipient year).}
 
 \item{var}{Character. Name of one or more variables to return. May contain household- and/or person-level variables. See Details.}
 
-\item{respondent}{Character. Should household or person-level microdata be returned?}
+\item{respondent}{Character. Should \code{"household"}- or \code{"person"}-level microdata be returned?}
 
 \item{M}{Integer. The first \code{M} implicates are returned for fused variables. Set \code{M = Inf} to return all implicates. Ignored if \code{var} contains only ACS variables (i.e. no implicates)}
 
+\item{df}{Data frame. Data frame used to identify a subset of rows to return. Default is to return all rows.}
+
 \item{cores}{Integer. Number of cores used by the \code{\link[fst]{fst-package}} when reading from disk.}
+
+\item{source}{Character Specifies where to look for \code{var}: all available microdata (\code{source = "all"}); only ACS microdata (\code{source = "ACS"}); or only fused microdata (\code{source = "fused"}). Note that no observation weights are returned if \code{source = "fused"}, since weights are stored in the ACS microdata.}
+
+\item{silent}{Logical. If \code{FALSE}, a warning is issued if any \code{var} cannot be located in available local files.}
 }
 \value{
 A keyed data table containing the following columns, in addition to the variables named in \code{var}:
@@ -32,8 +47,6 @@ For fusionACS usage only. Provides a safe and efficient way to assemble (merge) 
 }
 \details{
 The \code{var} argument can contain a mix of household- and/or person-level variables. When \code{respondent = "household"}, the reference person (i.e. head of household) value is returned for any person-level variables. When \code{respondent = "person"}, the values of any household-level variables are replicated for each person in the household.
-
-A warning is issued if any \code{var} cannot be located in the available local files.
 }
 \examples{
 # NOTE: Requires local /fusionData directory containing the necessary ACS and .fsd files

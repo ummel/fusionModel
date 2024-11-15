@@ -7,6 +7,7 @@
 read_fsd(
   path,
   columns = NULL,
+  M = 1,
   df = NULL,
   cores = max(1, parallel::detectCores(logical = FALSE) - 1)
 )
@@ -15,6 +16,8 @@ read_fsd(
 \item{path}{Character. Path to a \code{.fsd} (or \code{.fst}) file, typically produced by \code{\link{fuse}}.}
 
 \item{columns}{Character. Column names to read. The default is to return all columns.}
+
+\item{M}{Integer. The first \code{M} implicates are returned. Set \code{M = Inf} to return all implicates. Ignored if \code{M} column not present in data.}
 
 \item{df}{Data frame. Data frame used to identify a subset of rows to return. Default is to return all rows.}
 
@@ -27,7 +30,7 @@ A \code{\link[data.table]{data.table}}; keys are preserved if present in the on-
 Efficiently read fusion output that was written to disk, optionally returning a subset of rows and/or columns. Since a \code{.fsd} file is simply a \code{\link[fst]{fst}} file under the hood, this function also works on any \code{.fst} file.
 }
 \details{
-If \code{df} is provided and the file size on disk is less than 250 MB, then a full read and inner \code{\link[collapse]{join}} is performed. For larger files, a manual read of the required rows is performed, using \code{\link[collapse]{fmatch}} for the matching operation.
+If \code{df} is provided and the file size on disk is less than 100 MB, then a full read and inner \code{\link[collapse]{join}} is performed. For larger files, a manual read of the required rows is performed, using \code{\link[collapse]{fmatch}} for the matching operation.
 }
 \examples{
 # Build a fusion model using RECS microdata

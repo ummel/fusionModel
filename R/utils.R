@@ -1,7 +1,12 @@
 # Function to "clean" a numeric vector by reducing to significant digits and converting to integer, if possible
-cleanNumeric <- function(x, convert = TRUE, ...) {
-  x <- signifDigits(x, ...)
-  if (convert) x <- convertInteger(x)
+# If the input can be immediately coerced to integer, it is and returned as such
+# Otherwise, the number of digits is reduced and integer coercion attempted one final time
+cleanNumeric <- function(x, tol = 0.001, minimize = FALSE, threshold = 0.999) {
+  x <- convertInteger(x, threshold = 1)  # This coerces to integer, if possible
+  if (is.double(x)) {
+    x <- signifDigits(x, tol = tol, minimize = minimize)
+    x <- convertInteger(x, threshold = threshold)
+  }
   return(x)
 }
 
@@ -9,7 +14,7 @@ cleanNumeric <- function(x, convert = TRUE, ...) {
 
 # Function to return numeric vector rounded to reasonable significant digits
 # Returns a significant digit-ized result that is within 'tol' (percent) of the original value for all observations
-# If minimize = TRUE, function will try converting x to Z-scores first and 'tol' assesed relative to the Z-scores, then return result that minimizes number of unique values
+# If minimize = TRUE, function will try converting x to Z-scores first and 'tol' assessed relative to the Z-scores, then return result that minimizes number of unique values
 signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 
   intFUN <- function(x, orig = x) {
@@ -33,7 +38,7 @@ signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
     return(x1)
   } else {
     x2 <- intFUN(scale(x), x)
-    if (length(unique(x1)) <= length(unique(x2))) return(x1) else return(x2)
+    if (data.table::uniqueN(x1) <= data.table::uniqueN(x2)) return(x1) else return(x2)
   }
 
 }
@@ -41,15 +46,24 @@ signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 #------------------
 
 # Function to convert a numeric vector to integer, if possible
-convertInteger <- function(x) {
-  if (all(x[!is.na(x)] %% 1 == 0) & max(x, na.rm = TRUE) <= .Machine$integer.max) {
-    return(as.integer(round(x)))
+# Checks if maximum value is coercible to 32-bit integer; see ?integer "Details"
+# If the fraction of integer-coercible values exceeds 'threshold', then non-integer values are coerced to integer
+convertInteger <- function(x, threshold = 0.99) {
+  if (collapse::allNA(x)) {
+    x <- as.logical(x)
   } else {
-    return(x)
+    ok32 <- max(x, na.rm = TRUE) <= .Machine$integer.max
+    if (ok32) {
+      chk <- x[!is.na(x)] %% 1 == 0
+      if (sum(chk) / length(chk) >= threshold) {
+        x <- as.integer(round(x))
+      }
+    }
   }
+  return(x)
 }
 
-#------------------
+#-------------------
 
 # Function returns TRUE if 'x' has only one non-NA value OR is entirely NA
 novary <- function(x) data.table::uniqueN(x, na.rm = TRUE) <= 1
