@@ -17,7 +17,7 @@
 #' @param cores Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.
 #' @param up_version Integer. TEMPORARY. Use \code{1} to access national, single-implicate weights. Use \code{2} to access 10-replicate initial weights for 17 metro areas.
 #'
-#' @details Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, county, county subdivision, PUMA, census tract, zip code, and block group.
+#' @details Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), tract10, zcta10 (zip code), and bg10 (block group).
 #'
 #' @details The final point estimates are the mean estimates across implicates. The final margin of error is derived from the pooled standard error across implicates, calculated using Rubin's pooling rules (1987). The within-implicate standard error's are calculated using the replicate weights.
 #'
@@ -109,27 +109,27 @@
 #                           cores = 3)
 #
 #
-# analyses = list(elec_expend ~ mean(dollarel))
+# analyses = list(elec_expend ~ mean(dollarel), myvar ~ mean(ifelse(hincp > 20e3, scalee, NA)))
 # respondent = "household"
 # year = 2019
-# by = "county10"
-# area = substitute(region == "West")
+# by = "tract10"
+# area = substitute(state == 49)
 # M = 5
-# R = 5
+# R = 10
 # cores = 3
 # fun = NULL
 # up_version = 2
 
 
 #---------------
-
+#
 # library(collapse)
 # library(tidyverse)
 # library(data.table)
 # source("R/utils.R")
-
-# setwd("/home/kevin/Documents/Projects/fusionData")
 #
+# setwd("/home/kevin/Documents/Projects/fusionData")
+
 # # Function inputs
 # year = 2015:2019 # Way to automate this?
 #
@@ -424,7 +424,7 @@ analyze_fusionACS <- function(analyses,
   # Crosswalk linking block groups to the target geography ('gtarget'), possibly subsetted by 'area' filter argument
   area.vars <- if(is.null(area)) NULL else all.vars(area)
   geocon <- fst::read_fst(path = file.path(dir, "geo-processed/concordance/geo_concordance.fst"),
-                          columns = unique(c(area.vars, 'region', 'division', 'state_name', 'state', 'puma10', 'county10', 'cousubfp10', 'tract10', 'bg10', 'zcta10'))) %>%
+                          columns = unique(c(area.vars, 'region', 'division', 'state_name', 'state', 'cbsa10', 'puma10', 'county10', 'cousubfp10', 'tract10', 'bg10', 'zcta10'))) %>%
     mutate(keep = eval(area)) %>%  # Adds 'keep' column only if area is non-NULL
     filter(bg10 != "None") %>%  # Not sure why there are some entries with "None" for 'bg10' variable
     distinct()
@@ -450,6 +450,7 @@ analyze_fusionACS <- function(analyses,
                              division = division,
                              state_name = state_name,
                              state = state,
+                             cbsa10 = cbsa10,
                              puma10 = paste0(state, puma10),
                              county10 = substring(geoid, 1, 5),
                              cousubfp10 = paste0(state, county10, cousubfp10),
@@ -534,8 +535,9 @@ analyze_fusionACS <- function(analyses,
     up <- up[, list(weight = sum(weight)), by = list(year, hid, gtarget, rep)]
 
     # Make weights wide
-    # TO DO: Use NA instead of 0 for fill and revise computation of 'ncount' later for better efficiency
-    up <- data.table::dcast(up, ... ~ rep, value.var = "weight", fill = 0L)
+    #up <- data.table::dcast(up, ... ~ rep, value.var = "weight", fill = 0L)
+    # Fill with NA values here for more efficient creation of 'ncount' below
+    up <- data.table::dcast(up, ... ~ rep, value.var = "weight", fill = NA)
 
     # Set the replicate weight variable names in 'static'
     i <- which(names(up) == "0")
@@ -560,7 +562,7 @@ analyze_fusionACS <- function(analyses,
       setkey()
   } else {
     geocon %>%
-      select(state, puma10) %>%
+      select(state, puma10, gtarget) %>%
       unique() %>%
       setkey()
   }
@@ -589,15 +591,21 @@ analyze_fusionACS <- function(analyses,
     static <- static %>%
       select(-weight) %>%  # Remove static 'weight', since UrbanPop data has its own primary weight variable
       collapse::join(up,
-                     on = intersect(names(static), c('year', 'hid', 'pid')),
+                     on = intersect(names(static), c('year', 'hid')),
                      how = "inner",
                      multiple = TRUE,
                      verbose = FALSE) %>%
-      setnames(old = "gtarget", new = gtarget)
+      setnames(old = "gtarget", new = gtarget) # Rename 'gtarget' to the actual target geography (e.g. 'tract10')
 
     rm(up)
 
   } else {
+
+    # Add the geographic target in ACS-only case
+    static <- static %>%
+      collapse::join(up.hid, how = "inner", on = c('state', 'puma10'), verbose = FALSE) %>%   # This simply adds the 'gtarget' variable
+      select(-any_of(gtarget)) %>%  # Remove 'puma10', for example, if it is the target geographic variable
+      setnames(old = "gtarget", new = gtarget) # Rename 'gtarget' to the actual target geography (e.g. 'puma10')
 
     # If using ACS replicate weights, simply rename them
     # Set weight variables names for 'static' in ACS replicate weights case
@@ -709,8 +717,8 @@ analyze_fusionACS <- function(analyses,
   # Not a critical issue if using ACS replicate weights, since they should already be integer
   for (v in names(static)) {
     x <- static[[v]]
+    x[x < 0] <- NA
     if (is.double(x)) x <- as.integer(round(x))
-    x <- pmax(x, 0L)
     set(static, j = v, value = x)
   }
 
@@ -741,12 +749,16 @@ analyze_fusionACS <- function(analyses,
     # Current safety check: fun() must return same number of rows
     stopifnot(nrow(temp) == nrow(sim))
 
+    # If there are identically-named variables in 'temp' and 'sim', remove from latter
+    drop <- intersect(names(temp), names(sim))
+    if (length(drop)) get_vars(sim, drop) <- NULL
+
     # Add the variables creates by fun() to 'sim'
     # Retain only the variables needed to conduct analyses
     add_vars(sim) <- temp
     rm(temp)
     drop <- setdiff(names(sim), c('M', avar, by, gtarget))
-    get_vars(sim, drop) <- NULL
+    if (length(drop)) get_vars(sim, drop) <- NULL
 
     # Safety check on dimensions
     stopifnot(nrow(sim) / nrow(static) == Mimp)
@@ -795,8 +807,8 @@ analyze_fusionACS <- function(analyses,
   ind <- solo & !duplicated(anames)
   if (any(ind)) setnames(sim, old = unlist(ylist[ind]), new = anames[ind])
 
-  # TO DO: Move earlier for better memory efficiency? Would typically just affect gtarget variable?
   # Convert any character type analysis variables to factors for memory efficiency
+  # TO DO: Move earlier for better memory efficiency? Would typically just affect gtarget variable?
   if (length(char_vars(sim, return = "names"))) char_vars(sim) <- dapply(char_vars(sim), as.factor)
 
   #---
@@ -805,38 +817,50 @@ analyze_fusionACS <- function(analyses,
   # This is retained in the output results as column 'N': number of microdata observations (households or persons) used to construct the estimate
 
   grp <- GRP(sim[M == 1], by = by, sort = FALSE)
-  s <- copy(static)
-  setv(s, 0, NA)
-  n0 <- as.integer(ceiling(rowMeans(fnobs(s, g = grp))))
+
+  # Total number of unique respondents within each group (i.e. at least one replicate with a non-NA weight)
+  # This differs from 'n0', which will always be smaller, since not all respondents have non-NA weight across all available weight variables
+  nu <- grp$group.sizes
+
+  # Number of non-NA weight observations/respondents, by group, averaged across all available weight variables
+  fn <- fnobs(static, g = grp)
+  n0 <- as.integer(ceiling(rowMeans(fn)))
+
+  # Mean weight per non-NA microdata observation, averaged across all available weight variables
+  # Measures magnitude of the average observation weight within each group
+  temp <- fsum(static, g = grp) / fn
+  wmn0 <- rowMeans(temp)
+
+  # Coefficient of variation of weights, by group, averaged across all available weight variables
+  # Measures relative dispersion of observations weights within each group
+  wcv0 <- rowMeans(fsd(static, g = grp) / temp)
 
   ncount <- lapply(anames, function(v) {
     if (anyNA(sim[[v]])) {
       i <- whichNA(sim[[v]])
       i <- i - nrow(static) * (sim$M[i] - 1L)  # Row indices of NA's in 'sim', translated to 1:nrow(static) index values
-      i <- sample(i, size = round(length(i) / Mimp) ) # Sample the mean number of NA's per implicate
-      stemp <- copy(s)
-      set(stemp, i = i, j = names(s), value = NA)
-      out <- as.integer(ceiling(rowMeans(fnobs(stemp, g = grp))))
-      rm(stemp)
-      return(out)
+      i <- sample(i, size = ceiling(length(i) / Mimp)) # Sample the mean number of NA's per implicate
+      s <- copy(static)
+      set(s, i = i, j = names(s), value = NA)
+      fn <- fnobs(s, g = grp)
+      temp <- fsum(s, g = grp) / fn
+      data.frame(N = as.integer(ceiling(rowMeans(fn))),
+                 wcv = rowMeans(fsd(s, g = grp) / temp),
+                 wmn = rowMeans(temp))
     } else {
-      return(n0)
+      data.frame(N = n0, wcv = wcv0, wmn = wmn0)
     }
   }) %>%
     setNames(anames) %>%
-    bind_cols() %>%
-    cbind(grp$groups) %>%
-    tidyr::pivot_longer(cols = all_of(anames), names_to = "aname", values_to = "N")
+    bind_rows(.id = "aname") %>%
+    cbind(grp$groups, Nu = nu)
+    #tidyr::pivot_longer(cols = all_of(anames), names_to = "aname", values_to = "N")
 
-  rm(grp, s, n0)
+  #---
 
-  # ncount <- sim %>%
-  #   fsubset(M == 1L & static$REP__0 > 0L) %>%
-  #   group_by_vars(by = by) %>%
-  #   get_vars(anames) %>%
-  #   fnobs() %>%
-  #   pivot_longer(cols = all_of(anames), names_to = "aname", values_to = "N") %>%
-  #   select(all_of(c(by, 'aname', 'N')))
+  # Once 'ncount' is created, it may be necessary to set NA in 'static' to zeros
+  # This is only necessary if the outer functions include 'fmedian' (will throw error); NA's are allowed for the other outer functions
+  if (any(afun == "fmedian")) setv(static, NA, 0L)
 
   #---
 
@@ -1079,8 +1103,10 @@ analyze_fusionACS <- function(analyses,
       var = if (use.up) {
         # When using UrbanPop, compute variances around the mean of the replicates
         # Equivalent to 'mse = FALSE' in survey::svrepdesign()
-        # Since we aren't guaranteed a valid primary weight estimate, we use all weights to compute the variance and conservatively set the denominator of the first term to Rn.
-        (var_scale / Rn) * sum((EST - est) ^ 2)
+        # Since we aren't guaranteed a valid primary weight estimate, we use all weights to compute the variance and assume N - 1 in denominator of the variance
+        #(var_scale / (Rn - 1)) * sum((EST - est) ^ 2)
+        # ALT Nov 20, 2024
+        var(EST)
       } else {
         # Conventional ACS approach to variance; compute variances around the primary estimate
         # Equivalent to 'mse = TRUE' in survey::svrepdesign()
@@ -1120,7 +1146,7 @@ analyze_fusionACS <- function(analyses,
       #df = if (Mimp == 1) {pmax(1, length(wvars) - 2L)} else  {(Mimp - 1) * (1 + r^(-1)) ^ 2},
       #df = if (Mimp == 1 & !use.up) R - 1L else (Mn - 1) * (1 + r^(-1)) ^ 2,
       #df = ifelse(r == 0, Rn - 1, df),  # If 'r' is zero, there is no variance across the implicates, so we derive 'df' from the number of weights only
-      df = ifelse(Mn == 1, Rn - 1L, (Mn - 1) * (1 + r^(-1)) ^ 2),
+      df = ifelse(Mn == 1, Rn - ifelse(use.up, 1L, 2L), (Mn - 1) * (1 + r^(-1)) ^ 2),
 
       # DEPRECATED
       # Alternative code if attempting to implement Barnard and Rubin (1999) finite population correction
@@ -1170,7 +1196,7 @@ analyze_fusionACS <- function(analyses,
 
     arrange(i, !!!rlang::syms(by), level) %>%  # Arranges rows according to original 'analyses' order
     select(lhs, rhs, type, all_of(by), N, level, est, moe, se, df, cv, rshare) %>%
-    #select(lhs, rhs, type, all_of(by), N, level, ubar, b, r, est, moe, se, df, cv, rshare) %>%
+    #select(lhs, rhs, type, all_of(by), level, N, Nu, wcv, wmn, ubar, b, r, est, moe, se, df, cv, rshare) %>%
     mutate_all(tidyr::replace_na, replace = NA) %>%   # Replaces NaN from zero division with normal NA
     #mutate_if(is.character, as.factor) %>%
     mutate_if(is.double, cleanNumeric, tol = 0.001)

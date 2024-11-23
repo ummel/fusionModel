@@ -62,7 +62,7 @@ The use of native ACS weights or ORNL UrbanPop synthetic population weights is a
 Requires a local \code{/fusionData} directory in the working directory path with assumed file structure and conventions.
 }
 \details{
-Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, county, county subdivision, PUMA, census tract, zip code, and block group.
+Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), tract10, zcta10 (zip code), and bg10 (block group).
 
 The final point estimates are the mean estimates across implicates. The final margin of error is derived from the pooled standard error across implicates, calculated using Rubin's pooling rules (1987). The within-implicate standard error's are calculated using the replicate weights.
 
