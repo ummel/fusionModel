@@ -282,10 +282,15 @@ analyze_fusionACS <- function(analyses,
   # This is useful for special user input like: area = str2lang(paste0("state == '", st.obj, "'"))
   # The more common case is for 'area' to follow usage like in subset()
   # See here: http://adv-r.had.co.nz/Computing-on-the-language.html
-  check <- try(is.call(area), silent = TRUE)
-  if (inherits(check, "try-error") | check == FALSE) {
-    area <- substitute(area)
-    if (is.character(area)) area <- str2lang(area)
+  if (is.null(area)) {
+    area <- area.vars <- NULL
+  } else {
+    check <- try(is.call(area), silent = TRUE)
+    if (inherits(check, "try-error") | check == FALSE) {
+      area <- substitute(area)
+      if (is.character(area)) area <- str2lang(area)
+    }
+    area.vars <- all.vars(area)
   }
 
   # Respondent identifier ("H" or "P")
@@ -422,7 +427,6 @@ analyze_fusionACS <- function(analyses,
   cat("Geographic area:", if(is.null(area)) "national" else deparse(area), "\n")
 
   # Crosswalk linking block groups to the target geography ('gtarget'), possibly subsetted by 'area' filter argument
-  area.vars <- if(is.null(area)) NULL else all.vars(area)
   geocon <- fst::read_fst(path = file.path(dir, "geo-processed/concordance/geo_concordance.fst"),
                           columns = unique(c(area.vars, 'region', 'division', 'state_name', 'state', 'cbsa10', 'puma10', 'county10', 'cousubfp10', 'tract10', 'bg10', 'zcta10'))) %>%
     mutate(keep = eval(area)) %>%  # Adds 'keep' column only if area is non-NULL
@@ -433,55 +437,63 @@ analyze_fusionACS <- function(analyses,
   # Identify which of the 'by' variable(s) is geographic
   gtarget <- intersect(by, names(geocon))
   stopifnot(length(gtarget) %in% c(0, 1))
-  if (length(gtarget) == 0) {
-    stop("Argument 'by' must include one of:\n", paste(setdiff(names(geocon), 'keep'), collapse = "\n"))
-  } else {
+  if (length(gtarget) > 0) {
+
+    # Create crosswalk between block groups (geoid) and the target geography (gtarget)
+    # What are the allowable geographic variables for purposes of downscaling?
+    # Not a comprehensive list: https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html
     cat("Geographic unit of analysis:", gtarget, "\n")
+    if (is.null(area)) geocon$keep <- TRUE
+    geocon <- geocon %>%
+      fmutate(geoid = paste0(state, county10, tract10, bg10),
+              gtarget = switch(gtarget,
+                               region = region,
+                               division = division,
+                               state_name = state_name,
+                               state = state,
+                               cbsa10 = cbsa10,
+                               puma10 = paste0(state, puma10),
+                               county10 = substring(geoid, 1, 5),
+                               cousubfp10 = paste0(state, county10, cousubfp10),
+                               tract10 = substring(geoid, 1, 11),
+                               bg10 = geoid,
+                               zcta10 = zcta10)
+      ) %>%
+      group_by(gtarget) %>%
+      mutate(keep = all(keep)) %>%  # 'keep' = TRUE only if ALL of a target geography's block groups are within the requested 'area' (prevents returning a spatial subset of a geography)
+      ungroup() %>%
+      filter(keep) %>%
+      distinct(geoid, state, puma10, gtarget) %>%
+      as.data.table()
+
+    if (nrow(geocon) == 0) stop("No geographic intersections identified. Check if your 'by' and 'area' arguments are compatible.")
+
+    # TO DO: Confirm check if the 'area' filter violates the integrity of any of the 'gtarget' value
+    # For example, if area = state == 36 and by = "division", it should fail because 'area' does not contain a complete division
+
+    # Determine how many PUMA's are associated with each value of the target geography
+    # Used to determine if ACS replicate weights can be used instead of UrbanPop
+    # If the target geography is perfectly delineated by PUMA's, there is no need to use UrbanPop; can simply use native ACS replicate weights
+    acs.check <- geocon %>%
+      distinct(puma10, state, gtarget) %>%
+      add_count(puma10, state)
+
+    # Use urbanpop weights?
+    use.up <- any(acs.check$n != 1)
+    rm(acs.check)
+
+  } else {
+
+    #stop("Argument 'by' must include one of:\n", paste(setdiff(names(geocon), 'keep'), collapse = "\n"))
+    cat("No geographic unit of analysis in 'by'", gtarget, "\n")
+    geocon <- geocon %>%
+      distinct(state, puma10) %>%
+      mutate(gtarget = NA) %>%
+      as.data.table()
+
+    use.up <- FALSE
+
   }
-
-  # Create crosswalk between block groups (geoid) and the target geography (gtarget)
-  # What are the allowable geographic variables for purposes of downscaling?
-  # Not a comprehensive list: https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html
-  if (is.null(area)) geocon$keep <- TRUE
-  geocon <- geocon %>%
-    fmutate(geoid = paste0(state, county10, tract10, bg10),
-            gtarget = switch(gtarget,
-                             region = region,
-                             division = division,
-                             state_name = state_name,
-                             state = state,
-                             cbsa10 = cbsa10,
-                             puma10 = paste0(state, puma10),
-                             county10 = substring(geoid, 1, 5),
-                             cousubfp10 = paste0(state, county10, cousubfp10),
-                             tract10 = substring(geoid, 1, 11),
-                             bg10 = geoid,
-                             zcta10 = zcta10)
-    ) %>%
-    group_by(gtarget) %>%
-    mutate(keep = all(keep)) %>%  # 'keep' = TRUE only if ALL of a target geography's block groups are within the requested 'area' (prevents returning a spatial subset of a geography)
-    ungroup() %>%
-    filter(keep) %>%
-    distinct(geoid, state, puma10, gtarget) %>%
-    as.data.table()
-
-  if (nrow(geocon) == 0) stop("No geographic intersections identified. Check if your 'by' and 'area' arguments are compatible.")
-
-  # TO DO: Confirm check if the 'area' filter violates the integrity of any of the 'gtarget' value
-  # For example, if area = state == 36 and by = "division", it should fail because 'area' does not contain a complete division
-
-  #-----
-
-  # Determine how many PUMA's are associated with each value of the target geography
-  # Used to determine if ACS replicate weights can be used instead of UrbanPop
-  # If the target geography is perfectly delineated by PUMA's, there is no need to use UrbanPop; can simply use native ACS replicate weights
-  acs.check <- geocon %>%
-    distinct(puma10, state, gtarget) %>%
-    add_count(puma10, state)
-
-  # Use urbanpop weights?
-  use.up <- any(acs.check$n != 1)
-  rm(acs.check)
 
   #-----
 
@@ -602,10 +614,12 @@ analyze_fusionACS <- function(analyses,
   } else {
 
     # Add the geographic target in ACS-only case
-    static <- static %>%
-      collapse::join(up.hid, how = "inner", on = c('state', 'puma10'), verbose = FALSE) %>%   # This simply adds the 'gtarget' variable
-      select(-any_of(gtarget)) %>%  # Remove 'puma10', for example, if it is the target geographic variable
-      setnames(old = "gtarget", new = gtarget) # Rename 'gtarget' to the actual target geography (e.g. 'puma10')
+    if (!allNA(up.hid$gtarget)) {
+      static <- static %>%
+        collapse::join(up.hid, how = "inner", on = c('state', 'puma10'), verbose = FALSE) %>%   # This simply adds the 'gtarget' variable
+        select(-any_of(gtarget)) %>%  # Remove 'puma10', for example, if it is the target geographic variable
+        setnames(old = "gtarget", new = gtarget) # Rename 'gtarget' to the actual target geography (e.g. 'puma10')
+    }
 
     # If using ACS replicate weights, simply rename them
     # Set weight variables names for 'static' in ACS replicate weights case
@@ -854,7 +868,7 @@ analyze_fusionACS <- function(analyses,
     setNames(anames) %>%
     bind_rows(.id = "aname") %>%
     cbind(grp$groups, Nu = nu)
-    #tidyr::pivot_longer(cols = all_of(anames), names_to = "aname", values_to = "N")
+  #tidyr::pivot_longer(cols = all_of(anames), names_to = "aname", values_to = "N")
 
   #---
 
