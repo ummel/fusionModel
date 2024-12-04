@@ -66,6 +66,7 @@ read_fsd <- function(path,
   if (is.null(columns)) {
     columns <- meta$columnNames
   } else {
+    columns <- unique(columns)
     stopifnot(all(columns %in% meta$columnNames))
   }
 
@@ -89,7 +90,7 @@ read_fsd <- function(path,
   # Determine which rows have the requested implicates (M)
   # Since the data are assumed to be sorted by M, this should yield consecutive integers
 
-  if ('M' %in% columns) {
+  if ('M' %in% meta$columnNames) {
     d <- fst::fst(path)
     i <- which(d$M <= M)
     stopifnot(!is.unsorted(i))
@@ -127,8 +128,6 @@ read_fsd <- function(path,
 
     }
   }
-
-  rm(i)
 
   # Set column order and data.table keys
   setcolorder(d, neworder = columns)
