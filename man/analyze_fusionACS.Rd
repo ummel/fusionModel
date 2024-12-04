@@ -14,7 +14,8 @@ analyze_fusionACS(
   M = Inf,
   R = Inf,
   cores = 1,
-  up_version = 2
+  version_up = 2,
+  force_up = FALSE
 )
 }
 \arguments{
@@ -36,7 +37,9 @@ analyze_fusionACS(
 
 \item{cores}{Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.}
 
-\item{up_version}{Integer. TEMPORARY. Use \code{1} to access national, single-implicate weights. Use \code{2} to access 10-replicate initial weights for 17 metro areas.}
+\item{version_up}{Integer. TEMPORARY. Use \code{1} to access national, single-implicate weights. Use \code{2} to access 10-replicate initial weights for 17 metro areas.}
+
+\item{force_up}{Logical. If \code{TRUE}, force use of UrbanPop weights even if the requested analysis can be done using native ACS weights.}
 }
 \value{
 A tibble reporting analysis results, possibly across subgroups defined in \code{by}. The returned quantities include:
@@ -57,7 +60,7 @@ A tibble reporting analysis results, possibly across subgroups defined in \code{
 }
 \description{
 For fusionACS usage only. Calculation of point estimates and associated uncertainty (margin of error) for analyses using ACS and/or fused donor survey variables.
-Efficiently computes means, proportions, sums, counts, medians, standard deviations, and variances, optionally across population subgroups.
+Efficiently computes means, medians, sums, proportions, and counts, optionally across population subgroups.
 The use of native ACS weights or ORNL UrbanPop synthetic population weights is automatically determined given the requested geographic resolution.
 Requires a local \code{/fusionData} directory in the working directory path with assumed file structure and conventions.
 }

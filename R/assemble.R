@@ -104,6 +104,7 @@ assemble <- function(year,
 
     # Get file paths to both ACS and fused microdata for 'yr'
     pa <- list.files(file.path(dir, "survey-processed/ACS"), pattern = paste0(yr, "_._processed.fst"), recursive = TRUE, full.names = TRUE)
+    pa <- sort(pa, decreasing = rtype == "P") # Sort the processed ACS paths, to place either Household or Person microdata first
     pc <- list.files(file.path(dir, "survey-processed/ACS"), pattern = paste0(yr, "_._custom.fst"), recursive = TRUE, full.names = TRUE)
     pf <- rev(list.files(file.path(dir, "fusion"), pattern = paste0(yr, "_._fused.fsd"), recursive = TRUE, full.names = TRUE))
     fpaths <- switch(tolower(source),
@@ -146,7 +147,7 @@ assemble <- function(year,
       }
 
       # NOTE: If person-level data is requested, the merge() below causes any household-level variables to be replicated for each person
-      # Since it is an inner merge, persons not in the household data (i.e. group quarter population) are discarded
+      # Since it is an left merge, persons not in the household data (i.e. group quarter population) will contain NA values
       # If no household variables need to be added, then the returned person microdata will include the group quarter individuals
       if (nrow(dt) > 0) {
         dt <- setkeyv(dt, cols = intersect(c('M', 'year', 'hid', 'pid'), names(dt)))
@@ -157,7 +158,7 @@ assemble <- function(year,
           d <- collapse::join(x = d,
                               y = dt,
                               on = intersect(key(d), key(dt)),
-                              how = "inner",
+                              how = "left",  # See NOTE above about left join and household vs. person data
                               multiple = TRUE,
                               verbose = FALSE)
         }
