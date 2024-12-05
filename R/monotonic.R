@@ -6,7 +6,7 @@
 #' @param y Numeric.
 #' @param w Numeric. Optional observation weights.
 #' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
-#' @param expend Logical. Assume \code{y} is an expenditure variable? If \code{TRUE}, a safety check is implemented to ensure \code{y > 0} when \code{x = 0}.
+#' @param expend Logical. Assume \code{y} is an expenditure variable? If \code{TRUE}, a safety check is implemented to ensure \code{y > 0} when \code{x > 0}.
 #' @param fast Logical. If \code{TRUE}, only \code{\link[scam]{supsmu}} is used with coercion of result to monotone.
 #' @param nmax Integer. Maximum number of observations to use for smoothing. Set lower for faster computation. \code{nmax = Inf} eliminates sampling.
 #' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?

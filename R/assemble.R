@@ -133,7 +133,7 @@ assemble <- function(year,
         dt <- fusionModel::read_fsd(path = x,
                                     columns = intersect(xn, c('M', 'year', 'hid', 'pid', keep)),
                                     M = M,
-                                    df = if (is.null(df)) NULL else select(df, any_of(xn)),
+                                    df = if (any(xn %in% names(df))) select(df, any_of(xn)) else NULL,
                                     cores = cores)
       } else {
         dt <- data.table()

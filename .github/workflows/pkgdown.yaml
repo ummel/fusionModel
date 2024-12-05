@@ -1,4 +1,4 @@
-# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples#build-pkgdown-site
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 # 10/29/24: Set on:workflow_dispatch to allow workflow to be triggered manually: https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/manually-running-a-workflow
 on:

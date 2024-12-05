@@ -1,7 +1,7 @@
 #' Analyze fusionACS microdata
 #'
 #' @description
-#' For fusionACS usage only. Calculation of point estimates and associated uncertainty (margin of error) for analyses using ACS and/or fused donor survey variables.
+#' For fusionACS internal use only. Calculation of point estimates and associated uncertainty (margin of error) for analyses using ACS and/or fused donor survey variables.
 #' Efficiently computes means, medians, sums, proportions, and counts, optionally across population subgroups.
 #' The use of native ACS weights or ORNL UrbanPop synthetic population weights is automatically determined given the requested geographic resolution.
 #' Requires a local \code{/fusionData} directory in the working directory path with assumed file structure and conventions.
@@ -15,11 +15,10 @@
 #' @param M Integer. The first \code{M} implicates are used. Set \code{M = Inf} to use all available implicates.
 #' @param R Integer. The first \code{R} replicate weights are used. Set \code{R = Inf} to use all available replicate weights.
 #' @param cores Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.
-#' @param version_up Integer. TEMPORARY. Use \code{1} to access national, single-implicate weights. Use \code{2} to access 10-replicate initial weights for 17 metro areas.
+#' @param version_up Integer. Use \code{version_up = 1} to access national, single-implicate weights. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas.
 #' @param force_up Logical. If \code{TRUE}, force use of UrbanPop weights even if the requested analysis can be done using native ACS weights.
-
 #'
-#' @details Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), tract10, zcta10 (zip code), and bg10 (block group).
+#' @details Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), zcta10 (zip code), tract10 (census tract), and bg10 (block group).
 #'
 #' @details The final point estimates are the mean estimates across implicates. The final margin of error is derived from the pooled standard error across implicates, calculated using Rubin's pooling rules (1987). The within-implicate standard error's are calculated using the replicate weights.
 #'
@@ -41,14 +40,14 @@
 #'  \item{lhs}{Optional analysis name; the "left hand side" of the analysis formula.}
 #'  \item{rhs}{The "right hand side" of the analysis formula.}
 #'  \item{type}{Type of analysis: sum, mean, median, prop(ortion) or count.}
-#'  \item{N}{Number of microdata observations used to construct the estimate.}
 #'  \item{level}{Factor levels for categorical analyses; NA otherwise.}
-#'  \item{est}{Point estimate; mean estimate across implicates.}
+#'  \item{N}{Mean number of valid microdata observations across all implicates and replicates; i.e. the sample size used to construct the estimate.}
+#'  \item{est}{Point estimate; mean estimate across all implicates and replicates.}
 #'  \item{moe}{Margin of error associated with the 90% confidence interval.}
 #'  \item{se}{Standard error of the estimate.}
 #'  \item{df}{Degrees of freedom used to calculate the margin of error.}
-#'  \item{cv}{Coefficient of variation; a measure of estimate reliability.}
-#'  \item{rshare}{Share of uncertainty attributable to replicate weights (as opposed to across-implicates uncertainty).}
+#'  \item{cv}{Coefficient of variation; conventional scale-independent measure of estimate reliability. Calculated as: \code{100 * moe / 1.645 / est}}
+#'  \item{rshare}{Share of \code{moe} attributable to replicate weight uncertainty (as opposed to uncertainty across implicates).}
 #'  }
 #'
 #' @references Rubin, D.B. (1987). \emph{Multiple imputation for nonresponse in surveys}. Hoboken, NJ: Wiley.
@@ -329,12 +328,12 @@ analyze_fusionACS <- function(analyses,
   # Attempt to convert any non-formula entries in 'analyses' into a plausible formula
   # This applies to legacy analysis formulation of the kind:
   #  analyses <- list(mean = c("natural_gas", "aircon"), median = "electricity")
-  # The code below converts these to an equivalent formula provided that the function referenced is in .FAST_STAT_FUN
+  # The code below converts these to an equivalent formula and assigns LHS as concatenation of analysis variable name and outer function
   analyses <- lapply(seq_along(analyses), function(i) {
     x <- analyses[[i]]
     if (!rlang::is_formula(x)) {
       f <- names(analyses)[i]  # The requested outer function
-      fobj <- paste("~", f, "(", x, ")")  # No LHS name in this case
+      fobj <- paste0(gsub(" ", "_", str_squish(x)), "_", f, "~", f, "(`", x, "`)")
       lapply(fobj, as.formula)
     } else {
       x
@@ -386,8 +385,17 @@ analyze_fusionACS <- function(analyses,
   anames <- paste0("A..", match(aexp, unique(aexp)))
   names(alist) <- anames
 
-  # Outer function of each analysis; check that the requested function is allowed
+  # Outer function of each analysis
   afun <- purrr::map_chr(alist, 1)
+
+  # Abbreviation of the inner expression with function appended
+  # Used below to assign LHS when none is provided
+  afun <- gsub("proportion", "prop", afun)
+  lhs.abb <- paste(abbreviate(gsub('`', '', purrr::map_chr(alist, 2))), afun, sep = "_")
+
+  # Convert outer functions, if necessary, and check that the requested function is allowed
+  afun <- gsub("count", "sum", afun)  # Alternative way of requesting a sum
+  afun <- gsub("prop", "mean", afun)
   invalid <- !afun %in% c('sum', 'mean', 'median')  # Valid outer functions
   if (any(invalid)) stop("Outer functions must be sum(), mean(), or median()")
 
@@ -404,9 +412,12 @@ analyze_fusionACS <- function(analyses,
   # The "ANALYSIS" label used to identify each analysis (combination of function and analysis variable, separated by single dot)
   alabel <- paste(afun, names(afun), sep = ".")
 
-  # LHS and RHS of each analysis; assigned to the final results
+  # LHS and RHS of each analysis; assigned to the final output
   alhs <- sapply(alist, function(x) ifelse(length(x[[3]]), x[[3]], NA))
   arhs <- purrr::map_chr(alist, 4)
+
+  # If no LHS provided, assign an abbreviation based on the inner expression
+  alhs[is.na(alhs)] <- lhs.abb[is.na(alhs)]
 
   #-----
 
@@ -780,11 +791,14 @@ analyze_fusionACS <- function(analyses,
 
     # Safety check on dimensions
     stopifnot(nrow(sim) / nrow(static) == Mimp)
-    stopifnot(all(avars %in% names(sim)))
 
     cat("Successfully applied user fun() to microdata\n")
 
   }
+
+  # Check if all required analysis variables are present in 'sim' prior to evaluating inner expressions
+  miss <- setdiff(avars, names(sim))
+  if (length(miss)) stop("The following analysis variables are not present in 'sim': ", paste(miss, collapse = ", "))
 
   #-------
 

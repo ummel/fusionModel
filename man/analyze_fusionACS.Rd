@@ -37,7 +37,7 @@ analyze_fusionACS(
 
 \item{cores}{Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.}
 
-\item{version_up}{Integer. TEMPORARY. Use \code{1} to access national, single-implicate weights. Use \code{2} to access 10-replicate initial weights for 17 metro areas.}
+\item{version_up}{Integer. Use \code{version_up = 1} to access national, single-implicate weights. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas.}
 
 \item{force_up}{Logical. If \code{TRUE}, force use of UrbanPop weights even if the requested analysis can be done using native ACS weights.}
 }
@@ -48,24 +48,24 @@ A tibble reporting analysis results, possibly across subgroups defined in \code{
 \item{lhs}{Optional analysis name; the "left hand side" of the analysis formula.}
 \item{rhs}{The "right hand side" of the analysis formula.}
 \item{type}{Type of analysis: sum, mean, median, prop(ortion) or count.}
-\item{N}{Number of microdata observations used to construct the estimate.}
 \item{level}{Factor levels for categorical analyses; NA otherwise.}
-\item{est}{Point estimate; mean estimate across implicates.}
+\item{N}{Mean number of valid microdata observations across all implicates and replicates; i.e. the sample size used to construct the estimate.}
+\item{est}{Point estimate; mean estimate across all implicates and replicates.}
 \item{moe}{Margin of error associated with the 90\% confidence interval.}
 \item{se}{Standard error of the estimate.}
 \item{df}{Degrees of freedom used to calculate the margin of error.}
-\item{cv}{Coefficient of variation; a measure of estimate reliability.}
-\item{rshare}{Share of uncertainty attributable to replicate weights (as opposed to across-implicates uncertainty).}
+\item{cv}{Coefficient of variation; conventional scale-independent measure of estimate reliability. Calculated as: \code{100 * moe / 1.645 / est}}
+\item{rshare}{Share of \code{moe} attributable to replicate weight uncertainty (as opposed to uncertainty across implicates).}
 }
 }
 \description{
-For fusionACS usage only. Calculation of point estimates and associated uncertainty (margin of error) for analyses using ACS and/or fused donor survey variables.
+For fusionACS internal use only. Calculation of point estimates and associated uncertainty (margin of error) for analyses using ACS and/or fused donor survey variables.
 Efficiently computes means, medians, sums, proportions, and counts, optionally across population subgroups.
 The use of native ACS weights or ORNL UrbanPop synthetic population weights is automatically determined given the requested geographic resolution.
 Requires a local \code{/fusionData} directory in the working directory path with assumed file structure and conventions.
 }
 \details{
-Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), tract10, zcta10 (zip code), and bg10 (block group).
+Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), zcta10 (zip code), tract10 (census tract), and bg10 (block group).
 
 The final point estimates are the mean estimates across implicates. The final margin of error is derived from the pooled standard error across implicates, calculated using Rubin's pooling rules (1987). The within-implicate standard error's are calculated using the replicate weights.
 
