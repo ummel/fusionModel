@@ -1110,9 +1110,12 @@ analyze_fusionACS <- function(analyses,
     # For means, the standard variance is var(x) / N
     nout[grepl("^fmean", nout$ANALYSIS), VAR := VAR / N]
 
-    # For medians, we assume the standard variance is 1.253 * var(x) / N
+    # For medians, we assume the standard error is sqrt(pi / 2) times the standard error of the mean
+    # This means with adjust the standard variance by factor of pi/2
     # See here: https://stats.stackexchange.com/questions/59838/standard-error-of-the-median/61759#61759
-    nout[grepl("^fmedian", nout$ANALYSIS), VAR := 1.253 * VAR / N]
+    # NOTE: There is a technique to approximate the confidence interval for a percentile of any distribution, but it is much slower than the adjusted variance approximation.
+    # see here: https://stats.stackexchange.com/questions/99829/how-to-obtain-a-confidence-interval-for-a-percentile/284970#284970
+    nout[grepl("^fmedian", nout$ANALYSIS), VAR := (pi / 2) * VAR / N]
 
     # For sums, the standard variance is var(x) * N
     nout[grepl("^fsum", nout$ANALYSIS), VAR := VAR * N]
