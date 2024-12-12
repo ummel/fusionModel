@@ -1035,3 +1035,12 @@ lumpFactor <- function(x, nmax = 5, w = NULL, other_level = "_Other_") {
   }
   return(x)
 }
+
+#-------------------
+
+# Quickly identify if any values are Infinite; complement to anyNA()
+# Note that Inf is always double, so an integer vector cannot have Inf (if would need to be coerved to double)
+# See here: https://stackoverflow.com/questions/39849650/why-typeofinf-is-double
+anyInf <- function(x) {
+  if (is.double(x)) collapse::anyv(x, Inf) else FALSE
+}

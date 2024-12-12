@@ -391,7 +391,8 @@ analyze_fusionACS <- function(analyses,
   # Abbreviation of the inner expression with function appended
   # Used below to assign LHS when none is provided
   afun <- gsub("proportion", "prop", afun)
-  lhs.abb <- paste(abbreviate(gsub('`', '', purrr::map_chr(alist, 2))), afun, sep = "_")
+  #lhs.abb <- paste(abbreviate(gsub('`', '', )), afun, sep = "_")
+  lhs.abb <- paste(abbreviate(str_replace_all(purrr::map_chr(alist, 2), "[^[:alnum:]]", "")), afun, sep = "_")
 
   # Convert outer functions, if necessary, and check that the requested function is allowed
   afun <- gsub("count", "sum", afun)  # Alternative way of requesting a sum
@@ -1003,10 +1004,9 @@ analyze_fusionACS <- function(analyses,
 
     cat("Computing estimates for numerical analyses:\n ~", paste(sapply(analyses[anum], rlang::f_text), collapse = "\n ~ "), "\n")
 
-
     # Set any 'Inf' values in analysis variables to NA
     for (v in unique(anames[anum])) {
-      if (anyv(sim[[v]], Inf)) {
+      if (anyInf(sim[[v]])) {
         i <- whichv(sim[[v]], Inf)
         set(sim, i = i, j = v, value = NA)
         warning("Set ", length(i), " infinite values (", signif(100 * length(i) / nrow(sim), 3), "%) to NA for analysis variable ", v, " in 'sim'")
