@@ -55,7 +55,6 @@ A tibble reporting analysis results, possibly across subgroups defined in \code{
 \item{se}{Standard error of the estimate.}
 \item{df}{Degrees of freedom used to calculate the margin of error.}
 \item{cv}{Coefficient of variation; conventional scale-independent measure of estimate reliability. Calculated as: \code{100 * moe / 1.645 / est}}
-\item{rshare}{Share of \code{moe} attributable to replicate weight uncertainty (as opposed to uncertainty across implicates).}
 }
 }
 \description{

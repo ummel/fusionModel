@@ -47,7 +47,6 @@
 #'  \item{se}{Standard error of the estimate.}
 #'  \item{df}{Degrees of freedom used to calculate the margin of error.}
 #'  \item{cv}{Coefficient of variation; conventional scale-independent measure of estimate reliability. Calculated as: \code{100 * moe / 1.645 / est}}
-#'  \item{rshare}{Share of \code{moe} attributable to replicate weight uncertainty (as opposed to uncertainty across implicates).}
 #'  }
 #'
 #' @references Rubin, D.B. (1987). \emph{Multiple imputation for nonresponse in surveys}. Hoboken, NJ: Wiley.
@@ -1255,7 +1254,7 @@ analyze_fusionACS <- function(analyses,
 
       # Calculate share of uncertainty attributable to replicate weights (rshare)
       # Identical to rshare below in most cases
-      rshare = sqrt(ubar / se ^ 2),
+      #rshare = sqrt(ubar / se ^ 2),
 
       # Calculate share of MOE attributable to replicate weights (rshare)
       # The replicate-only MOE is equivalent to using just 'ubar' with 'df' equal to the number of ACS replicate weights minus 1
@@ -1274,7 +1273,7 @@ analyze_fusionACS <- function(analyses,
            type = ifelse(!is.na(level) & type == "sum",  "count", type)) %>%
 
     arrange(i, !!!rlang::syms(by), level) %>%  # Arranges rows according to original 'analyses' order
-    select(lhs, rhs, type, all_of(by), level, N, est, moe, se, df, cv, rshare) %>%
+    select(lhs, rhs, type, all_of(by), level, N, est, moe, se, df, cv) %>%
     #select(lhs, rhs, type, all_of(by), level, N, ubar, b, r, est, moe, se, df, cv, rshare) %>%
     mutate_all(tidyr::replace_na, replace = NA) %>%  # Replaces NaN from zero division with normal NA
     mutate_if(is.double, convertInteger, threshold = 1)
