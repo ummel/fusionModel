@@ -4,7 +4,7 @@
 #' A universal missing data imputation tool that wraps successive calls to \code{\link{train}} and \code{\link{fuse}} under the hood. Designed for simplicity and ease of use.
 #' @param data A data frame with missing values.
 #' @param weight Optional name of observation weights column in \code{data}.
-#' @param ignore Optional names of columns in \code{data} to ignore as predictor variables.
+#' @param ignore Optional names of columns in \code{data} to ignore. These variables are neither imputed nor used as predictors.
 #' @param cores Number of physical CPU cores used by \code{\link[lightgbm]{lightgbm}}. LightGBM is parallel-enabled on all platforms if OpenMP is available.
 #' @details Variables with missing values are imputed sequentially, beginning with the variable with the fewest missing values. Since LightGBM models accommodate NA values in the predictor set, all available variables are used as potential predictors (excluding \code{ignore} variables). For each call to \code{\link{train}}, 80% of observations are randomly selected for training and the remaining 20% are used as a validation set to determine an appropriate number of tree learners. All LightGBM model parameters are kept at the sensible default values in \code{\link{train}}. Since \code{\link[lightgbm]{lightgbm}} uses OpenMP multithreading, it is not advisable to use \code{\link{impute}} inside a forked/parallel process when \code{cores > 1}.
 #' @return A data frame with all missing values imputed.
@@ -65,9 +65,10 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
   }
 
   miss <- sort(colSums(is.na(d)))
-  stopifnot(all(miss < nrow(d)))
   y <- names(miss)[miss > 0 & miss < nrow(d)]
-  x <- setdiff(names(d), c(y, weight))
+  y <- setdiff(y, ignore)
+  if (!length(y)) stop("No un-ignored columns with NA values to impute")
+  #x <- setdiff(names(d), c(y, weight))
   temp.fsn <- paste0(tempfile(), ".fsn")
 
   #---
@@ -159,8 +160,8 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
     dtrain <- d[!imp, ..vtrain]
 
     # If sample size is large, use a stratified sample of the training data
-    # Restricts training sample to no more than 20k observations
-    maxn <- min(max(5e3, 10 * sum(imp)), 20e3)
+    # Restricts training sample to no more than 50k observations
+    maxn <- min(max(5e3, 10 * sum(imp)), 50e3)
     if (nrow(dtrain) > maxn) {
       keep <- stratify(y = dtrain[[v]],
                        ycont = is.numeric(dtrain[[v]]),
@@ -205,7 +206,7 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
   unlink(temp.fsn)
 
   # Check for NA's in output
-  stopifnot(!anyNA(d))
+  stopifnot(!anyNA(d[, ..y]))
 
   # Ensure output column order and class matches input 'data'
   suppressWarnings(set(d, j = "W_.._", value = NULL))  # Removes the placeholder weight variable, if present

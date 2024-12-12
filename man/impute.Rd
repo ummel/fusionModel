@@ -11,7 +11,7 @@ impute(data, weight = NULL, ignore = NULL, cores = 1)
 
 \item{weight}{Optional name of observation weights column in \code{data}.}
 
-\item{ignore}{Optional names of columns in \code{data} to ignore as predictor variables.}
+\item{ignore}{Optional names of columns in \code{data} to ignore. These variables are neither imputed nor used as predictors.}
 
 \item{cores}{Number of physical CPU cores used by \code{\link[lightgbm]{lightgbm}}. LightGBM is parallel-enabled on all platforms if OpenMP is available.}
 }
