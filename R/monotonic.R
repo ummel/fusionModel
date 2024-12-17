@@ -66,10 +66,16 @@ monotonic <- function(x,
   # If any issues are detected, a helpful warning is issued
   if (expend) {
     if (any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
-    i <- which(x == 0 & y != 0)
-    if (length(i)) y[i] <- 0L; warning("Set ", length(i), " non-zero y-values (", paste0(round(100 * length(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
-    i <- which(x != 0 & y == 0)
-    if (length(i)) y[i] <- NA; warning("Set ", length(i), " zero y-values (", paste0(round(100 * length(i) / length(y), 2), "%"), ") to NA where x != 0 because 'expend = TRUE'")
+    i <- x == 0 & y != 0
+    if (any(i)) {
+      y[i] <- 0L
+      warning("Set ", sum(i), " non-zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
+    }
+    i <- x != 0 & y == 0
+    if (any(i)) {
+      y[i] <- NA
+      warning("Set ", sum(i), " zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to NA where x != 0 because 'expend = TRUE'")
+    }
   }
 
   #ymin <- if (all(y == 0, na.rm = TRUE)) 0 else min(y[y != 0], na.rm = TRUE)
