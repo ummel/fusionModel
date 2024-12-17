@@ -296,8 +296,10 @@ analyze_fusionACS <- function(analyses,
   # See here: http://adv-r.had.co.nz/Computing-on-the-language.html
   check <- try(is.call(area), silent = TRUE)
   if (inherits(check, "try-error") | check == FALSE) {
+    #if (!is.null(area)) {
     area <- substitute(area)
     if (is.character(area)) area <- str2lang(area)
+    #}
   }
   area.vars <- all.vars(area)
 
@@ -981,6 +983,10 @@ analyze_fusionACS <- function(analyses,
     # The standard variance is the raw variance multiplied by 'N' (number of observations in each group-level)
     if (!all(i)) cout[!i, VAR := VAR * N]
 
+    # Ensure that returned variance is not less than zero
+    # Very small negative values are possible when using 'stable.algo = FALSE'
+    cout[, VAR := pmax(0, VAR)]
+
     # Retain only necessary variables
     keep <- c('M', 'REP', by, 'ANALYSIS', 'level', 'N', 'EST', 'VAR')
     cout <- cout[, ..keep]
@@ -1055,6 +1061,7 @@ analyze_fusionACS <- function(analyses,
     names(flist) <- fnames
 
     # Add calculation of variance via collapse::fvar()
+    # This is only necessary when using UrbanPop weights and R > 0; otherwise, variance calculation is ignored and NA's returned on 'nout'
     if (use.up & R > 0) flist$fvar <- unique(unlist(flist, use.names = FALSE))
 
     # Once 'ncount' is created, it may be necessary to set NA in 'static' to zeros
@@ -1118,6 +1125,10 @@ analyze_fusionACS <- function(analyses,
 
     # For sums, the standard variance is var(x) * N
     nout[grepl("^fsum", nout$ANALYSIS), VAR := VAR * N]
+
+    # Ensure that returned variance is not less than zero
+    # Very small negative values are possible when using 'stable.algo = FALSE'
+    nout[, VAR := pmax(0, VAR)]
 
     #---
 
@@ -1219,7 +1230,18 @@ analyze_fusionACS <- function(analyses,
 
     ) %>%
 
+    # See Table 2: https://www2.census.gov/programs-surveys/acs/tech_docs/data_suppression/ACS_Data_Release_Rules.pdf
+    group_by_at(c(by, "ANALYSIS")) %>%
+    mutate(suppress = anyNA(var) | (sum(N) < 3 * n()) | (R > 0 & Rn < 2)) %>%
+    ungroup() %>%
+
     mutate(
+
+      # Suppress the estimate if the number of unweighted cases is too low
+      est = ifelse(suppress, NA, est),
+
+      # Ensure variance set to NA if multiple replicates not available
+      var = ifelse(suppress | Rn < 2, NA, var),
 
       # Final standard error (Rubin)
       se = sqrt(var),
@@ -1237,6 +1259,7 @@ analyze_fusionACS <- function(analyses,
       #df = if (Mimp == 1 & !use.up) R - 1L else (Mn - 1) * (1 + r^(-1)) ^ 2,
       #df = ifelse(r == 0, Rn - 1, df),  # If 'r' is zero, there is no variance across the implicates, so we derive 'df' from the number of weights only
       df = ifelse(Mn == 1, Inf, (Mn - 1) * (1 + r^(-1)) ^ 2),
+      df = ifelse(suppress, NA, df),
 
       # DEPRECATED
       # Alternative code if attempting to implement Barnard and Rubin (1999) finite population correction
@@ -1276,7 +1299,8 @@ analyze_fusionACS <- function(analyses,
     select(lhs, rhs, type, all_of(by), level, N, est, moe, se, df, cv) %>%
     #select(lhs, rhs, type, all_of(by), level, N, ubar, b, r, est, moe, se, df, cv, rshare) %>%
     mutate_all(tidyr::replace_na, replace = NA) %>%  # Replaces NaN from zero division with normal NA
-    mutate_if(is.double, convertInteger, threshold = 1)
+    mutate_if(is.double, convertInteger, threshold = 1) %>%
+    mutate_if(is.double, signif, digits = 5)
 
   #-----
 
