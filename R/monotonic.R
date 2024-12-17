@@ -75,9 +75,13 @@ monotonic <- function(x,
   #ymin <- if (all(y == 0, na.rm = TRUE)) 0 else min(y[y != 0], na.rm = TRUE)
   x0 <- x
   w0 <- w
-  x <- x[!is.na(y)]
-  y <- y[!is.na(y)]
-  stopifnot(length(x) > 0)
+  ok <- !is.na(y)
+  if (!all(ok)) {
+    stopifnot(sum(ok) > 0)
+    x <- x[ok]
+    y <- y[ok]
+    w <- w[ok]
+  }
 
   # If zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
   force.zero <- FALSE
