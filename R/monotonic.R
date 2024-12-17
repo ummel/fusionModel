@@ -35,8 +35,8 @@
 #     by = .(state, puma10)]
 # )
 
-x <- c(0, 0)
-y <- c(0, 47)
+x <- c(0, 57, 307, 1490, 10360, 13770)
+y <- c(0, 0, 2, 44, 160, 534)
 
 #---------
 
@@ -69,16 +69,17 @@ monotonic <- function(x,
   # If 'expend = TRUE', check for violations
   # If any issues are detected, a helpful warning is issued
   if (expend) {
-    if (any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
+    if (any(x < 0)) stop("'expend = TRUE' but detected negative values in 'x'")
+    if (any(y < 0)) warning("'expend = TRUE' but detected negative values in 'y'")
     i <- x == 0 & y != 0
     if (any(i)) {
       y[i] <- 0L
       warning("Set ", sum(i), " non-zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
     }
-    i <- x != 0 & y == 0
+    i <- x > 0 & y == 0
     if (any(i)) {
       y[i] <- NA
-      warning("Set ", sum(i), " zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to NA where x != 0 because 'expend = TRUE'")
+      warning("Set ", sum(i), " zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to NA where x > 0 because 'expend = TRUE'")
     }
   }
 
@@ -92,9 +93,9 @@ monotonic <- function(x,
     w <- w[ok]
   }
 
-  # If zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
+  # If 'expend = TRUE' OR zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
   force.zero <- FALSE
-  if (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.995) {
+  if (expend | (any(x == 0) & sum(y[x == 0] == 0) / sum(x == 0) > 0.995)) {
     force.zero <- TRUE
     i <- c(match(0, x), which(x != 0))  # Retains first instance of zero in 'x'
     x <- x[i]
@@ -147,7 +148,7 @@ monotonic <- function(x,
     }
   }
 
-  # If 'y' is assumed to be expenditure, ensure that 'p' values meet some minimum positive value when x > 0
+  # First time: If expend = TRUE, ensure that the output values meet some minimum positive value when x > 0
   if (expend) p[xu > 0] <- pmax(p[xu > 0], ymin)
 
   # If necessary, set values to zero when 'x' is zero
@@ -156,19 +157,19 @@ monotonic <- function(x,
   # Make 'y' predictions for all original 'x'
   yout <- if (length(xu) == 1) rep(p, length(x0)) else approx(xu, p, xout = x0, rule = 2)$y
 
-  # Safety check
-  if (anyNA(yout)) stop("NA values in result vector")
 
   # If requested, adjustment factor to ensure mean of transformed 'y' matches original mean value
-  # NOTE: Mean is NOT strictly preserved in 'expend = TRUE' case where all x = 0 but some original y > 0 (returned mean will be zero)
   yadj <- 1  # Defined for use in plotting code, below, if 'preserve = FALSE'
   if (preserve) {
+    ymin <- if (all(x0 == 0)) 0L else min(yout[x0 > 0])
     yadj <- ymean / weighted.mean(yout, w0)
     if (!is.finite(yadj)) yadj <- 1  # Catch divide by zero case (mean not strictly preserved in this case)
     yout <- yout * yadj
+    if (expend) yout[x0 > 0] <- pmax(yout[x0 > 0], ymin) # May cause input mean of 'y' to not be strictly preserved in output
   }
 
   # If 'y' input is integer, force output to integer
+  # May cause input mean of 'y' to not be strictly preserved in output
   if (yint) yout <- as.integer(round(yout))
 
   # Optional plot of transformation
@@ -177,6 +178,10 @@ monotonic <- function(x,
     lines(xu, p * yadj, col = "red")
   }
 
+  # Safety check
+  if (anyNA(yout)) stop("NA values in result vector")
+
   return(yout)
 
 }
+monotonic()
