@@ -35,9 +35,6 @@
 #     by = .(state, puma10)]
 # )
 
-# x <- c(0, 57, 307, 1490, 10360, 13770)
-# y <- c(0, 0, 2, 44, 160, 534)
-
 #---------
 
 monotonic <- function(x,
@@ -65,32 +62,24 @@ monotonic <- function(x,
   ymean <- weighted.mean(y, w, na.rm = TRUE)
   yint <- is.integer(y)
   ymin <- if (all(y == 0)) 0 else min(y[y != 0])
+  x0 <- x
+  w0 <- w
 
   # If 'expend = TRUE', check for violations
   # If any issues are detected, a helpful warning is issued
   if (expend) {
     if (any(x < 0)) stop("'expend = TRUE' but detected negative values in 'x'")
-    if (any(y < 0)) warning("'expend = TRUE' but detected negative values in 'y'")
+    if (any(y < 0)) stop("'expend = TRUE' but detected negative values in 'y'")
     i <- x == 0 & y != 0
     if (any(i)) {
       y[i] <- 0L
-      warning("Set ", sum(i), " non-zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
+      warning("Set ", sum(i), " non-zero y-value(s) (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
     }
     i <- x > 0 & y == 0
     if (any(i)) {
-      y[i] <- NA
-      warning("Set ", sum(i), " zero y-values (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to NA where x > 0 because 'expend = TRUE'")
+      y[i] <- ymin
+      warning("Set ", sum(i), " zero y-value(s) (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to observed non-zero minimum where x > 0 because 'expend = TRUE'")
     }
-  }
-
-  x0 <- x
-  w0 <- w
-  ok <- !is.na(y)
-  if (!all(ok)) {
-    stopifnot(sum(ok) > 0)
-    x <- x[ok]
-    y <- y[ok]
-    w <- w[ok]
   }
 
   # If 'expend = TRUE' OR zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
@@ -102,17 +91,6 @@ monotonic <- function(x,
     y <- y[i]
     w <- w[i]
   }
-
-  # Remove outliers in 'x' and 'y'
-  # ok <- abs(x - median(x)) / mad(x) < 3.5 & abs(y - median(y)) / mad(y) < 3.5
-  # ok[is.na(ok)] <- TRUE
-  # if (!all(ok)) {
-  #   i <- match(range(x), x)  # Retains first instance of min and max 'x'
-  #   i <- unique(c(i, which(ok)))
-  #   x <- x[i]
-  #   y <- y[i]
-  #   w <- w[i]
-  # }
 
   # If necessary, sample the data for speed
   n <- length(x)
@@ -157,20 +135,20 @@ monotonic <- function(x,
   # Make 'y' predictions for all original 'x'
   yout <- if (length(xu) == 1) rep(p, length(x0)) else approx(xu, p, xout = x0, rule = 2)$y
 
-
   # If requested, adjustment factor to ensure mean of transformed 'y' matches original mean value
   yadj <- 1  # Defined for use in plotting code, below, if 'preserve = FALSE'
   if (preserve) {
-    ymin <- if (all(x0 == 0)) 0L else min(yout[x0 > 0])
     yadj <- ymean / weighted.mean(yout, w0)
     if (!is.finite(yadj)) yadj <- 1  # Catch divide by zero case (mean not strictly preserved in this case)
     yout <- yout * yadj
-    if (expend) yout[x0 > 0] <- pmax(yout[x0 > 0], ymin) # May cause input mean of 'y' to not be strictly preserved in output
   }
 
   # If 'y' input is integer, force output to integer
   # May cause input mean of 'y' to not be strictly preserved in output
   if (yint) yout <- as.integer(round(yout))
+
+  # May cause input mean of 'y' to NOT be strictly preserved in output
+  if (expend) yout[x0 > 0] <- pmax(yout[x0 > 0], ymin)
 
   # Optional plot of transformation
   if (plot) {
