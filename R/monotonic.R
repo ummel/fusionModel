@@ -64,6 +64,7 @@ monotonic <- function(x,
   if (is.null(w)) w <- rep.int(1L, length(x))
   ymean <- weighted.mean(y, w, na.rm = TRUE)
   yint <- is.integer(y)
+  ymin <- if (all(y == 0)) 0 else min(y[y != 0])
 
   # If 'expend = TRUE', check for violations
   # If any issues are detected, a helpful warning is issued
@@ -81,7 +82,6 @@ monotonic <- function(x,
     }
   }
 
-  #ymin <- if (all(y == 0, na.rm = TRUE)) 0 else min(y[y != 0], na.rm = TRUE)
   x0 <- x
   w0 <- w
   ok <- !is.na(y)
@@ -148,7 +148,7 @@ monotonic <- function(x,
   }
 
   # If 'y' is assumed to be expenditure, ensure that 'p' values meet some minimum positive value when x > 0
-  #if (expend) p[xu > 0] <- pmax(p[xu > 0], ymin)
+  if (expend) p[xu > 0] <- pmax(p[xu > 0], ymin)
 
   # If necessary, set values to zero when 'x' is zero
   if (force.zero) p[xu == 0] = 0
