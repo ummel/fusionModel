@@ -22,7 +22,7 @@
 
 # TEST
 # library(tidyverse)
-# library(data.table())
+# library(data.table)
 #
 # d <- fusionModel::read_fsd("~/Downloads/RECS_2020_2019_fused_UP.fsd")
 # acs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/ACS/2019/ACS_2019_H_processed.fst", columns = c('weight', 'state', 'puma10'))
@@ -61,7 +61,7 @@ monotonic <- function(x,
   if (is.null(w)) w <- rep.int(1L, length(x))
   ymean <- weighted.mean(y, w)
   yint <- is.integer(y)
-  ymin <- min(y[y != 0])
+  ymin <- if (all(y == 0)) 0 else min(y[y != 0])
   x0 <- x
   w0 <- w
   if (expend & any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
