@@ -35,6 +35,9 @@
 #     by = .(state, puma10)]
 # )
 
+x <- c(0, 0)
+y <- c(0, 47)
+
 #---------
 
 monotonic <- function(x,
@@ -157,10 +160,11 @@ monotonic <- function(x,
   if (anyNA(yout)) stop("NA values in result vector")
 
   # If requested, adjustment factor to ensure mean of transformed 'y' matches original mean value
+  # NOTE: Mean is NOT strictly preserved in 'expend = TRUE' case where all x = 0 but some original y > 0 (returned mean will be zero)
   yadj <- 1  # Defined for use in plotting code, below, if 'preserve = FALSE'
   if (preserve) {
     yadj <- ymean / weighted.mean(yout, w0)
-    if (is.na(yadj)) yadj <- 1  # Catch divide by zero case
+    if (!is.finite(yadj)) yadj <- 1  # Catch divide by zero case (mean not strictly preserved in this case)
     yout <- yout * yadj
   }
 
