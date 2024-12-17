@@ -59,12 +59,25 @@ monotonic <- function(x,
   })
 
   if (is.null(w)) w <- rep.int(1L, length(x))
-  ymean <- weighted.mean(y, w)
+  ymean <- weighted.mean(y, w, na.rm = TRUE)
   yint <- is.integer(y)
-  ymin <- if (all(y == 0)) 0 else min(y[y != 0])
+
+  # If 'expend = TRUE', check for violations
+  # If any issues are detected, a helpful warning is issued
+  if (expend) {
+    if (any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
+    i <- which(x == 0 & y != 0)
+    if (length(i)) y[i] <- 0L; warning("Set ", length(i), " non-zero y-values (", paste0(round(100 * length(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
+    i <- which(x != 0 & y == 0)
+    if (length(i)) y[i] <- NA; warning("Set ", length(i), " zero y-values (", paste0(round(100 * length(i) / length(y), 2), "%"), ") to NA where x != 0 because 'expend = TRUE'")
+  }
+
+  #ymin <- if (all(y == 0, na.rm = TRUE)) 0 else min(y[y != 0], na.rm = TRUE)
   x0 <- x
   w0 <- w
-  if (expend & any(x < 0 | y < 0)) warning("'expend = TRUE' but detected negative values in 'x' and/or 'y'")
+  x <- x[!is.na(y)]
+  y <- y[!is.na(y)]
+  stopifnot(length(x) > 0)
 
   # If zeros in 'x' (almost) always produce zeros in 'y', restrict to non-zero observations in 'x'
   force.zero <- FALSE
@@ -121,15 +134,14 @@ monotonic <- function(x,
     }
   }
 
-  # If 'y' is assumed to be expenditure, ensure that 'p' values meet some minimum positive value
-  # This is to prevent possibility of zero values for 'y' where x > 0
-  if (expend) p <- pmax(p, ymin)
+  # If 'y' is assumed to be expenditure, ensure that 'p' values meet some minimum positive value when x > 0
+  #if (expend) p[xu > 0] <- pmax(p[xu > 0], ymin)
+
+  # If necessary, set values to zero when 'x' is zero
+  if (force.zero) p[xu == 0] = 0
 
   # Make 'y' predictions for all original 'x'
   yout <- if (length(xu) == 1) rep(p, length(x0)) else approx(xu, p, xout = x0, rule = 2)$y
-
-  # If necessary, set values to zero when 'x' is zero
-  if (force.zero) yout[x0 == 0] = 0
 
   # Safety check
   if (anyNA(yout)) stop("NA values in result vector")
