@@ -220,7 +220,9 @@ analyze <- function(x,
   nM <- sim[, .N, by = M]
   stopifnot(all(nM$M %in% seq_len(Mimp)))
   stopifnot(all(nM$N == N))
-  if (!is.null(static)) stopifnot(nrow(static) == N)
+  if (!is.null(static)) {
+    if (nrow(static) != N) stop("The number of rows in 'static' should equal the number of rows in 'sim' per implicate (", N, ")")
+  }
   if (Mimp > 1) {
     cat("Using", Mimp, "implicates\n")
   } else {
@@ -318,9 +320,12 @@ analyze <- function(x,
   hotf <- names(x) %in% c("mean", "sum")
   othx <- unique(unlist(lapply(x[!hotf], function(x) if (is.vector(x)) x else all.vars(x))))
   hotx <- unique(unlist(x[hotf]))
+  hotx <- names(which(sapply(sim[, ..hotx], is.factor)))
   if (length(hotx) > 0) {
-    hotx <- names(which(sapply(sim[, ..hotx], is.factor)))
-    sim <- one_hot(sim, hotx, dropOriginal = FALSE)
+    temp <- one_hot(sim[, ..hotx], dropOriginal = TRUE)
+    sim <- cbind(sim, temp)
+    attr(sim, "one_hot_link") <- attr(temp, "one_hot_link")
+    rm(temp)
   }
 
   # Look up table for variables that are one-hot encoded
