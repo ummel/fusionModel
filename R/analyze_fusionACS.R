@@ -1230,9 +1230,12 @@ analyze_fusionACS <- function(analyses,
 
     ) %>%
 
+    # Estimates and associated results are suppressed under two conditions:
+    # 1. There are less than 3 valid unweighted microdata observations (per estimate); for proportions, number of observations must be at least 3x the number of levels
+    # 2. MOE is requested (R > 0) but only a single valid estimate is available across the replicates (Rn == 1); can occur due to missingness.
     # See Table 2: https://www2.census.gov/programs-surveys/acs/tech_docs/data_suppression/ACS_Data_Release_Rules.pdf
     group_by_at(c(by, "ANALYSIS")) %>%
-    mutate(suppress = anyNA(var) | (sum(N) < 3 * n()) | (R > 0 & Rn < 2)) %>%
+    mutate(suppress = (sum(N) < 3 * n()) | (R > 0 & Rn == 1)) %>%
     ungroup() %>%
 
     mutate(
