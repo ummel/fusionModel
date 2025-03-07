@@ -113,13 +113,14 @@
 #                           R = 5,
 #                           cores = 3)
 #
-#
+# analyses = list(elec_expend ~ mean(RECS_2020:dollarel + RECS_2020:dollarng), myvar ~ mean(RECS_2020:scalee), svar ~ mean(cooltype))
 # analyses = list(elec_expend ~ mean(dollarel), myvar ~ mean(scalee), svar ~ mean(scaleb))
 # analyses = list(myvar1 ~ mean(dollarel > 500), myvar2 ~ sum(dollarel > 500), m1 ~ mean(dollarel), m2~median(dollarel))
 # analyses = list(myvar1 ~ mean(dollarel > 500), myvar2 ~ sum(dollarel > 500), m1 ~ mean(dollarel), m2 ~ median(dollarel), m3 ~ sum(dollarel))
 # respondent = "household"
-# year = 2019
-# by = "tract10"
+# year = 2015
+# by = "puma10"
+# respondent = "H"
 # area = substitute(state == 49)
 # M = 5
 # R = 5
@@ -168,7 +169,7 @@
 #   ~ mean(dollarel + dollarng),
 #   ~ median(recs_util),
 #   ~ mean(recs_burden > 0.075)
-#   #~ mean(myvar)
+#   ~ mean(myvar)
 # )
 #
 # #---
@@ -281,6 +282,9 @@ analyze_fusionACS <- function(analyses,
   if (length(i) == 0) stop("'/fusionData' is not part of the working directory path; this is required.")
   dir <- paste(b[1:i], collapse = .Platform$file.sep)
 
+  # Capture the function call; added as attribute in the final output
+  mcall <- match.call()
+
   t0 <- Sys.time()
   fst::threads_fst(nr_of_threads = cores)
   setDTthreads(threads = cores)
@@ -357,15 +361,96 @@ analyze_fusionACS <- function(analyses,
   # Check for duplicate analysis names (LHS of formula)
   if (anyDuplicated(purrr::compact(sapply(analyses, rlang::f_lhs)))) stop("Detected duplicate LHS analysis names (must be unique)")
 
+  # ORIGINAL...
   # Get all potential variables required to perform analyses
   ylist <- lapply(analyses, function(x) all.vars(rlang::f_rhs(x)))
   avars <- unique(unlist(ylist, use.names = FALSE))
+
+  # Get all potential variables required to perform analyses
+  # removeSource <- function(x) ifelse(str_detect(x, ":"), str_extract(x, "(?<=:).*"), x)   # Function to remove source survey and colon, if present (e.g. "RECS_2020:variable" becomes just "variable")
+  # temp <- lapply(analyses, function(x) formula(str_replace_all(deparse(x), ":", "___")))
+  # ylist0 <- lapply(temp, function(x) str_replace_all(all.vars(rlang::f_rhs(x)), "___", ":"))
+  # svars <- unique(unlist(ylist0, use.names = FALSE))  # Variables to pass to assemble()
+  # avars <- removeSource(svars)
+  # ylist <- lapply(ylist0, removeSource)
 
   # An analysis variable cannot be in 'by'
   err <- intersect(avars, by)
   if (length(err)) stop("Analysis variables cannot also be in the 'by' argument: ", paste(err, collapse = ", "))
 
-  #----
+  #-----
+
+  # Extract input variables required by 'fun' user function
+
+  fvars <- if (!is.null(fun)) {
+    fargs <- names(formals(fun))
+    if (!all(fargs %in% c('data', 'weight'))) stop("Supplied fun() must have 'data' and (optionally) 'weight' as arguments)")
+    setdiff(all.vars(body(fun)), c("data", avars))
+  } else {
+    NULL
+  }
+
+  # x <- body(fun)
+  # y <- str_replace_all(deparse(x), ":", "___")
+  # y <- parse(text = y)
+  # all.vars(y)
+
+  # removeSource <- function(x) ifelse(str_detect(x, ":"), str_extract(x, "(?<=:).*"), x)   # Function to remove source survey and colon, if present (e.g. "RECS_2020:variable" becomes just "variable")
+  # temp <- lapply(analyses, function(x) formula(str_replace_all(deparse(x), ":", "___")))
+
+  #-----
+
+  # Lookup all of the required variables
+  temp <- fusionModel::lookup(c(avars, fvars, by), year = year) %>%
+    arrange(-(substring(respondent, 1, 1) == rtype)) %>% # Prioritizes entries with the correct respondent type
+    mutate(survey = paste(survey, vintage, sep = "_")) %>%
+    group_by(acs_year, var, survey) %>% # This should handle cases where variable is present in both H and P (e.g. ACS region)
+    slice(1) %>%
+    ungroup() %>%
+    add_count(acs_year, var)
+
+  # Variables that are sufficiently identified
+  out0 <- temp %>%
+    group_by(var, survey) %>%
+    filter(n == 1 | (n == 1 & all(year %in% acs_year))) %>%
+    group_by(var, acs_year) %>%
+    slice(1) %>%
+    ungroup() %>%
+    distinct(var, survey)
+
+  # out0 <- temp %>%
+  #   filter(n == 1) %>%
+  #   select(survey, var, acs_year) %>%
+  #   unique()
+
+  # Variables that need the source survey to be specified
+  out1 <- anti_join(temp, out0, by = "var")
+  if (nrow(out1) > 0) {
+
+    out1 <- out1 %>%
+      group_by(var) %>%
+      summarize(survey = list(survey)) %>%
+      group_by(survey) %>%
+      summarize(var = list(var))
+
+    # Prompt user in console to select desired source survey
+    cat("Unambiguous variables detected\n")
+    for (i in 1:nrow(out1)) {
+      cat("Which survey should be used for the following variable(s)?\n", paste(out1$var[[i]], collapse = ", "))
+      j <- menu(choices = out1$survey[[i]])
+      out1$survey[[i]] <- out1$survey[[i]][j]
+    }
+
+    out1 <- out1 %>%
+      tidyr::unnest(cols = c(survey, var))
+
+  }
+
+  # Data frame giving the source survey for identifiable input variables
+  var.sources <- rbind(out0, out1)
+  rm(temp, out0, out1)
+
+  #-----
 
   # Parse 'analyses' to get the outer function, inner expression, and LHS analysis name
   # https://stackoverflow.com/questions/8613237/extract-info-inside-all-parenthesis-in-r
@@ -373,6 +458,7 @@ analyze_fusionACS <- function(analyses,
     lhs <- as.character(rlang::f_lhs(analyses[[i]]))  # LHS analysis name
     rhs <- rlang::f_text(analyses[[i]])
     rhs <- gsub('\"', "'", rhs, fixed = TRUE)  # Remove any escaped quotes
+    #for (j in seq_along(ylist[[i]])) rhs <- sub(ylist0[[i]][j], ylist[[i]][j], rhs)  # Remove any source-colon formatting
     f <- sub("\\((.+)$", "", rhs)  # Outer function
     iexp <- sub(paste0(f, "("), "", rhs, fixed = TRUE)
     iexp <- substr(iexp, 1, nchar(iexp) - 1) # Inner expression
@@ -420,18 +506,6 @@ analyze_fusionACS <- function(analyses,
 
   # If no LHS provided, assign an abbreviation based on the inner expression
   alhs[is.na(alhs)] <- lhs.abb[is.na(alhs)]
-
-  #-----
-
-  # Extract input variables required by 'fun' user function
-
-  fvars <- if (!is.null(fun)) {
-    fargs <- names(formals(fun))
-    if (!all(fargs %in% c('data', 'weight'))) stop("Supplied fun() must have 'data' and (optionally) 'weight' as arguments)")
-    setdiff(all.vars(body(fun)), c("data", avars))
-  } else {
-    NULL
-  }
 
   #-----
 
@@ -603,10 +677,25 @@ analyze_fusionACS <- function(analyses,
   #-----
 
   # Use assemble() to load ACS variables, possibly including replicate weights
+  # cat("Loading variables from ACS microdata\n")
+  # w <- if (use.up) NULL else c('weight', if (R > 0) paste0("rep_", 1:min(R, 80)) else NULL)
+  # static <- fusionModel::assemble(year = year,  # Better way to automate this?
+  #                                 var = c(avars, fvars, by, w),  # Loads any ACS variables it can
+  #                                 respondent = rtype,
+  #                                 df = up.hid,
+  #                                 cores = cores,
+  #                                 source = "ACS",
+  #                                 silent = TRUE)
+
+  # ALT USING variable sources
   cat("Loading variables from ACS microdata\n")
   w <- if (use.up) NULL else c('weight', if (R > 0) paste0("rep_", 1:min(R, 80)) else NULL)
+  acs.vars <- var.sources %>%
+    filter(substring(survey, 1, 4) == "ACS_") %>%
+    pull(var) %>%
+    unique()
   static <- fusionModel::assemble(year = year,  # Better way to automate this?
-                                  var = c(avars, fvars, by, w),  # Loads any ACS variables it can
+                                  var = c(acs.vars, w),  # Loads any ACS variables it can
                                   respondent = rtype,
                                   df = up.hid,
                                   cores = cores,
@@ -615,7 +704,7 @@ analyze_fusionACS <- function(analyses,
 
   #-----
 
-  # If Urban pop, merge static with 'up' weight and transform weights into wide columns
+  # If using UrbanPop, merge static with 'up' weight and transform weights into wide columns
   if (use.up) {
 
     # Merge 'static' with UrbanPop weight 'up'
@@ -652,16 +741,35 @@ analyze_fusionACS <- function(analyses,
 
   # Load any required fusion variables, possibly with multiple implicates
   vsim <- setdiff(c(avars, fvars, by), names(static))
+  #vsim <- svars[match(vsim, avars)]  # Get appropriate variable names (possibly source-colon format) to pass to assemble()
+
   if (length(vsim)) {
+    # cat("Loading variables from fused microdata\n")
+    # sim <- fusionModel::assemble(year = unique(static$year),
+    #                              var = vsim,
+    #                              respondent = rtype,
+    #                              M = M,
+    #                              df = select(static, year, hid) %>% unique(),
+    #                              cores = cores,
+    #                              source = "fused",
+    #                              silent = TRUE)
+
+    # ALT USING variable sources
     cat("Loading variables from fused microdata\n")
+    fusion.vars <- var.sources %>%
+      filter(var %in% vsim) %>%
+      mutate(var = paste(survey, var, sep = ":")) %>%
+      pull(var)
+
     sim <- fusionModel::assemble(year = unique(static$year),
-                                 var = vsim,
+                                 var = fusion.vars,
                                  respondent = rtype,
                                  M = M,
                                  df = select(static, year, hid) %>% unique(),
                                  cores = cores,
                                  source = "fused",
                                  silent = TRUE)
+
   } else {
     # In case where ONLY ACS variables are used, this creates a placeholder 'sim' to avoid code breakage
     sim <- static %>%
@@ -806,6 +914,7 @@ analyze_fusionACS <- function(analyses,
 
   # 'solo' analyses are those with no inner expression modification (can simply rename the target variable)
   solo <- sapply(aexp, function(x) x %in% names(sim))
+  #solo <- sapply(aexp, function(x) ifelse(str_detect(x, ":"), str_extract(x, "(?<=:).*"), x) %in% names(sim))
 
   # Evaluation of any "inner expressions" in 'analyses' that create custom variables
   ind <- !solo & !duplicated(anames)
@@ -1303,7 +1412,10 @@ analyze_fusionACS <- function(analyses,
     #select(lhs, rhs, type, all_of(by), level, N, ubar, b, r, est, moe, se, df, cv, rshare) %>%
     mutate_all(tidyr::replace_na, replace = NA) %>%  # Replaces NaN from zero division with normal NA
     mutate_if(is.double, convertInteger, threshold = 1) %>%
-    mutate_if(is.double, signif, digits = 5)
+    mutate_if(is.double, signif, digits = 5) %>%
+    setattr(name = "var_source", value = var.sources) %>%
+    setattr(name = "analyze_call", value = mcall) %>%
+    setattr(name = "analyze_fun", value = fun)
 
   #-----
 

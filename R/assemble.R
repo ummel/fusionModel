@@ -74,6 +74,9 @@ assemble <- function(year,
   if (length(i) == 0) stop("'/fusionData' is not part of the working directory path; this is required.")
   dir <- paste(b[1:i], collapse = .Platform$file.sep)
 
+  # Capture the function call; added as attribute in the final output
+  mcall <- match.call()
+
   # Respondent identifier ("H" or "P")
   rtype <- substring(toupper(respondent), 1, 1)
 
@@ -94,23 +97,64 @@ assemble <- function(year,
 
   fst::threads_fst(nr_of_threads = cores)
   setDTthreads(threads = cores)
-  #if (is.null(df)) df <- data.table()
   hh <- rtype == "H"
-  v <- setdiff(var, uvar)
+
+  # Specified source for each 'var', if provided
+  vsrc <- ifelse(str_detect(var, ":"), str_extract(var, "^[^:]+"), "")
+  v <- ifelse(str_detect(var, ":"), str_extract(var, "(?<=:).*"), var)
+  i <- !v %in% uvar
+  vsrc <- vsrc[i]
+  v <- v[i]
 
   #-----
 
   result <- lapply(year, function(yr) {
 
-    # Get file paths to both ACS and fused microdata for 'yr'
+    # Get file paths to ACS microdata for 'yr'
     pa <- list.files(file.path(dir, "survey-processed/ACS"), pattern = paste0(yr, "_._processed.fst"), recursive = TRUE, full.names = TRUE)
     pa <- sort(pa, decreasing = rtype == "P") # Sort the processed ACS paths, to place either Household or Person microdata first
     pc <- list.files(file.path(dir, "survey-processed/ACS"), pattern = paste0(yr, "_._custom.fst"), recursive = TRUE, full.names = TRUE)
+
+    # Get file path(s) to fused microdata for 'yr'
     pf <- rev(list.files(file.path(dir, "fusion"), pattern = paste0(yr, "_._fused.fsd"), recursive = TRUE, full.names = TRUE))
+
+    # Select paths based on 'source' argument
     fpaths <- switch(tolower(source),
                      all = c(pa, pc, pf),
                      acs = c(pa, pc),
                      fused = pf)
+
+    # The survey name (e.g. RECS_2020) associated with each path
+    survey <- str_extract(basename(fpaths), "^[^_]*_[^_]*")
+
+    #---
+
+    # Check the donor survey 'fpaths' for duplicate occurrences of requested variables
+    # Stop with error if conflict(s) detected
+    # This can occur if there are identically named variables across surveys OR multiple vintages of a donor survey are fused to the same ACS vintage (e.g. RECS 2015 and RECS 2015 fused to ACS 2015-2019)
+    i <- substring(survey, 1, 4) != "ACS_"
+    vlist <- lapply(fpaths[i], function(x) intersect(v[vsrc == ""], fst::metadata_fst(x)$columnNames))
+    u <- table(unlist(vlist))
+    check <- lapply(vlist, function(x) intersect(x, names(u)[u > 1]))
+    names(vlist) <- names(check) <- survey[i]
+    if (any(lengths(check) > 0)) {
+      check <- check[lengths(check) > 0]
+      error.msg <- paste(capture.output(str(check)), collapse = "\n")
+      stop("Conflicting 'var' names. The following variables are present in more than one source file:\n", error.msg, "\nRevise 'var' to use a colon to specify the source; e.g. ", paste0("'", names(check)[1], ":", check[[1]][1], "'"))
+    }
+
+    # Update the 'vsrc' object to assign the source survey for 'v' that are unassigned
+    temp <- lapply(vlist, function(x) intersect(x, names(u)[u == 1]))
+    for (i in seq_along(temp)) {
+      for (j in temp[[i]]) {
+        vsrc[v == j] <- names(vlist)[i]
+      }
+    }
+
+    # Data frame with variable sources
+    dv <- data.frame(year = yr, var = v, source = vsrc)
+
+    #---
 
     d <- data.table()
     for (x in fpaths) {
@@ -118,14 +162,15 @@ assemble <- function(year,
       a <- substring(basename(x), 1, 4) == "ACS_"
       r <- rev(strsplit(x, "_")[[1]])[[2]]
       xn <- fst::metadata_fst(x)$columnNames
+
       keep <- if (!all(c('year', 'hid') %in% xn)) {
         warning("Skipping file ",  basename(x), " due to irregular file structure")
         NULL
       } else {
-        # Excludes any variables already in 'd'
-        temp <- intersect(xn, c(v, names(df)))
+        i <- vsrc == str_extract(basename(x), "^[^_]*_[^_]*") | vsrc == ""
+        temp <- intersect(xn, c(v[i], names(df)))
         if (a & rtype == r) temp <- c(temp, 'weight')
-        setdiff(temp, names(d))
+        setdiff(temp, names(d))  # Excludes any variables already in 'd'
       }
 
       # Load requested variables from disk
@@ -150,7 +195,7 @@ assemble <- function(year,
       # Since it is an left merge, persons not in the household data (i.e. group quarter population) will contain NA values
       # If no household variables need to be added, then the returned person microdata will include the group quarter individuals
       if (nrow(dt) > 0) {
-        dt <- setkeyv(dt, cols = intersect(c('M', 'year', 'hid', 'pid'), names(dt)))
+        setkeyv(dt, cols = intersect(c('M', 'year', 'hid', 'pid'), names(dt)))
         if (nrow(d) == 0) {
           d <- dt
         } else {
@@ -161,17 +206,30 @@ assemble <- function(year,
                               how = "left",  # See NOTE above about left join and household vs. person data
                               multiple = TRUE,
                               verbose = FALSE)
+          setkeyv(d, cols = key(dt))
         }
       }
       rm(dt)
 
     }
 
-    return(d)
+    #return(d)
+    return(list(d, dv))
 
-  }) %>%
+  })
+
+  # Extract and rbind the attribute data.frames
+  attr.df <- result %>%
+    purrr::map(2) %>%
+    rbindlist()
+
+  # Extract and rbind the microdata output
+  result <- result %>%
+    purrr::map(1) %>%
     rbindlist() %>%
-    setcolorder(neworder = intersect(c(uvar, var), names(.)))
+    setcolorder(neworder = intersect(c(uvar, var), names(.))) %>%
+    setattr(name = "origin", value = attr.df) %>%
+    setattr(name = "assemble", value = mcall)
 
   # Set keys
   if (nrow(result) > 0) setkeyv(result, cols = intersect(c('M', 'year', 'hid', 'pid'), names(result)))
