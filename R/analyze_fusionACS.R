@@ -401,7 +401,7 @@ analyze_fusionACS <- function(analyses,
   #-----
 
   # Lookup all of the required variables
-  temp <- fusionModel::lookup(c(avars, fvars, by), year = year) %>%
+  temp <- lookup(c(avars, fvars, by), year = year) %>%
     arrange(-(substring(respondent, 1, 1) == rtype)) %>% # Prioritizes entries with the correct respondent type
     mutate(survey = paste(survey, vintage, sep = "_")) %>%
     group_by(acs_year, var, survey) %>% # This should handle cases where variable is present in both H and P (e.g. ACS region)
