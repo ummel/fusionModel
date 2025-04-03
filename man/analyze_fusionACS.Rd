@@ -37,7 +37,7 @@ analyze_fusionACS(
 
 \item{cores}{Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.}
 
-\item{version_up}{Integer. Use \code{version_up = 1} to access national, single-implicate weights. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas.}
+\item{version_up}{Integer. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas or \code{version_up = 3} to access 40-replicate weights for 17 metro areas.}
 
 \item{force_up}{Logical. If \code{TRUE}, force use of UrbanPop weights even if the requested analysis can be done using native ACS weights.}
 }

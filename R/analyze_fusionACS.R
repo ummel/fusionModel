@@ -15,7 +15,7 @@
 #' @param M Integer. The first \code{M} implicates are used. Set \code{M = Inf} to use all available implicates.
 #' @param R Integer. The first \code{R} replicate weights are used. Set \code{R = Inf} to use all available replicate weights.
 #' @param cores Integer. Number of cores used for multithreading in \code{\link[collapse]{collapse-package}} functions.
-#' @param version_up Integer. Use \code{version_up = 1} to access national, single-implicate weights. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas.
+#' @param version_up Integer. Use \code{version_up = 2} to access 10-replicate weights for 17 metro areas or \code{version_up = 3} to access 40-replicate weights for 17 metro areas.
 #' @param force_up Logical. If \code{TRUE}, force use of UrbanPop weights even if the requested analysis can be done using native ACS weights.
 #'
 #' @details Allowable geographic units of analysis specified in \code{by} are currently limited to: region, division, state, cbsa10, puma10, county10, cousubfp10 (county subdivision), zcta10 (zip code), tract10 (census tract), and bg10 (block group).
@@ -322,7 +322,7 @@ analyze_fusionACS <- function(analyses,
     R >= 0 & R %% 1 == 0
     cores > 0 & cores %% 1 == 0
     is.logical(force_up)
-    version_up %in% c(1, 2)
+    version_up %in% 2:3
   })
 
   #---
@@ -592,7 +592,7 @@ analyze_fusionACS <- function(analyses,
       mutate_at(vars(state, county10, tract10, bg10), as.integer)
 
     # Path to UrbanPop data
-    up.path <- ifelse(version_up == 1, "urbanpop/v1/2015-2019", "urbanpop/v2/2015-2019")
+    up.path <- switch(version_up - 1, "urbanpop/v2/2015-2019", "urbanpop/v3/2015-2019")
 
     # If using urbanpop, any 'year' input is overridden
     cat("Using UrbanPop weights for 2015-2019 period (version ", version_up,")\n", sep = "")
