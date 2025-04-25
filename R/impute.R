@@ -39,9 +39,15 @@
 
 #---
 
-impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
+impute <- function(data,
+                   weight = NULL,
+                   ignore = NULL,
+                   cores = parallel::detectCores(logical = FALSE) - 1L) {
 
   t0 <- Sys.time()
+
+  fst::threads_fst(nr_of_threads = cores)
+  setDTthreads(threads = cores)
 
   stopifnot(exprs = {
     is.data.frame(data)
@@ -68,7 +74,6 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
   y <- names(miss)[miss > 0 & miss < nrow(d)]
   y <- setdiff(y, ignore)
   if (!length(y)) stop("No un-ignored columns with NA values to impute")
-  #x <- setdiff(names(d), c(y, weight))
   temp.fsn <- paste0(tempfile(), ".fsn")
 
   #---
@@ -89,6 +94,7 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
         # Ties method 'dense' ensures integer output with minimum of 1 and maximum of length(na.omit(z))
         z <- frank(z, ties.method = "dense", na.last = "keep")
       } else {
+        # Converts ordered factors to integer
         if (is.ordered(z)) {
           z <- as.integer(z)
         } else {
@@ -106,6 +112,7 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
     if (nrow(d2) > 100e3) d2 <- d2[sample.int(nrow(d2), 100e3), ]
 
     # Correlation matrix
+    # Note that Spearman (rank) correlations are used (data pre-ranked) to reduce effect of outliers
     ok <- setdiff(names(d2), ignore)
     cmat <- suppressWarnings(cor(d2[, ..y], d2[, ..ok], use = "pairwise.complete.obs"))
     cmat[is.na(cmat)] <- 0
@@ -133,12 +140,20 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
 
   } else {
 
-    #xlist <- rep(list(x), length(y))
     xlist <- lapply(y, function(v) setdiff(names(d), c(v, ignore, weight)))
 
   }
 
-  setNames(xlist, y)
+  xlist <- setNames(xlist, y)
+
+  #---
+
+  # Coerce any character variables in 'y' or 'xlist' to unordered factor
+  # This is necessary to avoid errors in train() and fuse(), which expect factors
+  # The 'cconv' columns are converted to character prior to returning final function output
+  ccols <- names(which(sapply(d, is.character)))
+  cconv <- intersect(ccols, unique(c(y, unlist(xlist))))
+  if (length(cconv) > 0)  d[, (cconv) := lapply(.SD, factor), .SDcols = cconv]
 
   #---
 
@@ -160,7 +175,8 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
     dtrain <- d[!imp, ..vtrain]
 
     # If sample size is large, use a stratified sample of the training data
-    # Restricts training sample to no more than 50k observations
+    # If there are few missing values, then fewer training observations are possible (10x the number missing)
+    # Restricts training sample to no less than 5k and no more than 50k observations
     maxn <- min(max(5e3, 10 * sum(imp)), 50e3)
     if (nrow(dtrain) > maxn) {
       keep <- stratify(y = dtrain[[v]],
@@ -207,6 +223,9 @@ impute <- function(data, weight = NULL, ignore = NULL, cores = 1) {
 
   # Check for NA's in output
   stopifnot(!anyNA(d[, ..y]))
+
+  # If any character columns were converted to factor, convert back to character
+  if (length(cconv) > 0)  d[, (cconv) := lapply(.SD, as.character), .SDcols = cconv]
 
   # Ensure output column order and class matches input 'data'
   suppressWarnings(set(d, j = "W_.._", value = NULL))  # Removes the placeholder weight variable, if present

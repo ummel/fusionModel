@@ -438,10 +438,11 @@ fuse <- function(data,
 
         # If zeros are simulated separately, integrate them into 'S'
         # This is only relevant when fusing a single continuous variable
+        # If 'S' is NULL, all of the output values are zeros and the set() operation below is skipped
         if (any(zind)) {
           out <- data.table(rep(0, nrow(dmat)))
           setnames(out, v)
-          set(out, i = which(!zind), j = v, value = S)
+          if (!is.null(S)) set(out, i = which(!zind), j = v, value = S)
           S <- out
           rm(out)
         }

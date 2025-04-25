@@ -4,7 +4,12 @@
 \alias{impute}
 \title{Impute missing data via fusion}
 \usage{
-impute(data, weight = NULL, ignore = NULL, cores = 1)
+impute(
+  data,
+  weight = NULL,
+  ignore = NULL,
+  cores = parallel::detectCores(logical = FALSE) - 1L
+)
 }
 \arguments{
 \item{data}{A data frame with missing values.}
