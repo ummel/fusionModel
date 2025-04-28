@@ -152,19 +152,18 @@ train <- function(data,
     !any(c("M", "W..", "R..") %in% y)  # Reserved variable names
     all(lengths(ylist) > 0)
     all(x %in% names(data))
-    #length(xlist[[1]]) > 0  # Technically, only the first 'xlist' slot is required to have variables specified (others can be NULL/empty)
     all(lengths(xlist) > 0)
     length(ylist) == length(xlist)
     length(intersect(y, x)) == 0
     is.character(fsn) & endsWith(fsn, ".fsn")
     is.null(weight) | (length(weight) == 1 & weight %in% names(data) & !weight %in% c(y, x))
-    nfolds > 0 & nfolds != 0
+    nfolds > 0
     nquantiles > 0
     nclusters >= 0
     all(krange >= 5) & length(krange) == 2
     is.null(hyper) | (is.list(hyper) & !anyDuplicated(names(hyper)))
     is.logical(fork)
-    cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
+    cores %in% 1:parallel::detectCores(logical = FALSE)
   })
 
   if (!any(x %in% xlist[[1]])) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
@@ -215,17 +214,22 @@ train <- function(data,
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
+  # 4/28/25: Removing unse of checkData(); zero-variance allowed to pass through
+  # Initial testing suggests LightGBM handles zero-variance cases without error
   # Check 'data' for type consistency and remove no-variance (constant) variables
-  data <- checkData(data, y, x, nfolds = nfolds, impute = FALSE)
-  x <- intersect(x, names(data))  # To account for possible removal of zero-variance variables
-  n <- length(xlist)
-  #for (i in 1:n) xlist[[i]] <- intersect(xlist[[i]], x)
-  #if (length(xlist[[1]]) == 0) stop("There must be at least one 'x' predictor variable assigned to the first 'y' variable")
-  y <- intersect(y, names(data))
-  for (i in 1:n) ylist[[i]] <- intersect(ylist[[i]], y)
-  keep <- setdiff(1:n, which(lengths(ylist) == 0))
-  xlist <- xlist[keep]
-  ylist <- ylist[keep]
+  # data <- checkData(data, y, x, nfolds = ceiling(nfolds), impute = FALSE)
+  # # To account for possible removal of zero-variance 'x' variables
+  # x <- intersect(x, names(data))
+  # for (i in 1:seq_along(xlist)) xlist[[i]] <- intersect(xlist[[i]], x)
+  # # To account for possible removal of zero-variance 'y' variables
+  # y <- intersect(y, names(data))
+  # for (i in 1:seq_along(ylist)) ylist[[i]] <- intersect(ylist[[i]], y)
+  # # Update 'xlist' and 'ylist' to reflect possible removal of cases with only non-varying x or y
+  # drop <- which(lengths(ylist) == 0 | lengths(xlist) == 0)
+  # ylist <- ylist[-drop]
+  # if (length(ylist) == 0) stop("There are no valid 'y' variables remaining with non-zero variance (nothing to predict)!")
+  # xlist <- xlist[-drop]
+  # if (length(xlist) == 0) stop("There are no valid 'x' variables remaining with non-zero variance (nothing to predict with)!")
 
   # Determine fusion variable directory prefixes for saving to disk
   pfixes <- formatC(seq_along(ylist), width = nchar(length(ylist)), format = "d", flag = "0")
@@ -280,7 +284,7 @@ train <- function(data,
   ysave <- y[ytype == "continuous" | y %in% unlist(ylist[lengths(ylist) > 1])]
   dtemp <- as.data.frame(dmat[, ysave, drop = FALSE])
   dtemp$W <- W.int
-  fst::write_fst(x = dtemp, path = file.path(td, "donor.fst"), compress = 100)
+  fst::write_fst(x = dtemp, path = file.path(td, "donor.fst"), compress = 95)
   rm(dtemp)
 
   #-----
@@ -375,8 +379,6 @@ train <- function(data,
       # Placeholder objects
       zc <- mc <- qc <- dtrain <- dvalid <- NULL
       ti <- pi <- rep(TRUE, length(Y))
-
-      # TEST
       hyper.results <- list()
 
       #-----
@@ -810,6 +812,9 @@ train <- function(data,
                   FUN = buildFun,
                   verbose = TRUE)
   }
+
+  # Troubleshooting buildFun()
+  #for (i in 1:length(ylist)) buildFun(i, verbose = TRUE)
 
   #-----
 

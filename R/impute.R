@@ -163,8 +163,6 @@ impute <- function(data,
 
     # Response and predictor variables
     v <- y[i]
-    #xv <- c(xlist[[i]], setdiff(y, v))
-    #xv <- setdiff(xv, ignore)
     xv <- xlist[[i]]
     vtrain <- c(weight, v, xv)
 

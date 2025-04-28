@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.3.6
+Version: 2.3.7
 Authors@R: c(
     person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "ummel@berkeley.edu"),
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),

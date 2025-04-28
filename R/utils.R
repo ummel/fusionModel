@@ -77,7 +77,7 @@ imputationValue <- function(x, na.ind) {
     m <- median(x, na.rm = TRUE)
     m <- ifelse(is.integer(x), as.integer(round(m)), m)
   } else {
-    tab <- table(x) / sum(!na.ind)
+    tab <- table2(x) / sum(!na.ind)
     m <- sample(names(tab), size = sum(na.ind), replace = TRUE, prob = tab)
   }
   return(m)
@@ -330,9 +330,10 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
     warning("Removed zero-variance 'y' variable(s):\n", paste(constant, collapse = ", "), immediate. = TRUE)
   }
 
-  # Remove (with warning) any zero-inflated 'y' variables with fewer than 10*nfolds non-zero values
+  # Remove (with warning) any zero-inflated 'y' variables with fewer than 'nfolds' non-zero values
   if (all(!is.null(nfolds), nfolds > 0)) {
-    toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds * 10 else FALSE)))
+    #toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds * 10 else FALSE)))
+    toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds else FALSE)))
     if (length(toofew)) {
       data <- select(data, -all_of(toofew))
       warning("Removed 'y' variable(s) with too few non-zero values:\n", paste(toofew, collapse = ", "), immediate. = TRUE)
