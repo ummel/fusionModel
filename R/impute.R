@@ -100,7 +100,8 @@ impute <- function(data,
         } else {
           if (!is.logical(z)) {
             # Converts character and un-ordered factors to TRUE for the most-common (non-NA) value and FALSE otherwise
-            zt <- table2(z, na.rm = TRUE)
+            #zt <- table2(z, na.rm = TRUE)
+            zt <- collapse::qtable(z, na.exclude = TRUE)
             z <- z == names(which.max(zt))
           }
         }
@@ -155,6 +156,13 @@ impute <- function(data,
   cconv <- intersect(ccols, unique(c(y, unlist(xlist))))
   if (length(cconv) > 0)  d[, (cconv) := lapply(.SD, factor), .SDcols = cconv]
 
+  # Check number of factor levels in 'y' variables
+  nlev <- sapply(d[, ..y], nlevels)
+  bad <- names(nlev)[nlev >= 200]
+  if(length(bad)) {
+    stop("Detected categorical imputation variable(s) with more than 200 levels (not allowed):\n", paste(bad, collapse = "\n"))
+  }
+
   #---
 
   pb <- txtProgressBar(max = length(y), style = 3)
@@ -193,6 +201,7 @@ impute <- function(data,
                          fsn = temp.fsn,
                          weight = weight,
                          nfolds = 0.8,
+                         nquantiles = 2,
                          cores = cores)
     ))
 

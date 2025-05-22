@@ -688,13 +688,23 @@ train <- function(data,
         # Note that this is effectively a weighted mean using the weights applied previous via 'colweight' vector
         err <- merr + Reduce("+", qerr)
 
-        # Moving average of the 'err' values
-        # This smooths the noise when the number of neighbors is low
-        # Lagged, 5-neighbor window
-        err <- sapply(5:ncol(err), function(j) matrixStats::rowMeans2(err, cols = (j - 4):j))
+        # This is only applied if there are enough columns in 'err'
+        if (ncol(err) > 5) {
 
-        # Set full columns of 'err' to Inf to ensure min(krange) number of selected neighbors is respected
-        if (min(krange) > 5) err[, 1:(min(krange) - 5)] <- Inf
+          # Moving average of the 'err' values
+          # This smooths the noise when the number of neighbors is low
+          # Lagged, 5-neighbor window
+          err <- sapply(5:ncol(err), function(j) matrixStats::rowMeans2(err, cols = (j - 4):j))
+
+          # Set full columns of 'err' to Inf to ensure min(krange) number of selected neighbors is respected
+          if (min(krange) > 5) err[, 1:(min(krange) - 5)] <- Inf
+
+          # Offset used in following code
+          delta <- 4L
+
+        } else {
+          delta <- 0L
+        }
 
         # Each row's minimum error column, prior to enforcing 'tol'
         b0 <- max.col(-err, ties.method = "first")
@@ -711,8 +721,8 @@ train <- function(data,
         kbest <- max.col(-err, ties.method = "first")
 
         # Final "best k"
-        # Add 4 because the first moving average window (i.e column 1 in 'err') includes the 5 nearest neighbors
-        kbest <- kbest + 4L
+        # Add 4 (delta) because the first moving average window (i.e column 1 in 'err') includes the 5 nearest neighbors
+        kbest <- kbest + delta
 
         # Manual check of results
         # r <- 1724  # Row number
@@ -726,7 +736,7 @@ train <- function(data,
 
         # Set neighbors beyond the error-minimizing k to NA
         # Reduces size on disk when 'nn' matrix is saved
-        for (j in 1:ncol(err)) nn[, j + 4] <- replace(nn[, j + 4], kbest < (j + 4), NA)
+        for (j in 1:ncol(err)) nn[, j + delta] <- replace(nn[, j + delta], kbest < (j + delta), NA)
 
         # This operation can be used in fuse() to recreate 'kbest' quickly from 'nn'
         # test <- matrixStats::rowCounts(is.na(nn), value = FALSE)
