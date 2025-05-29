@@ -129,6 +129,20 @@
 # version_up = 2
 # force_up = FALSE
 
+# UrbanPop v3 testing
+# analyses = list(mean = fusion.vars)
+# year = 2015:2019
+# respondent = "household"
+# fun = NULL
+# by = 'tract10'
+# #area = str2lang(paste0("region == '", "Northeast", "'"))
+# area = substitute(state == 49)
+# cores = 2
+# version_up = 3
+# R = 0  # Ignores replicate weights and uses only UrbanPop base weight
+# M = Inf
+# force_up = FALSE
+
 #---------------
 #
 # library(collapse)
@@ -690,6 +704,7 @@ analyze_fusionACS <- function(analyses,
   acs.vars <- var.sources %>%
     filter(substring(survey, 1, 4) == "ACS_") %>%
     pull(var) %>%
+    c("np") %>%    # !!!! TEMP KLUGE: TO avoid error below if there are no ACS variables requested
     unique()
 
   static <- fusionModel::assemble(year = year,  # Better way to automate this?
@@ -848,7 +863,7 @@ analyze_fusionACS <- function(analyses,
   # After this operation, 'sim' contains the necessary analysis variables and 'static' contains only the weight variables
   v <- setdiff(names(static), wvars)
   if (length(v)) {
-    add_vars(sim) <- alloc(get_vars(static, v), Mimp) %>% rbindlist()
+    add_vars(sim) <- alloc(get_vars(static, v), Mimp, simplify = FALSE) %>% rbindlist()
     get_vars(static, v) <- NULL
   }
 
