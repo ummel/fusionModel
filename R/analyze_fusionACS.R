@@ -272,7 +272,7 @@ analyze_fusionACS <- function(analyses,
                               M = Inf,
                               R = Inf,
                               cores = 1,
-                              version_up = 2,
+                              version_up = 3,
                               force_up = FALSE) {
 
   # Check validity of the working directory path
@@ -418,18 +418,13 @@ analyze_fusionACS <- function(analyses,
     ungroup() %>%
     distinct(var, survey)
 
-  # out0 <- temp %>%
-  #   filter(n == 1) %>%
-  #   select(survey, var, acs_year) %>%
-  #   unique()
-
   # Variables that need the source survey to be specified
   out1 <- anti_join(temp, out0, by = "var")
   if (nrow(out1) > 0) {
 
     out1 <- out1 %>%
       group_by(var) %>%
-      summarize(survey = list(survey)) %>%
+      summarize(survey = list(unique(survey))) %>%
       group_by(survey) %>%
       summarize(var = list(var))
 
@@ -441,7 +436,9 @@ analyze_fusionACS <- function(analyses,
       out1$survey[[i]] <- out1$survey[[i]][j]
     }
 
+    # Messy, but it works
     out1 <- out1 %>%
+      tidyr::unnest(cols = var) %>%
       tidyr::unnest(cols = c(survey, var))
 
   }
@@ -694,6 +691,7 @@ analyze_fusionACS <- function(analyses,
     filter(substring(survey, 1, 4) == "ACS_") %>%
     pull(var) %>%
     unique()
+
   static <- fusionModel::assemble(year = year,  # Better way to automate this?
                                   var = c(acs.vars, w),  # Loads any ACS variables it can
                                   respondent = rtype,
@@ -1385,7 +1383,7 @@ analyze_fusionACS <- function(analyses,
       moe = se * suppressWarnings(qt(p = 0.95, df)),
 
       # Coefficient of variation (https://sites.tufts.edu/gis/files/2013/11/Amercian-Community-Survey_Margin-of-error-tutorial.pdf)
-      cv = 100 * (moe / 1.645) / est,
+      cv = abs(100 * (moe / 1.645) / est),
 
       # Calculate share of uncertainty attributable to replicate weights (rshare)
       # Identical to rshare below in most cases
