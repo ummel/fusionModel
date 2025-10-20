@@ -10,6 +10,8 @@ fusionOutput(
   acs_year,
   fusion_vars,
   M = 1,
+  input_version = "latest",
+  output_version = "today",
   fsn = NULL,
   rlocation = NULL,
   note = NULL,
@@ -21,7 +23,23 @@ fusionOutput(
 )
 }
 \arguments{
+\item{donor}{Character. Donor survey identifier (e.g. \code{"RECS_2015"}).}
+
+\item{respondent}{Character. Desired respondent level of microdata. Either \code{"household"} or \code{"person"}.}
+
+\item{acs_year}{Integer. Year of the ACS microdata to be used as recipient.}
+
+\item{fusion_vars}{Character. Vector of variables in the donor microdata to be fused to the ACS microdata recipient.}
+
 \item{M}{Integer. Desired number of fusion implicates. If \code{M = NULL} (default) it is internally set to 40 or, if \code{test_mode = TRUE}, 2 implicates.}
+
+\item{input_version}{Character. Version (i.e. date stamp) of the desired fusion inputs. Defaults to the latest available version.}
+
+\item{output_version}{Character. Version (i.e. date stamp) to assign to the outputs. Defaults to today's date.}
+
+\item{fsn}{Character. Optional path to a .fsn object created by a previous call to \code{fusionOutput()}. If specified, code attempts to use \code{fsn} to bypass the training step.}
+
+\item{rlocation}{Data frame. Optional data frame to replace the donor input data imputed respondent locations with actual/disclosed locations specified in \code{rlocation}.}
 
 \item{note}{Character. Optional note supplied by user. Inserted in the log file for reference.}
 
@@ -34,10 +52,6 @@ fusionOutput(
 \item{margin}{Numeric. Passed to same argument in \code{\link[fusionModel]{fuse}}.}
 
 \item{...}{Optional, non-default arguments passed to \code{\link[fusionModel]{train}}. For example, \code{fork = TRUE} to enable forked parallel processing.}
-
-\item{input}{Character. Path to directory containing files created by \code{fusionInput}.}
-
-\item{output}{Character. Optional path to directory where output files will be saved. If \code{output = NULL} (default), the output directory is automatically constructed from \code{input}.}
 }
 \value{
 Saves resulting \code{output} data files to appropriate local directory. Also saves a .txt log file alongside data files that records console output from \code{fusionOutput}.

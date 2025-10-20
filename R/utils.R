@@ -54,7 +54,7 @@ convertInteger <- function(x, threshold = 0.99) {
   } else {
     ok32 <- max(x, na.rm = TRUE) <= .Machine$integer.max
     if (ok32) {
-      chk <- x[!is.na(x)] %% 1 == 0
+      chk <- collapse::na_rm(x) %% 1 == 0
       if (sum(chk) / length(chk) >= threshold) {
         x <- as.integer(round(x))
       }
