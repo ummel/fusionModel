@@ -16,7 +16,12 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Kevin Ummel \email{ummel@berkeley.edu}
+\strong{Maintainer}: Kevin Ummel \email{kevin.ummel@yale.edu}
+
+Authors:
+\itemize{
+  \item Kevin Ummel \email{kevin.ummel@yale.edu}
+}
 
 Other contributors:
 \itemize{

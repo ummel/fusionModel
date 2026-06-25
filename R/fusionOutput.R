@@ -157,6 +157,7 @@ fusionOutput <- function(donor,
       endsWith(fsn, ".fsn")
       file.exists(fsn)
     })
+    fsn <- full.path(fsn)
   }
 
   # Set number of cores for 'fst' and 'data.table' packages to use
@@ -190,13 +191,6 @@ fusionOutput <- function(donor,
 
   # Print message indicating 'test_mode' value
   cat("Running in", ifelse(test_mode, "TEST", "PRODUCTION"), "mode\n\n")
-
-  # Report the fusion directory or fail with error message
-  # if (dir.exists(dir)) {
-  #   cat("The fusion directory is:\n", dir, "\n\n")
-  # } else {
-  #   stop("Requested fusion directory does not exist. Input files not located at: ", dir)
-  # }
 
   # Report the INPUT directory
   cat("The fusion INPUT directory is:\n", dir.in, "\n\n")
@@ -287,10 +281,17 @@ fusionOutput <- function(donor,
 
   # Survey vintage (year); returns approximate midpoint year in case of range (e.g. "2014-2016" returns 2015)
   svintage <- ceiling(median(eval(parse(text = sub("-", ":", donor[2])))))
+
+  # Detect if spatial variable are to be merged using PUMA 2010 or PUMA 2020
+  puma_col <- intersect(names(train.data), c("puma10", "puma20"))[1]
+  if (!length(puma_col) == 1) stop("'train.data' must contain either 'puma10' or 'puma20'")
+
+  # Assemble spatial dataset and filter as necessary
   spatial.data <- fst::read_fst(gfile, as.data.table = TRUE) %>%
-    setkey(state, puma10) %>%
-    filter(vintage == svintage) %>%
-    select(-vintage)
+    filter(vintage == svintage, puma_vintage == ifelse(puma_col == "puma10", 2010, 2020)) %>%
+    setnames("puma", puma_col) %>%
+    setkeyv(c('state', puma_col)) %>%
+    select(-vintage, -puma_vintage)
 
   # Assemble full dataset needed for model training
   cat("\nAssembling full training dataset\n")
@@ -313,17 +314,9 @@ fusionOutput <- function(donor,
 
   #-----
 
-  # Check for presence of existing '*_model.fsn' object
-  # If requested, attempt to bypass fusionModel::train() step
-  mfile <- sub("donor.fst", "model.fsn", tfile)
-  if (file.exists(mfile) & is.null(fsn)) {
-    skip.train <- TRUE
-    fsn <- fsn.path <- mfile
-  } else {
-    skip.train <- FALSE
-  }
-
-  # If a 'fsn' object/template is provided (or existing .fsn model already present), use those results to create 'prep' list instead of running prepXY()
+  # If a 'fsn' path is provided,
+  #  use those results to either skip train() step OR create 'prep' list instead of running prepXY()
+  skip.train <- skip.prep <- FALSE
   if (is.character(fsn)) {
 
     # Extract metadata from 'fsn'
@@ -332,17 +325,21 @@ fusionOutput <- function(donor,
     meta <- readRDS(file.path(td, "metadata.rds"))
     unlink(td)
 
-    if (skip.train) {
+    # Check for presence of provided 'fsn' object in the output directory
+    # If present, attempt to bypass fusionModel::train() step (i.e. 'skip.train')
+    temp <- file.path(dir.out, sub("donor.fst", "model.fsn", basename(tfile)))
+    if (fsn == temp) {
+      skip.train <- TRUE
+      fsn.path <- fsn
+    }
 
-      # Build 'prep' object
-      prep <- list(y = meta$ylist, x = meta$xpreds)
-
-    } else {
-
-      cat("\n|=== Existing .fsn model used as training template ===|\n\n")
+    if (!skip.train) {
 
       # Original harmonized predictors in training data of existing 'fsn' model
-      hvars0 <- names(fst::fst(sub("_model.fsn", "_donor.fst", fsn)))
+      temp <- dir.in
+      str_sub(temp, -21, -18) <- str_sub(dirname(fsn), -22, -19)
+      fsn.donor <- file.path(temp, sub("_model.fsn", "_donor.fst", basename(fsn)))
+      hvars0 <- names(fst::fst(fsn.donor))
       hvars0 <- grep("__", hvars0, fixed = TRUE, value = TRUE)
 
       # Variable importance results for existing 'fsn' model
@@ -369,18 +366,35 @@ fusionOutput <- function(donor,
       })
 
       xunique <- setdiff(unique(unlist(prep$x)), fvars)
-      cat("Retained", length(xunique), "of", ncol(full.data) - length(fvars) - 1, "potential predictor variables\n")
+      skip.prep <- TRUE
 
     }
+  }
+
+  #-----
+
+  if (skip.train) {
+
+    cat("\n|=== Using provided .fsn model to bypass prepXY() and train() steps ===|\n\n")
+    cat("Using existing .fsn model:\n", fsn, "\n")
+
+    # When training is skipped, copy the existing output log file to 'outputlog0.txt'
+    # This allows the "0" version to retain the original training step console output
+    # If the "0" version already exists, the copying is skipped (i.e. the "0" version should always contain original training output)
+    if (!file.exists(log.path0)) file.copy(from = log.path, to = log.path0)
+    cat("See", basename(log.path0), "for console output from original model training step\n")
 
   } else {
 
-    # Check for presence of existing '_prep.rds' file
-    pfile <- sub("donor.fst", "prep.rds", tfile)
-    if (file.exists(pfile) & !skip.train) {
+    if (skip.prep) {
 
-      cat("Detected existing '_prep.rds' object; bypassing fusionModel::prepXY() step\n")
-      prep <- readRDS(pfile)
+      cat("\n|=== Using provided .fsn model to bypass prepXY() step ===|\n\n")
+      cat("Using existing .fsn model:\n", fsn, "\n")
+      cat("Retained", length(xunique), "of", ncol(full.data) - length(fvars) - 1, "potential predictor variables\n")
+
+      # Update 'full.data' to reflect results in 'prep'; removes unnecessary predictor variables
+      full.data <- full.data %>%
+        select(weight, any_of(unique(c(fvars, unlist(prep$x)))))
 
     } else {
 
@@ -399,34 +413,13 @@ fusionOutput <- function(donor,
                                   fraction = pfrac,
                                   cores = ncores)
 
-      # Save output from prepXY()
-      xfile <- paste0(stub, "prep.rds")
-      saveRDS(prep, file = xfile)
-      fsize <- signif(file.size(xfile) / 1e6, 3)
-      cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
-
     }
 
-  }
-
-  # Update 'full.data' to reflect results in 'prep'; removes unnecessary predictor variables
-  full.data <- full.data %>%
-    select(weight, any_of(unique(c(fvars, unlist(prep$x)))))
-
-  #-----
-
-
-  if (skip.train) {
-
-    cat("\n|=== Detected existing fusion model (.fsn) object; bypassing fusionModel::train() step ===|\n\n")
-
-    # When training is skipped, copy the existing output log file to 'outputlog0.txt'
-    # This allows the "0" version to retain the original training step console output
-    # If the "0" version already exists, the copying is skipped (i.e. the "0" version should always contain original training output)
-    if (!file.exists(log.path0)) file.copy(from = log.path, to = log.path0)
-    cat("See", basename(log.path0), "for console output from original model training step\n")
-
-  } else {
+    # Save output from prepXY() -- or pre-constructed 'prep' object if 'fsn' used as template
+    xfile <- paste0(stub, "prep.rds")
+    saveRDS(prep, file = xfile)
+    fsize <- signif(file.size(xfile) / 1e6, 3)
+    cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
 
     cat("\n|=== Run fusionModel::train() ===|\n\n")
 
@@ -507,28 +500,6 @@ fusionOutput <- function(donor,
 
   #-----
 
-  # # WHAT TO DO WITH THIS?
-  # # TO DO: Skip this step for now??? Or run at very end using combined results from all acs_years?
-  # if (validation | validation == 2) {
-  #
-  #   cat("\n|=== Run fusionModel::validate() ===|\n\n")
-  #
-  #   # Pass 'valid' implicates to validate() function
-  #   validresults <- fusionModel::validate(observed = merge(train.data, spatial.data, all.x = TRUE),
-  #                                         implicates = fusionModel::read_fsd(validfsd),
-  #                                         subset_vars = attr(prep, "xforce"),
-  #                                         weight = "weight",
-  #                                         cores = ncores)
-  #
-  #   # Save 'validation' results as .rds
-  #   vout <- paste0(stub, "validation.rds")
-  #   saveRDS(validresults, file = vout)
-  #   cat("Validation results saved to:\n", vout, "\n")
-  #
-  # }
-
-  #-----
-
   cat("\n|=== Fuse onto recipient microdata ===|\n\n")
 
   # Load the prediction data and merge spatial predictors
@@ -559,29 +530,6 @@ fusionOutput <- function(donor,
   xfile <- paste0(stub, "fused.fsd")
   fsize <- signif(file.size(xfile) / 1e6, 3)
   cat("\nResults saved to:", paste0(basename(xfile), " (", fsize, " MB)"), "\n")
-
-  #-----
-
-  # DEPRECATED
-  # cat("\n|=== Upload /output files to Google Drive ===|\n\n")
-  #
-  # if (upload) {
-  #   if (interactive()) {
-  #     # Check if fusionData package is installed; it is necessary to call uploadFiles()
-  #     fd <- !inherits(try(system.file(package='fusionData', mustWork = TRUE), silent = TRUE), "try-error")
-  #     if (fd) {
-  #       odf <- paste0(stub, c("model.fsn", "valid.fsd", "validation.rds", "fused.fsd"))
-  #       odf <- odf[file.exists(odf)]  # Restrict to output files that exist
-  #       uploadFiles(files = odf, ask = TRUE)
-  #     } else {
-  #       cat("fusionData package not installed; file upload skipped.\n")
-  #     }
-  #   } else {
-  #     cat("Non-interactive session: skipping upload to Google Drive\n")
-  #   }
-  # } else {
-  #   cat("'upload = FALSE'; file upload skipped at request of user.\n")
-  # }
 
   #-----
 

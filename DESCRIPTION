@@ -1,8 +1,8 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.3.8
+Version: 2.3.9
 Authors@R: c(
-    person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "ummel@berkeley.edu"),
+    person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "kevin.ummel@yale.edu"),
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),
     person(given = "Miguel", family = "Poblete Cazenave", role = "ctb"))
 Description: Data fusion and analysis of synthetic data in R.
@@ -33,5 +33,5 @@ Suggests:
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 URL: https://ummel.github.io/fusionModel/
+Config/roxygen2/version: 8.0.0

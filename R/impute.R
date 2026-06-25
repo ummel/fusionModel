@@ -100,12 +100,16 @@ impute <- function(data,
         } else {
           if (!is.logical(z)) {
             # Converts character and un-ordered factors to TRUE for the most-common (non-NA) value and FALSE otherwise
-            #zt <- table2(z, na.rm = TRUE)
-            zt <- collapse::qtable(z, na.exclude = TRUE)
-            z <- z == names(which.max(zt))
+            # zt <- collapse::qtable(z, na.exclude = TRUE)
+            # z <- z == names(which.max(zt))
+            z <- z == collapse::fmode(z, na.rm = TRUE)
           }
         }
       }
+      # Replace any NA's with the median value
+      # This makes the cor() operation below much faster
+      if (anyNA(z)) z[is.na(z)] <- median(z, na.rm = TRUE)
+      # Update values in 'd2'
       set(d2, j = i, value = z)
     }
 
@@ -115,7 +119,7 @@ impute <- function(data,
     # Correlation matrix
     # Note that Spearman (rank) correlations are used (data pre-ranked) to reduce effect of outliers
     ok <- setdiff(names(d2), ignore)
-    cmat <- suppressWarnings(cor(d2[, ..y], d2[, ..ok], use = "pairwise.complete.obs"))
+    cmat <- suppressWarnings(cor(d2[, ..y], d2[, ..ok]))
     cmat[is.na(cmat)] <- 0
 
     # Initial correlation screening, based on absolute correlation value
@@ -160,7 +164,7 @@ impute <- function(data,
   nlev <- sapply(d[, ..y], nlevels)
   bad <- names(nlev)[nlev >= 200]
   if(length(bad)) {
-    stop("Detected categorical imputation variable(s) with more than 200 levels (not allowed):\n", paste(bad, collapse = "\n"))
+    cat("WARNING: Detected categorical imputation variable(s) with more than 200 levels (can be slow):\n", paste(bad, collapse = "\n"), "\n")
   }
 
   #---
