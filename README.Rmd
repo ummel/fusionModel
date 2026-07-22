@@ -205,7 +205,7 @@ table(sim10$M)
 # Analyzing fused data
 
 > [!IMPORTANT]
-> The `analyze()` function in the `fusionModel` package documents and implements the point estimate and variance estimation methodology used in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). A newer, improved analysis approach has since been introduced in the `fusionACS` package ([fusionACS Methods](https://ummel.github.io/fusionACS/)). While `analyze()` is retained for legacy support and replication purposes, users are encouraged to review the updated `fusionACS` workflow for improved analysis techniques.
+> The `analyze()` function in the `fusionModel` package documents and implements the point estimate and variance estimation methodology used in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). A newer, improved analysis approach has since been introduced in the `fusionACS` package ([fusionACS Methods](https://ummel.github.io/fusionACS/articles/methods.html)). While `analyze()` is retained for legacy support and replication purposes, users are encouraged to review the updated `fusionACS` workflow for improved analysis techniques.
 
 The fused values are inherently probabilistic, reflecting uncertainty in the underlying statistical models. Multiple implicates are needed to calculate unbiased point estimates and associated uncertainty for any particular analysis of the data. In general, more implicates is preferable but requires more computation.
 
