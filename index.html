@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Data fusion and analysis of synthetic data in R • fusionModel</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Data fusion and analysis of synthetic data in R">
 <meta name="description" content="Data fusion and analysis of synthetic data in R.">
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">fusionModel</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.3.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,17 +47,25 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="fusionmodel">fusionModel<a class="anchor" aria-label="anchor" href="#fusionmodel"></a>
 </h1></div>
-<p>Kevin Ummel (<a href="mailto:ummel@berkeley.edu" class="email">ummel@berkeley.edu</a>)</p>
+<p>Kevin Ummel (<a href="mailto:kevin.ummel@yale.edu" class="email">kevin.ummel@yale.edu</a>)</p>
 <ul>
-<li><a href="#overview" id="toc-overview">Overview</a></li>
-<li><a href="#motivation" id="toc-motivation">Motivation</a></li>
-<li><a href="#methodology" id="toc-methodology">Methodology</a></li>
-<li><a href="#installation" id="toc-installation">Installation</a></li>
-<li><a href="#simple-fusion" id="toc-simple-fusion">Simple fusion</a></li>
-<li><a href="#advanced-fusion" id="toc-advanced-fusion">Advanced fusion</a></li>
-<li><a href="#analyzing-fused-data" id="toc-analyzing-fused-data">Analyzing fused data</a></li>
-<li><a href="#validating-fusion-models" id="toc-validating-fusion-models">Validating fusion models</a></li>
+<li><a href="#about">About</a></li>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#motivation">Motivation</a></li>
+<li><a href="#methodology">Methodology</a></li>
+<li><a href="#installation">Installation</a></li>
+<li><a href="#simple-fusion">Simple fusion</a></li>
+<li><a href="#advanced-fusion">Advanced fusion</a></li>
+<li><a href="#analyzing-fused-data">Analyzing fused data</a></li>
+<li><a href="#validating-fusion-models">Validating fusion models</a></li>
 </ul>
+</div>
+<div class="section level1">
+<h1 id="about">About<a class="anchor" aria-label="anchor" href="#about"></a>
+</h1>
+<p>⚠️ The <strong><code>fusionModel</code></strong> package provides an engine for generalized data fusion, implementing the statistical techniques described in <a href="https://www.nature.com/articles/s41597-023-02788-7" class="external-link">Ummel et al. (2024)</a>. It is primarily intended for users looking to build their own custom fusion workflows using arbitrary datasets.</p>
+<p>💡 <strong>Looking to analyze U.S. social survey microdata?</strong><br>
+Practitioners interested in accessing and analyzing fused U.S. social survey microdata should instead use the purpose-built <a href="https://ummel.github.io/fusionACS/" class="external-link"><strong><code>fusionACS</code> R package</strong></a>, which is designed to streamline workflows across a variety of standard U.S. survey sources.</p>
 </div>
 <div class="section level1">
 <h1 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
@@ -106,7 +114,7 @@
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"ummel/fusionModel"</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ummel.github.io/fusionModel/">fusionModel</a></span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb3"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>fusionModel v2.<span class="fl">2.1</span> <span class="sc">|</span> https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>ummel<span class="sc">/</span>fusionModel</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>fusionModel v2.<span class="fl">4.0</span> <span class="sc">|</span> https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>ummel<span class="sc">/</span>fusionModel</span></code></pre></div>
 </div>
 <div class="section level1">
 <h1 id="simple-fusion">Simple fusion<a class="anchor" aria-label="anchor" href="#simple-fusion"></a>
@@ -143,7 +151,7 @@
 <span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>[<span class="dv">1</span>] <span class="st">"integer"</span></span>
 <span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a></span>
 <span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="sc">$</span>electricity</span>
-<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>[<span class="dv">1</span>] <span class="st">"numeric"</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>[<span class="dv">1</span>] <span class="st">"integer"</span></span>
 <span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a></span>
 <span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="sc">$</span>natural_gas</span>
 <span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a>[<span class="dv">1</span>] <span class="st">"numeric"</span></span></code></pre></div>
@@ -153,71 +161,81 @@
 <span><span class="va">fsn.model</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/train.html">train</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">donor</span>, </span>
 <span>                   y <span class="op">=</span> <span class="va">fusion.vars</span>, </span>
 <span>                   x <span class="op">=</span> <span class="va">predictor.vars</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb10"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="dv">5</span> fusion variables</span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="dv">13</span> initial predictor variables</span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="dv">2843</span> observations</span>
-<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>Using all available predictors <span class="cf">for</span> each fusion variable</span>
-<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>Training step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
-<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>Training step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
-<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>Training step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
-<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.967</span> </span>
+<div class="sourceCode" id="cb10"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>Using all available predictors <span class="cf">for</span> each fusion variable</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>ℹ <span class="dv">5</span> fusion variables</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>ℹ <span class="dv">13</span> predictor variables</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>ℹ <span class="dv">2843</span> observations</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.98</span></span>
 <span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">49.0</span>   <span class="fl">141.0</span>   <span class="fl">200.6</span>   <span class="fl">357.0</span>   <span class="fl">498.0</span> </span>
-<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a>Training step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
-<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.966</span> </span>
-<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a>  <span class="fl">10.00</span>   <span class="fl">51.75</span>  <span class="fl">115.00</span>  <span class="fl">176.02</span>  <span class="fl">281.25</span>  <span class="fl">498.00</span> </span>
-<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a>Training step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
-<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.968</span> </span>
-<span id="cb10-19"><a href="#cb10-19" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb10-20"><a href="#cb10-20" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb10-21"><a href="#cb10-21" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">54.0</span>   <span class="fl">129.0</span>   <span class="fl">170.1</span>   <span class="fl">247.0</span>   <span class="fl">499.0</span> </span>
-<span id="cb10-22"><a href="#cb10-22" tabindex="-1"></a>Fusion model saved to<span class="sc">:</span> <span class="er">/</span>home<span class="sc">/</span>kevin<span class="sc">/</span>Documents<span class="sc">/</span>Projects<span class="sc">/</span>fusionModel<span class="sc">/</span>fusion_model.fsn </span>
-<span id="cb10-23"><a href="#cb10-23" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">8.53</span> secs </span></code></pre></div>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a>  <span class="fl">10.00</span>   <span class="fl">26.75</span>   <span class="fl">99.00</span>  <span class="fl">189.22</span>  <span class="fl">386.00</span>  <span class="fl">495.00</span> </span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a></span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.974</span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
+<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb10-19"><a href="#cb10-19" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">36.0</span>    <span class="fl">99.0</span>   <span class="fl">178.7</span>   <span class="fl">335.8</span>   <span class="fl">498.0</span> </span>
+<span id="cb10-20"><a href="#cb10-20" tabindex="-1"></a></span>
+<span id="cb10-21"><a href="#cb10-21" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
+<span id="cb10-22"><a href="#cb10-22" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.958</span></span>
+<span id="cb10-23"><a href="#cb10-23" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
+<span id="cb10-24"><a href="#cb10-24" tabindex="-1"></a></span>
+<span id="cb10-25"><a href="#cb10-25" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb10-26"><a href="#cb10-26" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">43.0</span>   <span class="fl">152.0</span>   <span class="fl">203.3</span>   <span class="fl">373.0</span>   <span class="fl">498.0</span> </span>
+<span id="cb10-27"><a href="#cb10-27" tabindex="-1"></a></span>
+<span id="cb10-28"><a href="#cb10-28" tabindex="-1"></a>✔ Fusion model saved to<span class="sc">:</span> <span class="st">'/home/kevin/Documents/Projects/fusionModel/fusion_model.fsn'</span></span>
+<span id="cb10-29"><a href="#cb10-29" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">5.63</span> secs</span></code></pre></div>
 <p>To fuse variables to <code>recipient</code>, we simply pass the recipient data and path of the .fsn model to the <code><a href="reference/fuse.html">fuse()</a></code> function. Each variable specified in <code>fusion.vars</code> is fused in the order provided. By default, <code><a href="reference/fuse.html">fuse()</a></code> generates a single implicate (version) of synthetic outcomes. Later, we’ll work with multiple implicates to perform proper analysis and uncertainty estimation.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Fuse 'fusion.vars' to the recipient</span></span>
 <span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, </span>
 <span>            fsn <span class="op">=</span> <span class="va">fsn.model</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb12"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="dv">5</span> fusion variables</span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="dv">13</span> initial predictor variables</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="dv">2843</span> observations</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>Generating <span class="dv">1</span> implicate </span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
-<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
-<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
-<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
-<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">0.8</span> secs </span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>ℹ <span class="dv">5</span> fusion variables</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>ℹ <span class="dv">13</span> initial predictor variables</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>ℹ <span class="dv">2843</span> observations</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>Detected <span class="fl">37.7</span> GB of free memory</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>Generating <span class="dv">1</span> implicate</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb12-21"><a href="#cb12-21" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">0.854</span> secs</span></code></pre></div>
 <p>Let’s look at the the recipient dataset’s fused/simulated variables. Note that your results will look different, because each call to <code><a href="reference/fuse.html">fuse()</a></code> generates a unique, probabilistic set of outcomes.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb14"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>   M           insulation                          aircon square_feet</span>
-<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated Central air conditioning system        <span class="dv">1956</span></span>
-<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated Central air conditioning system        <span class="dv">1621</span></span>
-<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated             No air conditioning         <span class="dv">558</span></span>
-<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated Central air conditioning system        <span class="dv">3072</span></span>
-<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated Central air conditioning system        <span class="dv">1010</span></span>
-<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated             No air conditioning        <span class="dv">1910</span></span>
-<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>   electricity natural_gas</span>
-<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>       <span class="dv">17000</span>         <span class="fl">0.0</span></span>
-<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>        <span class="dv">6070</span>       <span class="fl">146.2</span></span>
-<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>        <span class="dv">1334</span>         <span class="fl">0.0</span></span>
-<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>        <span class="dv">9620</span>       <span class="fl">797.0</span></span>
-<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>       <span class="dv">37500</span>         <span class="fl">0.0</span></span>
-<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>       <span class="dv">11240</span>       <span class="fl">223.0</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>Key<span class="sc">:</span> <span class="er">&lt;</span>M<span class="sc">&gt;</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>       M           insulation                          aircon square_feet</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>   <span class="sc">&lt;</span>int<span class="sc">&gt;</span>                <span class="er">&lt;</span>ord<span class="sc">&gt;</span>                          <span class="er">&lt;</span>fctr<span class="sc">&gt;</span>       <span class="er">&lt;</span>int<span class="sc">&gt;</span></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>     <span class="dv">1</span> Adequately insulated Central air conditioning system        <span class="dv">2352</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>     <span class="dv">1</span>       Well insulated Central air conditioning system        <span class="dv">1024</span></span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>     <span class="dv">1</span> Adequately insulated Central air conditioning system         <span class="dv">631</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>     <span class="dv">1</span>     Poorly insulated Central air conditioning system        <span class="dv">2652</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>     <span class="dv">1</span>     Poorly insulated Central air conditioning system        <span class="dv">2790</span></span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>     <span class="dv">1</span> Adequately insulated Central air conditioning system        <span class="dv">1884</span></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>   electricity natural_gas</span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>         <span class="sc">&lt;</span>int<span class="sc">&gt;</span>       <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>       <span class="dv">22640</span>           <span class="dv">0</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>        <span class="dv">7290</span>         <span class="dv">595</span></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>       <span class="dv">11000</span>           <span class="dv">0</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>       <span class="dv">15200</span>         <span class="dv">681</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>       <span class="dv">20500</span>           <span class="dv">0</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>       <span class="dv">10180</span>           <span class="dv">0</span></span></code></pre></div>
 <p>We can do some quick sanity checks to compare the distribution of the fusion variables in <code>donor</code> with those in <code>sim</code>. This, at least, confirms that the fusion output is not obviously wrong. Later, we’ll perform a formal internal validation exercise using multiple implicates.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span>
@@ -225,24 +243,24 @@
 <span><span class="co"># Compare means of the continuous variables</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>donor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colMeans</a></span><span class="op">(</span><span class="va">donor</span><span class="op">[</span><span class="va">fusion.vars</span><span class="op">[</span><span class="fl">3</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, sim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colMeans</a></span><span class="op">(</span><span class="va">sim</span><span class="op">[</span><span class="va">fusion.vars</span><span class="op">[</span><span class="fl">3</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb16"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>                donor        sim</span>
-<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>square_feet  <span class="fl">2070.784</span>  <span class="fl">2012.7306</span></span>
-<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>electricity <span class="fl">10994.517</span> <span class="fl">10675.6508</span></span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>natural_gas   <span class="fl">338.154</span>   <span class="fl">323.5523</span></span></code></pre></div>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>square_feet  <span class="fl">2070.784</span>  <span class="fl">2092.9033</span></span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>electricity <span class="fl">10994.517</span> <span class="fl">10956.0679</span></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>natural_gas   <span class="fl">338.154</span>   <span class="fl">330.5215</span></span></code></pre></div>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Compare frequencies of categorical variable classes</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>donor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">donor</span><span class="op">$</span><span class="va">insulation</span><span class="op">)</span>, sim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">insulation</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb18"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>                     donor  sim</span>
-<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>Not insulated           <span class="dv">40</span>   <span class="dv">40</span></span>
-<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>Poorly insulated       <span class="dv">459</span>  <span class="dv">443</span></span>
-<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>Adequately insulated  <span class="dv">1401</span> <span class="dv">1419</span></span>
-<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>Well insulated         <span class="dv">943</span>  <span class="dv">941</span></span></code></pre></div>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>Not insulated           <span class="dv">40</span>   <span class="dv">44</span></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>Poorly insulated       <span class="dv">459</span>  <span class="dv">441</span></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>Adequately insulated  <span class="dv">1401</span> <span class="dv">1403</span></span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>Well insulated         <span class="dv">943</span>  <span class="dv">955</span></span></code></pre></div>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>donor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">donor</span><span class="op">$</span><span class="va">aircon</span><span class="op">)</span>, sim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">aircon</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb20"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a>                                           donor  sim</span>
-<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>Central air conditioning system             <span class="dv">1788</span> <span class="dv">1818</span></span>
-<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>Individual window<span class="sc">/</span>wall or portable units     <span class="dv">545</span>  <span class="dv">545</span></span>
-<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>Both a central system and individual units   <span class="dv">125</span>  <span class="dv">119</span></span>
-<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a>No air conditioning                          <span class="dv">385</span>  <span class="dv">361</span></span></code></pre></div>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>Central air conditioning system             <span class="dv">1788</span> <span class="dv">1726</span></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>Individual window<span class="sc">/</span>wall or portable units     <span class="dv">545</span>  <span class="dv">621</span></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>Both a central system and individual units   <span class="dv">125</span>  <span class="dv">134</span></span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a>No air conditioning                          <span class="dv">385</span>  <span class="dv">362</span></span></code></pre></div>
 <p>And we can look at kernel density plots of the non-zero values for the continuous variables to see if the univariate distributions in <code>donor</code> are generally similar in <code>sim</code>.</p>
 <p><img src="reference/figures/README-unnamed-chunk-10-1.png"><!-- --></p>
 </div>
@@ -260,73 +278,83 @@
 <span>                                num_leaves <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">30</span><span class="op">)</span>,</span>
 <span>                                feature_fraction <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.9</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>                   cores <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb22"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="dv">5</span> fusion variables</span>
-<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a><span class="dv">13</span> initial predictor variables</span>
-<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a><span class="dv">2843</span> observations</span>
-<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>Using all available predictors <span class="cf">for</span> each fusion variable</span>
+<div class="sourceCode" id="cb22"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a>Using all available predictors <span class="cf">for</span> each fusion variable</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a>ℹ <span class="dv">5</span> fusion variables</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>ℹ <span class="dv">13</span> predictor variables</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>ℹ <span class="dv">2843</span> observations</span>
 <span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a>Using OpenMP multithreading within <span class="fu">LightGBM</span> (<span class="dv">2</span> cores)</span>
-<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a>Training step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
-<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a>Training step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
-<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a>Training step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
-<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.971</span> </span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.978</span></span>
 <span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">61.0</span>   <span class="fl">142.0</span>   <span class="fl">198.4</span>   <span class="fl">330.0</span>   <span class="fl">499.0</span> </span>
-<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a>Training step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
-<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.971</span> </span>
-<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">61.0</span>   <span class="fl">179.0</span>   <span class="fl">220.7</span>   <span class="fl">388.0</span>   <span class="fl">499.0</span> </span>
-<span id="cb22-18"><a href="#cb22-18" tabindex="-1"></a>Training step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
-<span id="cb22-19"><a href="#cb22-19" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.959</span> </span>
-<span id="cb22-20"><a href="#cb22-20" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
-<span id="cb22-21"><a href="#cb22-21" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb22-22"><a href="#cb22-22" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">70.0</span>   <span class="fl">193.0</span>   <span class="fl">217.6</span>   <span class="fl">340.0</span>   <span class="fl">499.0</span> </span>
-<span id="cb22-23"><a href="#cb22-23" tabindex="-1"></a>Fusion model saved to<span class="sc">:</span> <span class="er">/</span>home<span class="sc">/</span>kevin<span class="sc">/</span>Documents<span class="sc">/</span>Projects<span class="sc">/</span>fusionModel<span class="sc">/</span>fusion_model.fsn </span>
-<span id="cb22-24"><a href="#cb22-24" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">44.9</span> secs </span></code></pre></div>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a></span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">41.0</span>   <span class="fl">111.5</span>   <span class="fl">181.9</span>   <span class="fl">328.0</span>   <span class="fl">498.0</span> </span>
+<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a></span>
+<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
+<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.971</span></span>
+<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
+<span id="cb22-18"><a href="#cb22-18" tabindex="-1"></a></span>
+<span id="cb22-19"><a href="#cb22-19" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb22-20"><a href="#cb22-20" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">45.0</span>   <span class="fl">127.0</span>   <span class="fl">196.2</span>   <span class="fl">366.0</span>   <span class="fl">498.0</span> </span>
+<span id="cb22-21"><a href="#cb22-21" tabindex="-1"></a></span>
+<span id="cb22-22"><a href="#cb22-22" tabindex="-1"></a><span class="sc">--</span> Training step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
+<span id="cb22-23"><a href="#cb22-23" tabindex="-1"></a><span class="sc">--</span> R<span class="sc">-</span>squared of cluster means<span class="sc">:</span> <span class="fl">0.953</span></span>
+<span id="cb22-24"><a href="#cb22-24" tabindex="-1"></a><span class="sc">--</span> Number of neighbors <span class="cf">in</span> each cluster<span class="sc">:</span></span>
+<span id="cb22-25"><a href="#cb22-25" tabindex="-1"></a></span>
+<span id="cb22-26"><a href="#cb22-26" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb22-27"><a href="#cb22-27" tabindex="-1"></a>   <span class="fl">10.0</span>    <span class="fl">53.0</span>   <span class="fl">147.0</span>   <span class="fl">196.7</span>   <span class="fl">334.0</span>   <span class="fl">499.0</span> </span>
+<span id="cb22-28"><a href="#cb22-28" tabindex="-1"></a></span>
+<span id="cb22-29"><a href="#cb22-29" tabindex="-1"></a>✔ Fusion model saved to<span class="sc">:</span> <span class="st">'/home/kevin/Documents/Projects/fusionModel/fusion_model.fsn'</span></span>
+<span id="cb22-30"><a href="#cb22-30" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">29.1</span> secs</span></code></pre></div>
 <p>We generally want to create multiple versions of the simulated fusion variables – called <em>implicates</em> – in order to reduce bias in point estimates and calculate associated uncertainty. We can do this using the <code>M</code> argument within <code><a href="reference/fuse.html">fuse()</a></code>. Here we generate 10 implicates; i.e. 10 unique, probabilistic representations of what the recipient records might look like with respect to the fusion variables.</p>
 <div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Fuse multiple implicates to the recipient</span></span>
 <span><span class="va">sim10</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">recipient</span>, </span>
 <span>              fsn <span class="op">=</span> <span class="va">fsn.model</span>,</span>
 <span>              M <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb24"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="dv">5</span> fusion variables</span>
-<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a><span class="dv">13</span> initial predictor variables</span>
-<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a><span class="dv">2843</span> observations</span>
-<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>Generating <span class="dv">10</span> implicates </span>
-<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
-<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
-<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
-<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
-<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
-<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">2.38</span> secs </span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>ℹ <span class="dv">5</span> fusion variables</span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>ℹ <span class="dv">13</span> initial predictor variables</span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a>ℹ <span class="dv">2843</span> observations</span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>Detected <span class="fl">37.5</span> GB of free memory</span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>Generating <span class="dv">10</span> implicates</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
+<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
+<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb24-21"><a href="#cb24-21" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">2.06</span> secs</span></code></pre></div>
 <p>Note that each implicate in <code>sim10</code> is identified by the “M” variable/column.</p>
 <div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim10</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb26"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>   M           insulation                                   aircon square_feet</span>
-<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated          Central air conditioning system        <span class="dv">1728</span></span>
-<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated          Central air conditioning system        <span class="dv">1492</span></span>
-<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated                      No air conditioning         <span class="dv">636</span></span>
-<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated          Central air conditioning system        <span class="dv">2948</span></span>
-<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span> <span class="dv">1</span>       Well insulated Individual window<span class="sc">/</span>wall or portable units        <span class="dv">1140</span></span>
-<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> <span class="dv">1</span> Adequately insulated                      No air conditioning        <span class="dv">1579</span></span>
-<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a>   electricity natural_gas</span>
-<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>       <span class="dv">13700</span>         <span class="fl">0.0</span></span>
-<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>       <span class="dv">15200</span>         <span class="fl">0.0</span></span>
-<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>        <span class="dv">1880</span>        <span class="fl">89.7</span></span>
-<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>        <span class="dv">8670</span>       <span class="fl">651.0</span></span>
-<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>       <span class="dv">14460</span>         <span class="fl">0.0</span></span>
-<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>       <span class="dv">14220</span>         <span class="fl">0.0</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>Key<span class="sc">:</span> <span class="er">&lt;</span>M<span class="sc">&gt;</span></span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>       M           insulation                                   aircon</span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>   <span class="sc">&lt;</span>int<span class="sc">&gt;</span>                <span class="er">&lt;</span>ord<span class="sc">&gt;</span>                                   <span class="er">&lt;</span>fctr<span class="sc">&gt;</span></span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>     <span class="dv">1</span>       Well insulated          Central air conditioning system</span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>     <span class="dv">1</span>     Poorly insulated          Central air conditioning system</span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>     <span class="dv">1</span>     Poorly insulated                      No air conditioning</span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>     <span class="dv">1</span>       Well insulated Individual window<span class="sc">/</span>wall or portable units</span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>     <span class="dv">1</span> Adequately insulated          Central air conditioning system</span>
+<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>     <span class="dv">1</span> Adequately insulated Individual window<span class="sc">/</span>wall or portable units</span>
+<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a>   square_feet electricity natural_gas</span>
+<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a>         <span class="sc">&lt;</span>int<span class="sc">&gt;</span>       <span class="er">&lt;</span>int<span class="sc">&gt;</span>       <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>        <span class="dv">1072</span>        <span class="dv">9040</span>           <span class="dv">0</span></span>
+<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>        <span class="dv">3268</span>        <span class="dv">7720</span>           <span class="dv">0</span></span>
+<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>         <span class="dv">714</span>        <span class="dv">1818</span>           <span class="dv">0</span></span>
+<span id="cb26-15"><a href="#cb26-15" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>        <span class="dv">1656</span>        <span class="dv">5650</span>         <span class="dv">524</span></span>
+<span id="cb26-16"><a href="#cb26-16" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>        <span class="dv">2765</span>       <span class="dv">14020</span>           <span class="dv">0</span></span>
+<span id="cb26-17"><a href="#cb26-17" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>        <span class="dv">1258</span>       <span class="dv">15140</span>           <span class="dv">0</span></span></code></pre></div>
 <div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sim10</span><span class="op">$</span><span class="va">M</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb28"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>   <span class="dv">1</span>    <span class="dv">2</span>    <span class="dv">3</span>    <span class="dv">4</span>    <span class="dv">5</span>    <span class="dv">6</span>    <span class="dv">7</span>    <span class="dv">8</span>    <span class="dv">9</span>   <span class="dv">10</span> </span>
@@ -335,55 +363,68 @@
 <div class="section level1">
 <h1 id="analyzing-fused-data">Analyzing fused data<a class="anchor" aria-label="anchor" href="#analyzing-fused-data"></a>
 </h1>
+<blockquote>
+<p>[!IMPORTANT] The <code><a href="reference/analyze.html">analyze()</a></code> function in the <code>fusionModel</code> package documents and implements the point estimate and variance estimation methodology used in <a href="https://www.nature.com/articles/s41597-023-02788-7" class="external-link">Ummel et al. (2024)</a>. A newer, improved analysis approach has since been introduced in the <code>fusionACS</code> package (<a href="https://ummel.github.io/fusionACS/" class="external-link">fusionACS Methods</a>). While <code><a href="reference/analyze.html">analyze()</a></code> is retained for legacy support and replication purposes, users are encouraged to review the updated <code>fusionACS</code> workflow for improved analysis techniques.</p>
+</blockquote>
 <p>The fused values are inherently probabilistic, reflecting uncertainty in the underlying statistical models. Multiple implicates are needed to calculate unbiased point estimates and associated uncertainty for any particular analysis of the data. In general, more implicates is preferable but requires more computation.</p>
 <p>Since proper analysis of multiple implicates can be rather cumbersome – both from a coding and mathematical standpoint – the <code><a href="reference/analyze.html">analyze()</a></code> function provides a convenient way to calculate point estimates and associated uncertainty for common analyses. Potential analyses currently include variable means, proportions, sums, counts, and medians, (optionally) calculated for population subgroups.</p>
 <p>For example, to calculate the mean value of the “electricity” variable across all observations in the recipient dataset, we do the following.</p>
 <div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/analyze.html">analyze</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span>
 <span>        implicates <span class="op">=</span> <span class="va">sim10</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb30"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a>Using <span class="dv">10</span> implicates</span>
-<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>Assuming uniform sample weights</span>
-<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">0.0344</span> secs </span>
+<div class="sourceCode" id="cb30"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a>ℹ Using <span class="dv">10</span> implicates</span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a></span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>ℹ Assuming uniform sample weights</span>
 <span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a></span>
-<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>      N           y level type      est      moe</span>
-<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="dv">2843</span> electricity    <span class="cn">NA</span> mean <span class="fl">10808.86</span> <span class="fl">232.2422</span></span></code></pre></div>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>✔ Total processing time<span class="sc">:</span> <span class="fl">0.0237</span> secs</span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a>       N           y  level   type      est      moe</span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a>   <span class="sc">&lt;</span>int<span class="sc">&gt;</span>      <span class="er">&lt;</span>char<span class="sc">&gt;</span> <span class="er">&lt;</span>lgcl<span class="sc">&gt;</span> <span class="er">&lt;</span>char<span class="sc">&gt;</span>    <span class="er">&lt;</span>num<span class="sc">&gt;</span>    <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>  <span class="dv">2843</span> electricity     <span class="cn">NA</span>   mean <span class="fl">10925.07</span> <span class="fl">238.2842</span></span></code></pre></div>
 <p>When the response variable is categorical, <code><a href="reference/analyze.html">analyze()</a></code> automatically returns the proportions associated with each factor level.</p>
 <div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/analyze.html">analyze</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"aircon"</span><span class="op">)</span>,</span>
 <span>        implicates <span class="op">=</span> <span class="va">sim10</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb32"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>Using <span class="dv">10</span> implicates</span>
-<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>Assuming uniform sample weights</span>
-<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">0.0903</span> secs </span>
+<div class="sourceCode" id="cb32"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>ℹ Using <span class="dv">10</span> implicates</span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a></span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>ℹ Assuming uniform sample weights</span>
 <span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a></span>
-<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a>      N      y                                      level       type        est</span>
-<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="dv">2843</span> aircon            Central air conditioning system proportion <span class="fl">0.62866690</span></span>
-<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="dv">2843</span> aircon   Individual window<span class="sc">/</span>wall or portable units proportion <span class="fl">0.19212100</span></span>
-<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="dv">2843</span> aircon Both a central system and individual units proportion <span class="fl">0.04400281</span></span>
-<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="dv">2843</span> aircon                        No air conditioning proportion <span class="fl">0.13520929</span></span>
-<span id="cb32-10"><a href="#cb32-10" tabindex="-1"></a>           moe</span>
-<span id="cb32-11"><a href="#cb32-11" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="fl">0.017603881</span></span>
-<span id="cb32-12"><a href="#cb32-12" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="fl">0.015537772</span></span>
-<span id="cb32-13"><a href="#cb32-13" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="fl">0.007524075</span></span>
-<span id="cb32-14"><a href="#cb32-14" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="fl">0.014413665</span></span></code></pre></div>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a>✔ Total processing time<span class="sc">:</span> <span class="fl">0.0651</span> secs</span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a></span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a>       N      y                                      level       type</span>
+<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a>   <span class="sc">&lt;</span>int<span class="sc">&gt;</span> <span class="er">&lt;</span>char<span class="sc">&gt;</span>                                     <span class="er">&lt;</span>char<span class="sc">&gt;</span>     <span class="er">&lt;</span>char<span class="sc">&gt;</span></span>
+<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>  <span class="dv">2843</span> aircon            Central air conditioning system proportion</span>
+<span id="cb32-10"><a href="#cb32-10" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>  <span class="dv">2843</span> aircon   Individual window<span class="sc">/</span>wall or portable units proportion</span>
+<span id="cb32-11"><a href="#cb32-11" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>  <span class="dv">2843</span> aircon Both a central system and individual units proportion</span>
+<span id="cb32-12"><a href="#cb32-12" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>  <span class="dv">2843</span> aircon                        No air conditioning proportion</span>
+<span id="cb32-13"><a href="#cb32-13" tabindex="-1"></a>          est         moe</span>
+<span id="cb32-14"><a href="#cb32-14" tabindex="-1"></a>        <span class="sc">&lt;</span>num<span class="sc">&gt;</span>       <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb32-15"><a href="#cb32-15" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="fl">0.62022511</span> <span class="fl">0.022633809</span></span>
+<span id="cb32-16"><a href="#cb32-16" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="fl">0.19324657</span> <span class="fl">0.015933188</span></span>
+<span id="cb32-17"><a href="#cb32-17" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="fl">0.04934928</span> <span class="fl">0.009002835</span></span>
+<span id="cb32-18"><a href="#cb32-18" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="fl">0.13717904</span> <span class="fl">0.015253775</span></span></code></pre></div>
 <p>If we want to perform an analysis across subsets of the recipient population – for example, calculate the mean value of “electricity” by household “income” – we can use the <code>by</code> and <code>static</code> arguments. We see that mean electricity consumption increases with household income.</p>
 <div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/analyze.html">analyze</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="st">"electricity"</span><span class="op">)</span>,</span>
 <span>        implicates <span class="op">=</span> <span class="va">sim10</span>,</span>
 <span>        static <span class="op">=</span> <span class="va">recipient</span>,</span>
 <span>        by <span class="op">=</span> <span class="st">"income"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb34"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>Using <span class="dv">10</span> implicates</span>
-<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a>Assuming uniform sample weights</span>
-<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">0.0229</span> secs </span>
+<div class="sourceCode" id="cb34"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>ℹ Using <span class="dv">10</span> implicates</span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a>ℹ Assuming uniform sample weights</span>
 <span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a></span>
-<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>                 income   N           y level type       est       moe</span>
-<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>    Less than <span class="sc">$</span><span class="dv">20</span>,<span class="dv">000</span> <span class="dv">471</span> electricity    <span class="cn">NA</span> mean  <span class="fl">8884.312</span>  <span class="fl">478.0797</span></span>
-<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>    <span class="er">$</span><span class="dv">20</span>,<span class="dv">000</span> <span class="sc">-</span> <span class="er">$</span><span class="dv">39</span>,<span class="dv">999</span> <span class="dv">645</span> electricity    <span class="cn">NA</span> mean  <span class="fl">9719.018</span>  <span class="fl">456.4553</span></span>
-<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>    <span class="er">$</span><span class="dv">40</span>,<span class="dv">000</span> <span class="sc">-</span> <span class="er">$</span><span class="dv">59</span>,<span class="dv">999</span> <span class="dv">464</span> electricity    <span class="cn">NA</span> mean <span class="fl">10537.228</span>  <span class="fl">538.0130</span></span>
-<span id="cb34-9"><a href="#cb34-9" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>   <span class="er">$</span><span class="dv">60</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">79</span>,<span class="dv">999</span> <span class="dv">372</span> electricity    <span class="cn">NA</span> mean <span class="fl">11314.790</span>  <span class="fl">572.3587</span></span>
-<span id="cb34-10"><a href="#cb34-10" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>   <span class="er">$</span><span class="dv">80</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">99</span>,<span class="dv">999</span> <span class="dv">248</span> electricity    <span class="cn">NA</span> mean <span class="fl">11550.401</span>  <span class="fl">693.7652</span></span>
-<span id="cb34-11"><a href="#cb34-11" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> <span class="er">$</span><span class="dv">100</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">119</span>,<span class="dv">999</span> <span class="dv">222</span> electricity    <span class="cn">NA</span> mean <span class="fl">12138.498</span>  <span class="fl">850.3994</span></span>
-<span id="cb34-12"><a href="#cb34-12" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span> <span class="er">$</span><span class="dv">120</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">139</span>,<span class="dv">999</span> <span class="dv">119</span> electricity    <span class="cn">NA</span> mean <span class="fl">12490.518</span> <span class="fl">1113.5339</span></span>
-<span id="cb34-13"><a href="#cb34-13" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span>     <span class="er">$</span><span class="dv">140</span>,<span class="dv">000</span> or more <span class="dv">302</span> electricity    <span class="cn">NA</span> mean <span class="fl">13683.182</span>  <span class="fl">728.6027</span></span></code></pre></div>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>✔ Total processing time<span class="sc">:</span> <span class="fl">0.0211</span> secs</span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a>                 income     N           y  level   type       est       moe</span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a>                  <span class="sc">&lt;</span>ord<span class="sc">&gt;</span> <span class="er">&lt;</span>int<span class="sc">&gt;</span>      <span class="er">&lt;</span>char<span class="sc">&gt;</span> <span class="er">&lt;</span>lgcl<span class="sc">&gt;</span> <span class="er">&lt;</span>char<span class="sc">&gt;</span>     <span class="er">&lt;</span>num<span class="sc">&gt;</span>     <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb34-9"><a href="#cb34-9" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>    Less than <span class="sc">$</span><span class="dv">20</span>,<span class="dv">000</span>   <span class="dv">471</span> electricity     <span class="cn">NA</span>   mean  <span class="fl">8750.062</span>  <span class="fl">537.9967</span></span>
+<span id="cb34-10"><a href="#cb34-10" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>    <span class="er">$</span><span class="dv">20</span>,<span class="dv">000</span> <span class="sc">-</span> <span class="er">$</span><span class="dv">39</span>,<span class="dv">999</span>   <span class="dv">645</span> electricity     <span class="cn">NA</span>   mean  <span class="fl">9808.782</span>  <span class="fl">474.7702</span></span>
+<span id="cb34-11"><a href="#cb34-11" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>    <span class="er">$</span><span class="dv">40</span>,<span class="dv">000</span> <span class="sc">-</span> <span class="er">$</span><span class="dv">59</span>,<span class="dv">999</span>   <span class="dv">464</span> electricity     <span class="cn">NA</span>   mean <span class="fl">10684.930</span>  <span class="fl">526.5698</span></span>
+<span id="cb34-12"><a href="#cb34-12" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>   <span class="er">$</span><span class="dv">60</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">79</span>,<span class="dv">999</span>   <span class="dv">372</span> electricity     <span class="cn">NA</span>   mean <span class="fl">11279.174</span>  <span class="fl">704.9938</span></span>
+<span id="cb34-13"><a href="#cb34-13" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>   <span class="er">$</span><span class="dv">80</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">99</span>,<span class="dv">999</span>   <span class="dv">248</span> electricity     <span class="cn">NA</span>   mean <span class="fl">11656.552</span>  <span class="fl">902.0131</span></span>
+<span id="cb34-14"><a href="#cb34-14" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> <span class="er">$</span><span class="dv">100</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">119</span>,<span class="dv">999</span>   <span class="dv">222</span> electricity     <span class="cn">NA</span>   mean <span class="fl">12382.729</span>  <span class="fl">970.6336</span></span>
+<span id="cb34-15"><a href="#cb34-15" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span> <span class="er">$</span><span class="dv">120</span>,<span class="dv">000</span> to <span class="sc">$</span><span class="dv">139</span>,<span class="dv">999</span>   <span class="dv">119</span> electricity     <span class="cn">NA</span>   mean <span class="fl">13116.725</span> <span class="fl">1504.4645</span></span>
+<span id="cb34-16"><a href="#cb34-16" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span>     <span class="er">$</span><span class="dv">140</span>,<span class="dv">000</span> or more   <span class="dv">302</span> electricity     <span class="cn">NA</span>   mean <span class="fl">14098.276</span>  <span class="fl">932.7634</span></span></code></pre></div>
 <p>It is also possible to do multiple kinds of analyses in a single call to <code><a href="reference/analyze.html">analyze()</a></code>. For example, the following call calculates the mean value of “natural_gas” and “square_feet”, the median value of “square_feet”, and the sum of “electricity” (i.e. total consumption) and “insulation” (i.e. total count of each level). All of these estimates are calculated for each population subgroup defined by the intersection of “race” and “urban_rural” status.</p>
 <div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/analyze.html">analyze</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"natural_gas"</span>, <span class="st">"square_feet"</span><span class="op">)</span>,</span>
@@ -392,30 +433,34 @@
 <span>                  implicates <span class="op">=</span> <span class="va">sim10</span>,</span>
 <span>                  static <span class="op">=</span> <span class="va">recipient</span>,</span>
 <span>                  by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"race"</span>, <span class="st">"urban_rural"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb36"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>Using <span class="dv">10</span> implicates</span>
-<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a>Assuming uniform sample weights</span>
-<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">1.63</span> secs </span></code></pre></div>
+<div class="sourceCode" id="cb36"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>ℹ Using <span class="dv">10</span> implicates</span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a>ℹ Assuming uniform sample weights</span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a></span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>✔ Total processing time<span class="sc">:</span> <span class="fl">0.509</span> secs</span></code></pre></div>
 <p>We can then (for example) isolate the results for white households in rural areas. Notice that the mean estimate of “square_feet” exceeds the median, reflecting the skewed distribution.</p>
 <div class="sourceCode" id="cb37"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">result</span>, <span class="va">race</span> <span class="op">==</span> <span class="st">"White"</span> <span class="op">&amp;</span> <span class="va">urban_rural</span> <span class="op">==</span> <span class="st">"Rural"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb38"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a>    race urban_rural   N           y                level   type          est</span>
-<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> White       Rural <span class="dv">503</span> electricity                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>    sum <span class="fl">6906696.6100</span></span>
-<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> White       Rural <span class="dv">503</span>  insulation        Not insulated  count       <span class="fl">5.6000</span></span>
-<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> White       Rural <span class="dv">503</span>  insulation     Poorly insulated  count      <span class="fl">68.4000</span></span>
-<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> White       Rural <span class="dv">503</span>  insulation Adequately insulated  count     <span class="fl">209.7000</span></span>
-<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span> White       Rural <span class="dv">503</span>  insulation       Well insulated  count     <span class="fl">219.3000</span></span>
-<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> White       Rural <span class="dv">503</span> natural_gas                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>   mean     <span class="fl">157.5723</span></span>
-<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span> White       Rural <span class="dv">503</span> square_feet                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>   mean    <span class="fl">2387.3509</span></span>
-<span id="cb38-9"><a href="#cb38-9" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span> White       Rural <span class="dv">503</span> square_feet                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span> median    <span class="fl">2159.4000</span></span>
-<span id="cb38-10"><a href="#cb38-10" tabindex="-1"></a>            moe</span>
-<span id="cb38-11"><a href="#cb38-11" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="fl">3.115890e+05</span></span>
-<span id="cb38-12"><a href="#cb38-12" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span> <span class="fl">5.653837e+00</span></span>
-<span id="cb38-13"><a href="#cb38-13" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span> <span class="fl">2.178315e+01</span></span>
-<span id="cb38-14"><a href="#cb38-14" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span> <span class="fl">3.144372e+01</span></span>
-<span id="cb38-15"><a href="#cb38-15" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span> <span class="fl">3.613723e+01</span></span>
-<span id="cb38-16"><a href="#cb38-16" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span> <span class="fl">2.579220e+01</span></span>
-<span id="cb38-17"><a href="#cb38-17" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span> <span class="fl">1.164896e+02</span></span>
-<span id="cb38-18"><a href="#cb38-18" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span> <span class="fl">1.573095e+02</span></span></code></pre></div>
+<div class="sourceCode" id="cb38"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a>     race urban_rural     N           y                level   type</span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a>   <span class="sc">&lt;</span>fctr<span class="sc">&gt;</span>      <span class="er">&lt;</span>fctr<span class="sc">&gt;</span> <span class="er">&lt;</span>int<span class="sc">&gt;</span>      <span class="er">&lt;</span>char<span class="sc">&gt;</span>               <span class="er">&lt;</span>char<span class="sc">&gt;</span> <span class="er">&lt;</span>char<span class="sc">&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span> electricity                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>    sum</span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span>  insulation        Not insulated  count</span>
+<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span>  insulation     Poorly insulated  count</span>
+<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span>  insulation Adequately insulated  count</span>
+<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span>  insulation       Well insulated  count</span>
+<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span> natural_gas                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>   mean</span>
+<span id="cb38-9"><a href="#cb38-9" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span> square_feet                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span>   mean</span>
+<span id="cb38-10"><a href="#cb38-10" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span>  White       Rural   <span class="dv">503</span> square_feet                 <span class="sc">&lt;</span><span class="cn">NA</span><span class="sc">&gt;</span> median</span>
+<span id="cb38-11"><a href="#cb38-11" tabindex="-1"></a>            est          moe</span>
+<span id="cb38-12"><a href="#cb38-12" tabindex="-1"></a>          <span class="sc">&lt;</span>num<span class="sc">&gt;</span>        <span class="er">&lt;</span>num<span class="sc">&gt;</span></span>
+<span id="cb38-13"><a href="#cb38-13" tabindex="-1"></a><span class="dv">1</span><span class="sc">:</span> <span class="fl">6961264.2000</span> <span class="fl">3.351969e+05</span></span>
+<span id="cb38-14"><a href="#cb38-14" tabindex="-1"></a><span class="dv">2</span><span class="sc">:</span>       <span class="fl">5.8000</span> <span class="fl">6.318078e+00</span></span>
+<span id="cb38-15"><a href="#cb38-15" tabindex="-1"></a><span class="dv">3</span><span class="sc">:</span>      <span class="fl">77.1000</span> <span class="fl">2.107942e+01</span></span>
+<span id="cb38-16"><a href="#cb38-16" tabindex="-1"></a><span class="dv">4</span><span class="sc">:</span>     <span class="fl">218.1000</span> <span class="fl">2.717505e+01</span></span>
+<span id="cb38-17"><a href="#cb38-17" tabindex="-1"></a><span class="dv">5</span><span class="sc">:</span>     <span class="fl">202.0000</span> <span class="fl">2.439389e+01</span></span>
+<span id="cb38-18"><a href="#cb38-18" tabindex="-1"></a><span class="dv">6</span><span class="sc">:</span>     <span class="fl">161.4957</span> <span class="fl">3.036519e+01</span></span>
+<span id="cb38-19"><a href="#cb38-19" tabindex="-1"></a><span class="dv">7</span><span class="sc">:</span>    <span class="fl">2418.2807</span> <span class="fl">1.261965e+02</span></span>
+<span id="cb38-20"><a href="#cb38-20" tabindex="-1"></a><span class="dv">8</span><span class="sc">:</span>    <span class="fl">2164.3000</span> <span class="fl">1.900049e+02</span></span></code></pre></div>
 <p>More complicated analyses can be performed using the custom <code>fun</code> argument to <code><a href="reference/analyze.html">analyze()</a></code>. See the Examples section of <code><a href="reference/analyze.html">?analyze</a></code>.</p>
 </div>
 <div class="section level1">
@@ -428,26 +473,27 @@
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fuse.html">fuse</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">donor</span>,</span>
 <span>            fsn <span class="op">=</span> <span class="va">fsn.model</span>,</span>
 <span>            M <span class="op">=</span> <span class="fl">40</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb40"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a><span class="dv">5</span> fusion variables</span>
-<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a><span class="dv">13</span> initial predictor variables</span>
-<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a><span class="dv">2843</span> observations</span>
-<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>Generating <span class="dv">40</span> implicates </span>
-<span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
-<span id="cb40-6"><a href="#cb40-6" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb40-7"><a href="#cb40-7" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb40-8"><a href="#cb40-8" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
-<span id="cb40-9"><a href="#cb40-9" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb40-10"><a href="#cb40-10" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb40-11"><a href="#cb40-11" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
-<span id="cb40-12"><a href="#cb40-12" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb40-13"><a href="#cb40-13" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb40-14"><a href="#cb40-14" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
-<span id="cb40-15"><a href="#cb40-15" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb40-16"><a href="#cb40-16" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb40-17"><a href="#cb40-17" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
-<span id="cb40-18"><a href="#cb40-18" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
-<span id="cb40-19"><a href="#cb40-19" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
-<span id="cb40-20"><a href="#cb40-20" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">7.8</span> secs </span></code></pre></div>
+<div class="sourceCode" id="cb40"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>ℹ <span class="dv">5</span> fusion variables</span>
+<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a>ℹ <span class="dv">13</span> initial predictor variables</span>
+<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a>ℹ <span class="dv">2843</span> observations</span>
+<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>Detected <span class="fl">37.5</span> GB of free memory</span>
+<span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a>Generating <span class="dv">40</span> implicates</span>
+<span id="cb40-6"><a href="#cb40-6" tabindex="-1"></a>Fusion step <span class="dv">1</span> of <span class="dv">5</span><span class="sc">:</span> insulation</span>
+<span id="cb40-7"><a href="#cb40-7" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb40-8"><a href="#cb40-8" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb40-9"><a href="#cb40-9" tabindex="-1"></a>Fusion step <span class="dv">2</span> of <span class="dv">5</span><span class="sc">:</span> aircon</span>
+<span id="cb40-10"><a href="#cb40-10" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb40-11"><a href="#cb40-11" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb40-12"><a href="#cb40-12" tabindex="-1"></a>Fusion step <span class="dv">3</span> of <span class="dv">5</span><span class="sc">:</span> square_feet</span>
+<span id="cb40-13"><a href="#cb40-13" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb40-14"><a href="#cb40-14" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb40-15"><a href="#cb40-15" tabindex="-1"></a>Fusion step <span class="dv">4</span> of <span class="dv">5</span><span class="sc">:</span> electricity</span>
+<span id="cb40-16"><a href="#cb40-16" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb40-17"><a href="#cb40-17" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb40-18"><a href="#cb40-18" tabindex="-1"></a>Fusion step <span class="dv">5</span> of <span class="dv">5</span><span class="sc">:</span> natural_gas</span>
+<span id="cb40-19"><a href="#cb40-19" tabindex="-1"></a><span class="sc">--</span> Predicting LightGBM models</span>
+<span id="cb40-20"><a href="#cb40-20" tabindex="-1"></a><span class="sc">--</span> Simulating fused values</span>
+<span id="cb40-21"><a href="#cb40-21" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">5.5</span> secs</span></code></pre></div>
 <p>Next, we pass the <code>sim</code> results to <code><a href="reference/validate.html">validate()</a></code>. The argument <code>subset_vars</code> specifies that we want the validation exercise to compare observed (donor) and simulated point estimates across population subsets defined by “income”, “age”, “race”, and “education”. See <code><a href="reference/validate.html">?validate</a></code> for more details.</p>
 <div class="sourceCode" id="cb41"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">valid</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/validate.html">validate</a></span><span class="op">(</span>observed <span class="op">=</span> <span class="va">donor</span>,</span>
@@ -456,20 +502,24 @@
 <div class="sourceCode" id="cb42"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" tabindex="-1"></a>Assuming uniform sample weights</span>
 <span id="cb42-2"><a href="#cb42-2" tabindex="-1"></a>One<span class="sc">-</span>hot encoding categorical fusion variables</span>
 <span id="cb42-3"><a href="#cb42-3" tabindex="-1"></a>Correlation between observed and fused values<span class="sc">:</span></span>
-<span id="cb42-4"><a href="#cb42-4" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
-<span id="cb42-5"><a href="#cb42-5" tabindex="-1"></a>  <span class="fl">0.075</span>   <span class="fl">0.109</span>   <span class="fl">0.255</span>   <span class="fl">0.303</span>   <span class="fl">0.431</span>   <span class="fl">0.774</span> </span>
-<span id="cb42-6"><a href="#cb42-6" tabindex="-1"></a>Processing validation analyses <span class="cf">for</span> <span class="dv">5</span> fusion variables</span>
-<span id="cb42-7"><a href="#cb42-7" tabindex="-1"></a>Performed <span class="dv">1430</span> analyses across <span class="dv">130</span> subsets</span>
-<span id="cb42-8"><a href="#cb42-8" tabindex="-1"></a>Smoothing validation metrics</span>
-<span id="cb42-9"><a href="#cb42-9" tabindex="-1"></a>Average smoothed performance metrics across subset range<span class="sc">:</span></span>
-<span id="cb42-10"><a href="#cb42-10" tabindex="-1"></a>             y     est    vad   moe</span>
-<span id="cb42-11"><a href="#cb42-11" tabindex="-1"></a><span class="dv">1</span>       aircon  <span class="fl">0.0323</span>  <span class="fl">0.689</span>  <span class="fl">1.37</span></span>
-<span id="cb42-12"><a href="#cb42-12" tabindex="-1"></a><span class="dv">2</span>  electricity  <span class="fl">0.0225</span>  <span class="fl">0.419</span>  <span class="fl">1.06</span></span>
-<span id="cb42-13"><a href="#cb42-13" tabindex="-1"></a><span class="dv">3</span>   insulation  <span class="fl">0.0390</span>  <span class="fl">0.492</span>  <span class="fl">1.41</span></span>
-<span id="cb42-14"><a href="#cb42-14" tabindex="-1"></a><span class="dv">4</span>  natural_gas  <span class="fl">0.0277</span>  <span class="fl">0.500</span>  <span class="fl">1.06</span></span>
-<span id="cb42-15"><a href="#cb42-15" tabindex="-1"></a><span class="dv">5</span>  square_feet  <span class="fl">0.0146</span>  <span class="fl">0.788</span>  <span class="fl">1.18</span></span>
-<span id="cb42-16"><a href="#cb42-16" tabindex="-1"></a>Creating ggplot2 graphics  </span>
-<span id="cb42-17"><a href="#cb42-17" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">3.14</span> secs </span></code></pre></div>
+<span id="cb42-4"><a href="#cb42-4" tabindex="-1"></a></span>
+<span id="cb42-5"><a href="#cb42-5" tabindex="-1"></a>   Min. <span class="dv">1</span>st Qu.  Median    Mean <span class="dv">3</span>rd Qu.    Max. </span>
+<span id="cb42-6"><a href="#cb42-6" tabindex="-1"></a>  <span class="fl">0.039</span>   <span class="fl">0.068</span>   <span class="fl">0.250</span>   <span class="fl">0.270</span>   <span class="fl">0.424</span>   <span class="fl">0.748</span> </span>
+<span id="cb42-7"><a href="#cb42-7" tabindex="-1"></a></span>
+<span id="cb42-8"><a href="#cb42-8" tabindex="-1"></a>Processing validation analyses <span class="cf">for</span> <span class="dv">5</span> fusion variables</span>
+<span id="cb42-9"><a href="#cb42-9" tabindex="-1"></a>Performed <span class="dv">1430</span> analyses across <span class="dv">130</span> subsets</span>
+<span id="cb42-10"><a href="#cb42-10" tabindex="-1"></a>Smoothing validation metrics</span>
+<span id="cb42-11"><a href="#cb42-11" tabindex="-1"></a>Average smoothed performance metrics across subset range<span class="sc">:</span></span>
+<span id="cb42-12"><a href="#cb42-12" tabindex="-1"></a></span>
+<span id="cb42-13"><a href="#cb42-13" tabindex="-1"></a>             y      est    vad   moe</span>
+<span id="cb42-14"><a href="#cb42-14" tabindex="-1"></a><span class="dv">1</span>       aircon  <span class="fl">0.04028</span>  <span class="fl">0.426</span>  <span class="fl">1.33</span></span>
+<span id="cb42-15"><a href="#cb42-15" tabindex="-1"></a><span class="dv">2</span>  electricity  <span class="fl">0.02248</span>  <span class="fl">0.584</span>  <span class="fl">1.16</span></span>
+<span id="cb42-16"><a href="#cb42-16" tabindex="-1"></a><span class="dv">3</span>   insulation  <span class="fl">0.05358</span>  <span class="fl">0.359</span>  <span class="fl">1.39</span></span>
+<span id="cb42-17"><a href="#cb42-17" tabindex="-1"></a><span class="dv">4</span>  natural_gas  <span class="fl">0.01445</span>  <span class="fl">0.796</span>  <span class="fl">1.09</span></span>
+<span id="cb42-18"><a href="#cb42-18" tabindex="-1"></a><span class="dv">5</span>  square_feet  <span class="fl">0.00621</span>  <span class="fl">0.935</span>  <span class="fl">1.24</span></span>
+<span id="cb42-19"><a href="#cb42-19" tabindex="-1"></a></span>
+<span id="cb42-20"><a href="#cb42-20" tabindex="-1"></a>Creating ggplot2 graphics</span>
+<span id="cb42-21"><a href="#cb42-21" tabindex="-1"></a>Total processing time<span class="sc">:</span> <span class="fl">2.32</span> secs</span></code></pre></div>
 <p>The <code><a href="reference/validate.html">validate()</a></code> output includes ggplot2 graphics that helpfully summarize the validation results. For example, the plot below shows how the observed and simulated point estimates compare, using median absolute percent error as the performance metric. We see that the synthetic data do a very good job reproducing the point estimates for all fusion variables when the population subset in question is reasonably large. For smaller subsets – i.e. more difficult analyses due to small sample size – “square_feet”, “natural_gas”, and “electricity” remain well modeled, but the error increases more rapidly for “aircon” and “insulation”. This information is useful for understanding what kind of reliability we can expect for particular variables and types of analyses, given the underlying fusion model and data.</p>
 <div class="sourceCode" id="cb43"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">valid</span><span class="op">$</span><span class="va">plots</span><span class="op">$</span><span class="va">est</span></span></code></pre></div>
@@ -496,7 +546,7 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Kevin Ummel <br><small class="roles"> Author, maintainer </small>  </li>
+<li>Kevin Ummel <br><small class="roles"> Author, maintainer </small>   </li>
 <li><a href="authors.html">More about authors...</a></li>
 </ul>
 </div>
@@ -512,7 +562,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>
