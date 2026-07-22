@@ -1,21 +1,82 @@
-#' Create a monotonic relationship between two variables
+#' Enforce Monotonic Relationships Between Numerical Variables
 #'
 #' @description
-#' \code{monotonic()} returns modified values of input vector \code{y} that are smoothed, monotonic, and consistent across all values of input \code{x}. It was designed to be used post-fusion when one wants to ensure a plausible relationship between consumption (\code{x}) and expenditure (\code{y}), under the assumption that all consumers face an identical, monotonic pricing structure. By default, the mean of the returned values is forced to equal the original mean of \code{y} (\code{preserve = TRUE}). The direction of monotonicity (increasing or decreasing) is detected automatically, so use cases are not limited to consumption and expenditure variables.
-#' @param x Numeric.
-#' @param y Numeric.
-#' @param w Numeric. Optional observation weights.
-#' @param preserve Logical. Preserve the original mean of the \code{y} values in the returned values?
-#' @param expend Logical. Assume \code{y} is an expenditure variable? If \code{TRUE}, a safety check is implemented to ensure \code{y > 0} when \code{x > 0}.
-#' @param fast Logical. If \code{TRUE}, only \code{\link[scam]{supsmu}} is used with coercion of result to monotone.
-#' @param nmax Integer. Maximum number of observations to use for smoothing. Set lower for faster computation. \code{nmax = Inf} eliminates sampling.
-#' @param plot Logical. Plot the (sampled) data points and derived monotonic relationship?
-#' @details The initial smoothing is accomplished via \code{\link[scam]{supsmu}} with the result coerced to monotone. If \code{fast = FALSE} and the coercion step modifies the values too much, a second smooth is attempted via a \code{\link[scam]{scam}} model with either a monotone increasing or decreasing constraint. If the SCAM fails to fit, the function falls back to \code{\link[stats]{lm}} with simple linear predictions. If \code{y = 0} when \code{x = 0} (as typical for consumption-expenditure variables), then that outcome is enforced in the result. The input data are randomly sampled to no more than \code{nmax} observations, if necessary, for speed.
-#' @return A numeric vector of modified \code{y} values. Optionally, a plot showing the returned monotonic relationship.
+#' Smoothes and transforms a numeric target vector (\code{y}) relative to an ordering
+#' vector (\code{x}) to enforce a strict, monotonic relationship (either consistently
+#' increasing or decreasing) across all observed values of \code{x}. Designed primarily
+#' for post-fusion adjustment of energy consumption (\code{x}) and expenditure (\code{y})
+#' variables to guarantee a plausible pricing structure (e.g., higher fuel volume never
+#' yields lower total cost). By default, the weighted mean of \code{y} is preserved in
+#' the returned vector (\code{preserve = TRUE}).
+#'
+#' @param x Numeric vector. The independent ordering variable (e.g., energy consumption in BTU).
+#'   Must not contain missing values (\code{NA}).
+#' @param y Numeric vector of the same length as \code{x}. The dependent response
+#'   variable to be transformed (e.g., fuel expenditure in dollars). Must not contain
+#'   missing values (\code{NA}).
+#' @param w Numeric vector of the same length as \code{x}, optional. Observation sampling
+#'   weights. If \code{NULL} (default), uniform weights equal to 1 are assumed.
+#' @param preserve Logical. Should the original weighted mean of \code{y} be preserved in the
+#'   returned numeric vector? Defaults to \code{TRUE}.
+#' @param expend Logical. Treat \code{y} as an expenditure variable tied to consumption \code{x}?
+#'   If \code{TRUE} (default), safety checks enforce physical consistency: negative values in
+#'   \code{x} or \code{y} throw an error, non-zero expenditures when \code{x == 0} are zeroed,
+#'   and zero expenditures when \code{x > 0} are raised to the minimum observed positive expenditure.
+#' @param fast Logical. If \code{TRUE} (default), rapid smoothing via Friedman's super-smoother
+#'   (\code{\link[stats]{supsmu}}) is performed and directly coerced to monotonicity via
+#'   sorting. If \code{FALSE}, a Shape Constrained Additive Model (\code{\link[scam]{scam}}) is
+#'   attempted if the initial super-smoother coercion results in excessive error.
+#' @param nmax Integer. Maximum number of observations sampled for model fitting to optimize
+#'   computational speed. Defaults to \code{5000}. Set to \code{Inf} to disable sampling.
+#' @param plot Logical. Should a diagnostic scatterplot of the sampled input points and the
+#'   fitted monotonic relationship (in red) be rendered to the active graphics device? Defaults to \code{FALSE}.
+#'
+#' @details
+#' \code{monotonic()} provides non-parametric post-processing to rectify logical inconsistencies
+#' in microdata fusion output (such as negative marginal prices or non-monotonic tariff curves).
+#'
+#' \strong{Algorithmic Workflow:}
+#' \describe{
+#'   \item{1. Physical Sanity Checks}{If \code{expend = TRUE}, boundary conditions are enforced
+#'     to ensure zero consumption yields zero expenditure and positive consumption yields positive
+#'     expenditure.}
+#'   \item{2. High-Speed Subsampling}{If \code{length(x) > nmax}, extreme boundaries (minimum and
+#'     maximum) are preserved while intermediate points are randomly down-sampled to \code{nmax}
+#'     for efficient smoothing.}
+#'   \item{3. Super-Smoother Fit & Direction Detection}{An initial non-parametric smooth is fit
+#'     via \code{\link[stats]{supsmu}}. The overall correlation between \code{x} and predicted
+#'     \code{y} determines whether the relationship should be monotonic increasing or decreasing.}
+#'   \item{4. Monotonic Coercion & SCAM Fallback}{Predicted values are sorted to enforce monotonicity.
+#'     If \code{fast = FALSE} and sorting introduces substantial error (>5% relative divergence on
+#'     over 5% of points), a constrained spline is fit via \code{\link[scam]{scam}}. If SCAM fitting
+#'     fails to converge, linear regression (\code{\link[stats]{lm}}) serves as the ultimate fallback.}
+#'   \item{5. Interpolation & Mean Preservation}{Fitted values are mapped back to the complete
+#'     original \code{x} vector using linear interpolation (\code{\link[stats]{approx}}). If
+#'     \code{preserve = TRUE}, the resulting vector is scaled so its weighted mean matches
+#'     \code{weighted.mean(y, w)}.}
+#' }
+#'
+#' @return A numeric vector of modified, monotonic \code{y} values matching the length and order
+#'   of input \code{x}. If input \code{y} was integer-typed, the returned vector is rounded to integer.
+#'
 #' @examples
-#' y <- monotonic(x = recs$propane_btu, y = recs$propane_expend, plot = TRUE)
-#' mean(recs$propane_expend)
-#' mean(y)
+#' \dontrun{
+#' library(fusionModel)
+#' data(recs)
+#'
+#' # Enforce a monotonic pricing curve between propane consumption and expenditure
+#' adjusted_expend <- monotonic(
+#'   x = recs$propane_btu,
+#'   y = recs$propane_expend,
+#'   w = recs$weight,
+#'   plot = TRUE
+#' )
+#'
+#' # Compare original and adjusted weighted means
+#' weighted.mean(recs$propane_expend, recs$weight)
+#' weighted.mean(adjusted_expend, recs$weight)
+#' }
+#'
 #' @export
 
 #---------
@@ -28,11 +89,11 @@
 # acs <- fst::read_fst("~/Documents/Projects/fusionData/survey-processed/ACS/2019/ACS_2019_H_processed.fst", columns = c('weight', 'state', 'puma10'))
 # d <- cbind(d, acs)
 # system.time(
-#   d[, `:=`(dollarel_z =  monotonic(x = btuel, y = dollarel, w = weight),
-#            dollarng_z =  monotonic(x = btung, y = dollarng, w = weight),
-#            dollarlp_z =  monotonic(x = btulp, y = dollarlp, w = weight),
-#            dollarfo_z =  monotonic(x = btufo, y = dollarfo, w = weight)),
-#     by = .(state, puma10)]
+#    d[, `:=`(dollarel_z =  monotonic(x = btuel, y = dollarel, w = weight),
+#             dollarng_z =  monotonic(x = btung, y = dollarng, w = weight),
+#             dollarlp_z =  monotonic(x = btulp, y = dollarlp, w = weight),
+#             dollarfo_z =  monotonic(x = btufo, y = dollarfo, w = weight)),
+#      by = .(state, puma10)]
 # )
 
 #---------
@@ -73,12 +134,12 @@ monotonic <- function(x,
     i <- x == 0 & y != 0
     if (any(i)) {
       y[i] <- 0L
-      warning("Set ", sum(i), " non-zero y-value(s) (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to zero where x == 0 because 'expend = TRUE'")
+      cli::cli_warn("Set {sum(i)} non-zero y-value(s) ({round(100 * sum(i) / length(y), 2)}%) to zero where x == 0 because 'expend = TRUE'")
     }
     i <- x > 0 & y == 0
     if (any(i)) {
       y[i] <- ymin
-      warning("Set ", sum(i), " zero y-value(s) (", paste0(round(100 * sum(i) / length(y), 2), "%"), ") to observed non-zero minimum where x > 0 because 'expend = TRUE'")
+      cli::cli_warn("Set {sum(i)} zero y-value(s) ({round(100 * sum(i) / length(y), 2)}%) to observed non-zero minimum where x > 0 because 'expend = TRUE'")
     }
   }
 

@@ -1,7 +1,7 @@
 ---
 title: "fusionModel"
 subtitle: "Synthetic data fusion and analysis in R"
-author: Kevin Ummel ([ummel@berkeley.edu](mailto:ummel@berkeley.edu))
+author: Kevin Ummel ([kevin.ummel@yale.edu](mailto:kevin.ummel@yale.edu))
 output:
   github_document:
     toc: true
@@ -17,6 +17,13 @@ knitr::opts_chunk$set(
   fig.path = "man/figures/README-"
 )
 ```
+
+# About
+
+⚠️ The **`fusionModel`** package provides an engine for generalized data fusion, implementing the statistical techniques described in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). It is primarily intended for users looking to build their own custom fusion workflows using arbitrary datasets.
+ 
+💡 **Looking to analyze U.S. social survey microdata?**  
+Practitioners interested in accessing and analyzing fused U.S. social survey microdata should instead use the purpose-built [**`fusionACS` R package**](https://ummel.github.io/fusionACS/), which is designed to streamline workflows across a variety of standard U.S. survey sources.
 
 # Overview
 
@@ -158,7 +165,7 @@ pdata[c("dataset", ncont)] %>%
   pivot_longer(cols = -1L) %>%
   filter(value != 0) %>%
   ggplot(aes(x = value, color = dataset)) +
-  geom_density(size = 1) +
+  geom_density(linewidth = 1) +
   theme(legend.position = "top") +
   facet_wrap(~ name, scales = "free")
 #ggtitle("Distribution of continuous variables (non-zero values)")
@@ -196,6 +203,9 @@ table(sim10$M)
 ```
 
 # Analyzing fused data
+
+> [!IMPORTANT]
+> The `analyze()` function in the `fusionModel` package documents and implements the point estimate and variance estimation methodology used in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). A newer, improved analysis approach has since been introduced in the `fusionACS` package ([fusionACS Methods](https://ummel.github.io/fusionACS/)). While `analyze()` is retained for legacy support and replication purposes, users are encouraged to review the updated `fusionACS` workflow for improved analysis techniques.
 
 The fused values are inherently probabilistic, reflecting uncertainty in the underlying statistical models. Multiple implicates are needed to calculate unbiased point estimates and associated uncertainty for any particular analysis of the data. In general, more implicates is preferable but requires more computation.
 

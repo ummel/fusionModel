@@ -1,75 +1,136 @@
-#' Train a fusion model
+#' Train a Data Fusion Model
 #'
 #' @description
-#' Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the conditional distributions. The resulting fusion model (.fsn file) can be used with \code{\link{fuse}} to simulate outcomes for a "recipient" dataset.
+#' Trains a statistical fusion model on a "donor" dataset using sequential
+#' \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} gradient boosting
+#' models to capture conditional distributions. The resulting fitted model archive
+#' (\code{.fsn} file) contains the conditional expectations, candidate donor pool
+#' indices, and metadata required by \code{\link{fuse}} to simulate synthetic outcomes
+#' onto a "recipient" dataset.
 #'
-#' @param data Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.
-#' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.
-#' @param x Character or list. Predictor variables in \code{data} common to donor and eventual recipient. If a list, each slot specifies the \code{x} predictors to use for each \code{y}.
-#' @param fsn Character. File path where fusion model will be saved. Must use \code{.fsn} suffix.
-#' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
-#' @param nfolds Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).
-#' @param nquantiles Numeric. Number of quantile models to train for continuous \code{y} variables, in addition to the conditional mean. \code{nquantiles} evenly-distributed percentiles are used. For example, the default \code{nquantiles = 2} yields quantile models for the 25th and 75th percentiles. Higher values may produce more accurate conditional distributions at the expense of computation time. Even \code{nquantiles} is recommended since the conditional mean tends to capture the central tendency, making a median model superfluous.
-#' @param nclusters Numeric. Maximum number of k-means clusters to use. Higher is better but at computational cost. \code{nclusters = 0} or \code{nclusters = Inf} turn off clustering.
-#' @param krange Numeric. Minimum and maximum number of nearest neighbors to use for construction of continuous conditional distributions. Higher \code{max(krange)} is better but at computational cost.
-#' @param hyper List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.
-#' @param fork Logical. Should parallel processing via forking be used, if possible? See Details.
-#' @param cores Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.
+#' @param data A data frame (or \code{data.table}) containing the donor microdata.
+#'   Categorical variables should be formatted as factors (ordered whenever applicable).
+#' @param y Character vector or list. Variable(s) in \code{data} to be fused to a
+#'   recipient dataset. Variables are modeled and fused sequentially in the order
+#'   provided. If \code{y} is a list, each element can be a character vector representing
+#'   a "block" of variables to be sampled jointly during fusion to preserve
+#'   multivariate dependence.
+#' @param x Character vector or list. Predictor variable name(s) common to both donor
+#'   and recipient datasets. If a list, each element specifies the predictor set to use
+#'   for the corresponding element in \code{y}. If a character vector, earlier \code{y}
+#'   variables in the sequence are automatically appended as predictors for subsequent
+#'   \code{y} models.
+#' @param fsn Character string. File path where the trained fusion model archive will
+#'   be saved. Must end with the \code{.fsn} extension. Default is \code{"fusion_model.fsn"}.
+#' @param weight Character string. Name of the column in \code{data} containing survey
+#'   or sampling weights. If \code{NULL} (default), uniform observation weights are assumed.
+#' @param nfolds Numeric. Number of cross-validation folds used during LightGBM model
+#'   tuning. If \code{0 < nfolds < 1}, it represents the proportion of observations allocated
+#'   to training, with the remainder used for validation (substantially faster than
+#'   full cross-validation). Default is \code{5}.
+#' @param nquantiles Numeric. Number of quantile models to fit for continuous \code{y}
+#'   variables in addition to the conditional mean model. Specified quantiles are
+#'   evenly spaced. For example, \code{nquantiles = 2} (default) models the 25th and 75th
+#'   percentiles. Even values are recommended, as the conditional mean already captures
+#'   central tendency.
+#' @param nclusters Numeric. Maximum number of \eqn{k}-means clusters used to group donor
+#'   observations in conditional expectation space. Higher values increase donor selection
+#'   precision at the expense of memory and processing time. Set to \code{0} or \code{Inf}
+#'   to skip clustering (i.e., treat every donor row as a cluster center). Default is \code{2000}.
+#' @param krange Numeric vector of length 2. Specifies the minimum and maximum number of
+#'   nearest neighbors (\eqn{k}) evaluated when selecting optimal candidate pools for
+#'   continuous conditional distributions. Default is \code{c(10, 500)}.
+#' @param hyper List. LightGBM hyperparameter grid or custom values to evaluate during
+#'   training. If \code{NULL} (default), a standardized baseline configuration optimized for
+#'   survey fusion is used. See Details.
+#' @param fork Logical. If \code{TRUE}, uses parallel processing via process forking
+#'   (\code{\link[parallel]{mclapply}}) across fusion steps. Only supported on Unix/Linux/macOS platforms.
+#'   Default is \code{FALSE}.
+#' @param cores Integer. Number of physical CPU cores allocated to computation. When
+#'   \code{fork = FALSE} or on Windows, fusion steps are processed serially, while
+#'   LightGBM utilizes \code{cores} for internal OpenMP multithreading. When \code{fork = TRUE}
+#'   on Unix, independent fusion steps are executed concurrently across \code{cores}.
+#'   Default is \code{1}.
 #'
-#' @details When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
-#' @details `y` variables that exhibit no variance or continuous `y` variables with less than `10 * nfolds` non-zero observations (minimum required for cross-validation) are automatically removed with a warning.
-#' @details The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
-#' @details The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used with the following default values:
-#' @details \itemize{
-#'   \item boosting = "gbdt"
-#'   \item data_sample_strategy = "goss"
-#'   \item num_leaves = 31
-#'   \item feature_fraction = 0.8
-#'   \item max_depth = 5
-#'   \item min_data_in_leaf = max(10, round(0.001 * nrow(data)))
-#'   \item num_iterations = 2500
-#'   \item learning_rate= 0.1
-#'   \item max_bin = 255
-#'   \item min_data_in_bin = 3
-#'   \item max_cat_threshold = 32
-#'  }
-#'  Typical users will only have reason to modify the hyperparameters listed above. Note that \code{num_iterations} only imposes a ceiling, since early stopping will typically result in models with a lower number of iterations. See Examples.
-#' @details Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
+#' @details
+#' \subsection{Sequential and Block Modeling}{
+#'   Data fusion proceeds sequentially through the variables specified in \code{y}. To
+#'   preserve complex dependencies among tightly coupled outcomes (e.g., fuel expenditure
+#'   shares), supply those variables as a character vector within a list element of \code{y}.
+#'   Block variables are predicted jointly, and donor observations within blocks are sampled
+#'   en masse during fusion.
+#' }
 #'
-#' @return A fusion model object (.fsn) is saved to \code{fsn}.
+#' \subsection{Hyperparameter Optimization}{
+#'   If a list of vectors is supplied to \code{hyper}, \code{train()} performs grid search
+#'   across all parameter combinations using \eqn{V}-fold cross-validation (\code{\link[lightgbm]{lgb.cv}})
+#'   with early stopping. The optimal parameter combination (minimizing loss) is selected to fit
+#'   the final booster.
+#'
+#'   When \code{hyper = NULL}, default hyperparameters applied include:
+#'   \itemize{
+#'     \item \code{boosting = "gbdt"}
+#'     \item \code{data_sample_strategy = "goss"}
+#'     \item \code{num_leaves = 31}
+#'     \item \code{feature_fraction = 0.8}
+#'     \item \code{max_depth = 5}
+#'     \item \code{min_data_in_leaf = max(10, round(0.001 * nrow(data)))}
+#'     \item \code{num_iterations = 2500}
+#'     \item \code{learning_rate = 0.1}
+#'     \item \code{max_bin = 255}
+#'     \item \code{min_data_in_bin = 3}
+#'     \item \code{max_cat_threshold = 32}
+#'   }
+#' }
+#'
+#' \subsection{Parallel Execution & OpenMP Considerations}{
+#'   On Unix-like operating systems, process forking via \code{fork = TRUE} can yield faster
+#'   execution times than OpenMP multithreading. However, if OpenMP threads have already been
+#'   initialized in the current R session (e.g., by \code{\link[data.table]{data.table}} or
+#'   \code{\link[fst]{fst}}), forking may hang. If this occurs, execute \code{data.table::setDTthreads(1)}
+#'   and \code{fst::threads_fst(1)} immediately after launching R before calling \code{train()}.
+#' }
+#'
+#' @return Returns the file path to the saved \code{.fsn} archive invisibly.
+#'
+#' @references
+#' Ummel, K., et al. (2024). Multidimensional well-being of US households at a fine spatial scale using fused household surveys.
+#' \emph{Scientific Data}, 11(142). \doi{10.1038/s41597-023-02788-7}
+#'
+#' @seealso \code{\link{fuse}}, \code{\link{validate}}, \code{\link{fitLGB}}
 #'
 #' @examples
-#' # Build a fusion model using RECS microdata
-#' # Note that "fusion_model.fsn" will be written to working directory
-#' ?recs
+#' \dontrun{
+#' # Load sample RECS survey dataset supplied with fusionModel
+#' data(recs)
+
+#' # Define fusion targets and common predictors
 #' fusion.vars <- c("electricity", "natural_gas", "aircon")
 #' predictor.vars <- names(recs)[2:12]
+
+#' # 1. Basic model training (saves output to working directory)
 #' fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
-#'
-#' # When 'y' is a list, it can specify variables to fuse as a block
-#' fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
-#' fusion.vars
-#' train(data = recs, y = fusion.vars, x = predictor.vars)
-#'
-#' # When 'x' is a list, it specifies which predictor variables to use for each 'y'
+
+#' # 2. Block fusion: Preserving joint dependency across component shares
+#' fusion.vars.block <- list(
+#'   "electricity",
+#'   "natural_gas",
+#'   c("heating_share", "cooling_share", "other_share")
+#' )
+#' train(data = recs, y = fusion.vars.block, x = predictor.vars, fsn = "model_block.fsn")
+
+#' # 3. Custom predictor specification per fusion step
 #' xlist <- list(predictor.vars[1:4], predictor.vars[2:8], predictor.vars)
-#' xlist
-#' train(data = recs, y = fusion.vars, x = xlist)
-#'
-#' # Specify a single set of LightGBM hyperparameters
-#' # Here we use Random Forests instead of the default Gradient Boosting Decision Trees
+#' train(data = recs, y = fusion.vars.block, x = xlist, fsn = "model_xlist.fsn")
+
+#' # 4. Hyperparameter override (Random Forest boosting alternative)
 #' train(data = recs, y = fusion.vars, x = predictor.vars,
-#'       hyper = list(boosting = "rf",
-#'                    feature_fraction = 0.6,
-#'                    max_depth = 10
-#'       ))
-#'
-#' # Specify a range of LightGBM hyperparameters to search over
-#' # This takes longer, because there are more models to test
+#'       hyper = list(boosting = "rf", feature_fraction = 0.6, max_depth = 10))
+
+#' # 5. Grid search hyperparameter tuning
 #' train(data = recs, y = fusion.vars, x = predictor.vars,
-#'       hyper = list(max_depth = c(5, 10),
-#'                    feature_fraction = c(0.7, 0.9)
-#'       ))
+#'       hyper = list(max_depth = c(5, 10), feature_fraction = c(0.7, 0.9)))
+#' }
 #' @export
 
 #---------------------
@@ -99,8 +160,6 @@
 
 # Try with variable block
 #y <- c(list(y[1:2]), y[-c(1:2)])
-
-
 
 #---------------------
 
@@ -135,21 +194,21 @@ train <- function(data,
   if (is.list(x)) {
     xlist <- x
     x <- unique(unlist(x))
-    cat("Using specified set of predictors for each fusion variable\n")
+    cli::cli_inform("Using specified set of predictors for each fusion variable")
   } else {
-    #xlist <- rep(list(x), length(ylist))
+    # Sequence chaining: Append previously predicted 'y' variables as predictors for subsequent 'y' variables
     xlist <- lapply(1:length(ylist), function(i) c({if (i == 1) NULL else unlist(ylist[1:(i - 1)])}, x))
-    cat("Using all available predictors for each fusion variable\n")
+    cli::cli_inform("Using all available predictors for each fusion variable")
   }
   x <- setdiff(x, y)
 
   #---
 
-  # Check validity of other inputs
+  # Validate inputs against required logical constraints
   stopifnot(exprs = {
     is.data.frame(data)
     all(y %in% names(data))
-    !any(c("M", "W..", "R..") %in% y)  # Reserved variable names
+    !any(c("M", "W..", "R..") %in% y)  # Reserved internal column names
     all(lengths(ylist) > 0)
     all(x %in% names(data))
     all(lengths(xlist) > 0)
@@ -174,7 +233,7 @@ train <- function(data,
   ptiles <- seq(from = 1 / nquantiles / 2, length.out = nquantiles, by = 2 * 1 / nquantiles / 2)
 
   # Determine if parallel forking will be used
-  # This forces use of OpenMP if there are more cores than fusion steps
+  # Forces use of OpenMP if there are more cores than fusion steps
   fork <- fork & .Platform$OS.type == "unix" & cores > 1 & length(ylist) > 1 & cores <= length(ylist)
 
   # Check 'fsn' path and create parent directories, if necessary
@@ -182,7 +241,7 @@ train <- function(data,
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
   fsn <- file.path(dir, basename(fsn))
 
-  # Temporary directory to save outputs to
+  # Temporary directory to save intermediate outputs to
   td <- tempfile()
   dir.create(td, showWarnings = FALSE)
 
@@ -193,7 +252,7 @@ train <- function(data,
     rep(1L, nrow(data))
   } else {
     if (anyNA(data[[weight]])) stop("Missing (NA) values are not allowed in 'weight'")
-    if (any(data[[weight]] < 0)) cat("Setting negative observation weights to zero\n")
+    if (any(data[[weight]] < 0)) cli::cli_alert_warning("Setting negative observation weights to zero")
     set(data, j = weight, value = pmax(0, data[[weight]]))
     data[[weight]] / mean(data[[weight]]) # Scaled weights to avoid numerical issues
   }
@@ -206,7 +265,7 @@ train <- function(data,
   # Check data and variable name validity
   if (anyNA(data[y])) stop("Missing (NA) values are not allowed in 'y'")
 
-  # Check that the 'x' and 'y' contain only syntactically valid names
+  # Check that 'x' and 'y' contain only syntactically valid names
   bad <- setdiff(c(x, y), make.names(c(x, y)))
   if (length(bad)) stop("Fix invalid column names (see ?make.names):\n", paste(bad, collapse = ", "))
 
@@ -214,22 +273,8 @@ train <- function(data,
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # 4/28/25: Removing unse of checkData(); zero-variance allowed to pass through
+  # 4/28/25: Removing use of checkData(); zero-variance allowed to pass through
   # Initial testing suggests LightGBM handles zero-variance cases without error
-  # Check 'data' for type consistency and remove no-variance (constant) variables
-  # data <- checkData(data, y, x, nfolds = ceiling(nfolds), impute = FALSE)
-  # # To account for possible removal of zero-variance 'x' variables
-  # x <- intersect(x, names(data))
-  # for (i in 1:seq_along(xlist)) xlist[[i]] <- intersect(xlist[[i]], x)
-  # # To account for possible removal of zero-variance 'y' variables
-  # y <- intersect(y, names(data))
-  # for (i in 1:seq_along(ylist)) ylist[[i]] <- intersect(ylist[[i]], y)
-  # # Update 'xlist' and 'ylist' to reflect possible removal of cases with only non-varying x or y
-  # drop <- which(lengths(ylist) == 0 | lengths(xlist) == 0)
-  # ylist <- ylist[-drop]
-  # if (length(ylist) == 0) stop("There are no valid 'y' variables remaining with non-zero variance (nothing to predict)!")
-  # xlist <- xlist[-drop]
-  # if (length(xlist) == 0) stop("There are no valid 'x' variables remaining with non-zero variance (nothing to predict with)!")
 
   # Determine fusion variable directory prefixes for saving to disk
   pfixes <- formatC(seq_along(ylist), width = nchar(length(ylist)), format = "d", flag = "0")
@@ -258,17 +303,12 @@ train <- function(data,
 
   #-----
 
-  # Print variable information to console
-  cat(length(y), "fusion variables\n")
-  cat(length(x), "predictor variables\n")
-  cat(nrow(data), "observations\n")
-
-  # Report if using different sets of predictor variables across the fusion variables
-  # if (all(lengths(xlist) == length(x))) {
-  #   cat("Using all available predictors for each fusion variable\n")
-  # } else {
-  #   cat("Using specified set of predictors for each fusion variable\n")
-  # }
+  # Output summary info to console
+  cli::cli_inform(c(
+    "i" = "{length(y)} fusion variable{?s}",
+    "i" = "{length(x)} predictor variable{?s}",
+    "i" = "{nrow(data)} observation{?s}"
+  ))
 
   # Limit 'data' to the necessary variables
   data <- data[c(x, y)]
@@ -277,10 +317,8 @@ train <- function(data,
   dmat <- to_mat(data)
   rm(data)
 
-  # Write to disk (donor.fst)
-  # Save the necessary response/fusion variables and observation weights to disk
-  # This information is used be fuse() to select simulated values
-  # This should include all fusion variables other than solo categorical (multiclass or logical) variables
+  # Write donor response/fusion variables and observation weights to disk (donor.fst)
+  # Used by fuse() to select simulated donor values (excludes solo categorical response variables)
   ysave <- y[ytype == "continuous" | y %in% unlist(ylist[lengths(ylist) > 1])]
   dtemp <- as.data.frame(dmat[, ysave, drop = FALSE])
   dtemp$W <- W.int
@@ -293,9 +331,6 @@ train <- function(data,
   if (is.null(hyper)) hyper <- list()
 
   # Default hyperparameter values, per LightGBM documentation
-  # Parameters: https://lightgbm.readthedocs.io/en/latest/Parameters.html
-  # Parameter tuning: https://lightgbm.readthedocs.io/en/latest/Parameters-Tuning.html
-  # More details: https://sites.google.com/view/lauraepp/parameters
   hyper.default <- list(
     boosting = "gbdt",
     data_sample_strategy = "goss",
@@ -318,24 +353,24 @@ train <- function(data,
   }
 
   # Set the number of LightGBM threads
-  # If forking, LightGBM uses single core internally
+  # If forking, LightGBM uses single core internally per thread
   hyper$num_threads <- ifelse(fork, 1L, cores)
 
-  # The 'dataset' parameters 'min_data_in_leaf', 'max_bin', 'min_data_in_bin', and 'max_cat_threshold' can only have a single value (they are not eligible to be varied within fitLGB)
-  # https://lightgbm.readthedocs.io/en/latest/Parameters.html#dataset-parameters
+  # The 'dataset' parameters can only have a single value (not eligible for grid search)
   for (v in c("min_data_in_leaf", "max_bin", "min_data_in_bin", "max_cat_threshold")) {
     if (length(hyper[[v]]) > 1) {
       hyper[[v]] <- hyper[[v]][1]
-      cat("Only one", v, "value allowed. Using:", hyper[[v]], "\n")
+      cli::cli_alert_warning("Only one {.val {v}} value allowed. Using: {.val {hyper[[v]]}}")
     }
   }
-  # Note that 'feature_pre_filter' is forced to TRUE (for speed), which means only one 'min_data_in_leaf' value is allowed in 'hyper'
+
+  # Construct LightGBM dataset parameter set
   dparams <- list(max_bin = hyper$max_bin,
                   min_data_in_bin = hyper$min_data_in_bin,
                   max_cat_threshold = hyper$max_cat_threshold,
                   min_data_in_leaf = hyper$min_data_in_leaf,
                   feature_pre_filter = TRUE)
-  # Remove 'dparams' hyperparamters from 'hyper' object
+  # Remove 'dparams' hyperparameters from 'hyper' object
   hyper[names(dparams)] <- NULL
 
   # Create hyperparameter grid to search
@@ -346,20 +381,21 @@ train <- function(data,
 
   #-----
 
-  # Function to build LightGBM prediction model for step 'i' in 'ylist'
+  # Internal function to build LightGBM prediction model for step 'i' in 'ylist'
   buildFun <- function(i, verbose = FALSE) {
 
     v <- ylist[[i]]
     block <- length(v) > 1
 
     # Print message to console
-    if (verbose) cat("-- Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "), "\n", sep = "")
+    if (verbose) {
+      cli::cli_inform("-- Training step {i} of {length(pfixes)}: {paste(v, collapse = ', ')}")
+    }
 
     # 'y' variables from prior clusters to be included as predictors
     yv <- if (i == 1) NULL else unlist(ylist[1:(i - 1)])
 
-    # Full set of predictor variables, including possible 'y' variables from earlier in the sequence
-    #xv <- c(xlist[[i]], yv)
+    # Full set of predictor variables
     xv <- xlist[[i]]
 
     path <- file.path(td, pfixes[i])
@@ -383,7 +419,7 @@ train <- function(data,
 
       #-----
 
-      # Build zero model, if necessary
+      # Build zero-inflation model if continuous variable exhibits structural zeros
       if (type == "continuous" & inflated(Y)) {
 
         # Indices to identify which observations to use for subsequent training (ti) and prediction (pi)
@@ -393,9 +429,6 @@ train <- function(data,
         #---
 
         # Build LightGBM datasets for zero-inflated model
-
-        # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
-        # List indicating random assignment of folds
         cv.folds <- stratify(y = (Y == 0), ycont = FALSE, tfrac = nfolds, cv_list = TRUE)
 
         # Create full LGB training dataset with all available observations
@@ -406,7 +439,7 @@ train <- function(data,
                                        params = dparams) %>%
           lightgbm::lgb.Dataset.construct()
 
-        # Create 'dtrain' and 'dvalid' sets, if requested
+        # Create 'dtrain' and 'dvalid' sets if validation split requested (nfolds < 1)
         if (is.logical(cv.folds)) {
           ind <- which(cv.folds)
           dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
@@ -427,7 +460,7 @@ train <- function(data,
 
         #---
 
-        # Set the loss function and performance metric used with lightGBM
+        # Set loss function and performance metric for binary zero-inflation model
         params.obj <- list(objective = "binary", metric = "binary_logloss")
 
         # Fit model
@@ -437,16 +470,14 @@ train <- function(data,
                        hyper.grid = hyper.grid,
                        params.obj = params.obj,
                        cv.folds = cv.folds)
-        # TEMP
+
         hyper.results$z <- zmod$record_evals
 
-        # Save LightGBM mean model (m.txt) to disk
+        # Save LightGBM zero model (_z.txt) to disk
         lightgbm::lgb.save(booster = zmod, filename = file.path(path, paste0(y, "_z.txt")))
 
-        # Conditional probability of zero for the non-zero training observations
-        # Note that 'zc' will be NULL in case of single continuous variables (zeros are simulated directly by 'zmod')
+        # Predict conditional probability of zero for block items
         if (block) {
-          #zc <- matrix(predict(object = zmod, data = dmat[pi, xv], reshape = TRUE))
           zc <- matrix(predict(object = zmod, newdata = dmat[pi, xv]))
           colnames(zc) <- paste0(y, "_z")
         }
@@ -458,8 +489,6 @@ train <- function(data,
       #---
 
       # Build LightGBM datasets for mean and quantile models
-
-      # List indicating assignment of folds OR vector indicating training observations when nfolds <= 1
       cv.folds <- stratify(y = Y[ti], ycont = (type == "continuous"), tfrac = nfolds, ntiles = 10, cv_list = TRUE)
 
       # Create full LGB training dataset with all available observations
@@ -470,7 +499,7 @@ train <- function(data,
                                      params = dparams) %>%
         lightgbm::lgb.Dataset.construct()
 
-      # Create 'dtrain' and 'dvalid' sets, if requested (only necessary when nfolds < 1)
+      # Create 'dtrain' and 'dvalid' sets if validation split requested
       if (is.logical(cv.folds)) {
         ind <- which(ti)[cv.folds]
         dtrain <- lightgbm::lgb.Dataset(data = dmat[ind, xv, drop = FALSE],
@@ -491,19 +520,15 @@ train <- function(data,
 
       #---
 
-      # Set the loss function and performance metric used with lightGBM
-      # This is here so that the Huber loss 'alpha' is set based on observed MAD
-      # See full list of built-in metrics: https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric-parameters
-      # And here about Huber: https://stats.stackexchange.com/questions/465937/how-to-choose-delta-parameter-in-huber-loss-function
+      # Set loss function and metric appropriate for variable response type
       params.obj <- switch(type,
-                           #continuous = list(objective = "regression", metric = "huber", alpha = 1.35 * mad(Y)),  # Will throw error if mad(Y) is zero
                            continuous = list(objective = "regression", metric = "l2"),
                            multiclass = list(objective = "multiclass", metric = "multi_logloss", num_class = 1L + max(Y)),
                            binary = list(objective = "binary", metric = "binary_logloss"))
 
       #-----
 
-      # Fit mean response model
+      # Fit conditional mean/probability model
       mmod <- fitLGB(dfull = dfull,
                      dtrain = dtrain,
                      dvalid = dvalid,
@@ -511,18 +536,15 @@ train <- function(data,
                      params.obj = params.obj,
                      cv.folds = cv.folds)
 
-      # TEMP
       hyper.results$m <- mmod$record_evals
 
-      # Save LightGBM mean model (m.txt) to disk
-      # NOTE: mmod$best_iter and mmod$best_score custom attributes are not retained in save
+      # Save LightGBM mean model (_m.txt) to disk
       lightgbm::lgb.save(booster = mmod, filename = file.path(path, paste0(y, "_m.txt")))
 
       #-----
 
-      # Predict conditional mean/probabilities for the training observations
+      # Predict conditional mean/probabilities for training observations
       if (block | type == "continuous") {
-        #mc <- predict(object = mmod, data = dmat[pi, xv, drop = FALSE], reshape = TRUE)
         mc <- predict(object = mmod, newdata = dmat[pi, xv, drop = FALSE])
         if (!is.matrix(mc)) mc <- matrix(mc)
         colnames(mc) <- paste0(y, "_m", 1:ncol(mc))
@@ -532,10 +554,9 @@ train <- function(data,
 
       #----
 
-      # Fit quantile models
+      # Fit quantile regression models for continuous variables
       if (type == "continuous") {
 
-        # Fit quantile models for each value in 'ptiles'
         qmods <- vector(mode = "list", length = length(ptiles))
         names(qmods) <- paste0("q", 1:length(ptiles))
 
@@ -548,15 +569,14 @@ train <- function(data,
                                cv.folds = cv.folds)
         }
 
-        # TEMP
         for (k in seq_along(ptiles)) hyper.results[[names(qmods)[k]]] <- qmods[[k]]$record_evals
 
-        # Predict conditional quantiles for full dataset
+        # Predict conditional quantiles across training set
         qc <- matrix(data = NA, nrow = sum(pi), ncol = length(ptiles))
         for (k in seq_along(ptiles)) qc[, k] <- predict(object = qmods[[k]], newdata = dmat[pi, xv, drop = FALSE])
         colnames(qc) <- paste0(y, "_", names(qmods))
 
-        # Save LightGBM quantile models (q**.txt) to disk
+        # Save LightGBM quantile models (_q**.txt) to disk
         for (k in seq_along(ptiles)) lightgbm::lgb.save(booster = qmods[[k]], filename = file.path(path, paste0(colnames(qc)[k], ".txt")))
         rm(qmods)
 
@@ -564,34 +584,31 @@ train <- function(data,
 
       #----
 
-      # Construct objects needed for subsequent nearest-neighbor and clustering operations
-      # Conditional expectations for each training observation
-      # Note that 'zc' only exists if 'y' is part of a block; NULL otherwise
+      # Append predicted conditional expectations, observed values, and weights
       if (block | type == "continuous") {
-        cd <- cbind(cd, data.table(zc, mc, qc)) # Add conditional expectations to retained 'cd' object
-        yi <- cbind(yi, Y[pi])  # Observed values associated with 'cd'
-        wi <- cbind(wi, W.int[pi]) # Observed weights associated with 'cd'
+        cd <- cbind(cd, data.table(zc, mc, qc))
+        yi <- cbind(yi, Y[pi])
+        wi <- cbind(wi, W.int[pi])
       }
 
-    } # Done processing 'y'; loop repeats with remaining variables in 'v' (if any)
+    } # Repeat for remaining variables in block 'v'
 
     #-----
 
     if (!is.null(cd)) {
 
-      # Center and scale the conditional expectations
-      # Scaling is only applied to conditional expectations that are not probabilities
-      # The simple check below for values between 0 and 1 is not entirely safe but unlikely to cause problems in practice
+      # Standardize conditional expectations (median centering + MAD scaling)
+      # Skip columns representing probabilities (bounded in [0, 1])
       for (j in 1:ncol(cd)) {
         x <- cd[[j]]
-        if (all(x >= 0 & x <= 1)) {  # Checks if the column looks to be conditional probabilities (no scaling applied)
+        if (all(x >= 0 & x <= 1)) {
           ncenter <- NA
           nscale <- NA
         } else {
           ncenter <- median(x)
           nscale <- mad(x)
-          if (nscale == 0) nscale <- sd(x) # Use sd() if mad() returns zero
-          if (nscale == 0) nscale <- 1  # If scale is still zero, set to 1 so that normalized values will all be 0.5 (prevents errors)
+          if (nscale == 0) nscale <- sd(x)
+          if (nscale == 0) nscale <- 1
           eps <- 0.001
           x <- (x - ncenter) / nscale
           x <- (x - qnorm(eps)) / (2 * qnorm(1 - eps))
@@ -604,24 +621,23 @@ train <- function(data,
 
       #-----
 
-      # Potentially partition the training observations into 'nclusters' clusters via kmeans
+      # Partition training observations into 'nclusters' centers via k-means in expectation space
       if (nclusters == 0) nclusters <- Inf
       ncd <- data.table::uniqueN(cd)
       nclusters <- min(nclusters, ncd)
 
       if (ncd > nclusters) {
 
-        # Distance of each row in 'cd' from the approximate median point
+        # Distance of each row in 'cd' from median point
         temp <- as.matrix(cd)
         for (j in 1:ncol(temp)) temp[, j] <- (temp[, j] - median(temp[, j])) ^ 2
         temp <- sqrt(rowSums(temp))
 
-        # Initial cluster centers for k-means
-        # This allows cluster selection to be deterministic and initial centers evenly spread through the distribution
+        # Deterministic initial cluster centers evenly spread across expectation distribution
         qt <- quantile(temp, probs = seq(from = 0, to = 1, length.out = nclusters), type = 1)
         ind <- unique(match(qt, temp))
 
-        # Perform k-means to identify optimal cluster centers
+        # Perform k-means to compute cluster centers
         km <- stats::kmeans(x = cd, centers = cd[ind, ], iter.max = 30)
         kcenters <- kc <- km$centers
 
@@ -631,168 +647,93 @@ train <- function(data,
 
       #-----
 
-      # Find the indices of nearest neighbors in
-
+      # Identify candidate nearest neighbors in donor pool surrounding cluster centers
       if (block) {
 
-        # If block = TRUE, then we simply retaining a fixed number (30) of nearest neighbors
-        # For each cluster center, find the 30 nearest neighbors in 'd' (approximate match; eps = 0.1)
+        # For variable blocks: retain fixed candidate pool of 30 nearest neighbors
         nn <- RANN::nn2(data = cd, query = kcenters, k = 30, eps = 0.1)
         nn <- nn$nn.idx
 
       } else {
 
-        # If block = FALSE, then we constructing conditional expectation neighborhood with up to max(krange) neighbors
-        # We are dealing with a single continuous fusion variable in this case
-
-        # For each cluster center, find the max(krange) nearest neighbors in 'd' (approximate match; eps = 0.1)
+        # For single continuous variables: construct optimal candidate pools up to max(krange)
         nn <- RANN::nn2(data = cd, query = kcenters, k = min(max(krange), nrow(cd)), eps = 0.1)
         nn <- nn$nn.idx
 
-        # Convert the 'kc' cluster centers back to original response units
-        # Original units are necessary for computing the objective function below
+        # Convert 'kc' cluster centers back to unscaled response units for error evaluation
         for (j in 1:ncol(kc)) kc[, j] <- denormalize(z = kc[, j], center = ycenter[j], scale = yscale[j], eps = 0.001)
 
-        # Create 'm' and 'w' matrices with the nearest-neighbor values and weights
-        m <- nn; m[] <- yi[m]  # Neighbor values matrix
-        w <- nn; w[] <- wi[w]  # Neighbor weights matrix
-        w <- w / mean(w)  # Prevents integer overflow in cumulative sum below
+        # Construct neighbor value and weight matrices
+        m <- nn; m[] <- yi[m]
+        w <- nn; w[] <- wi[w]
+        w <- w / mean(w)
 
-        # Cumulative weighted means
+        # Compute cumulative weighted candidate means
         denom <- matrixStats::rowCumsums(w)
         m1 <- matrixStats::rowCumsums(m * w) / denom
 
-        # Approximate conditional standard deviation, based on conditional quantiles
-        sdc <- abs(as.vector(matrixStats::rowDiffs(kc[, c(2, ncol(kc))]))) / diff(qnorm(range(ptiles)))  # Uses the max ptiles as the moment (need to test with larger number of ptiles)
-        z <- (m1 - kc[, 1]) / sdc  # Z-score using the assumed SD of the conditional distribution under assumption of normality
+        # Estimate conditional standard deviation from outer quantiles
+        sdc <- abs(as.vector(matrixStats::rowDiffs(kc[, c(2, ncol(kc))]))) / diff(qnorm(range(ptiles)))
+        z <- (m1 - kc[, 1]) / sdc
 
-        # Mean expectation error
+        # Compute conditional expectation loss terms (mean + quantile errors)
         merr <- 1 - dnorm(z) / dnorm(0)
 
-        # Quantile expectation error
         qerr <- lapply(2:ncol(kc), function(i) {
-          tau <- ptiles[i - 1]  # Target percentile
-          emax <- ifelse(tau > 0.5, tau, 1 - tau)  # Maximum possible error
+          tau <- ptiles[i - 1]
+          emax <- ifelse(tau > 0.5, tau, 1 - tau)
           p <- matrixStats::rowCumsums((m <= kc[, i]) * w) / denom
           abs(p - tau) / emax
         })
 
-        # Visualize the maximum error as function of 'tau' (percentile)
-        # tau <- seq(0, 1, length.out = 100)
-        # plot(tau, ifelse(tau > 0.5, tau, 1 - tau))
-        # plot(tau, pmax(tau, 1 - tau))  # Identical
-
-        #---
-
-        # Average error (mean and quantile) across the conditional values
-        # Note that this is effectively a weighted mean using the weights applied previous via 'colweight' vector
+        # Aggregate error across mean and quantile predictions
         err <- merr + Reduce("+", qerr)
 
-        # This is only applied if there are enough columns in 'err'
         if (ncol(err) > 5) {
-
-          # Moving average of the 'err' values
-          # This smooths the noise when the number of neighbors is low
-          # Lagged, 5-neighbor window
+          # Apply 5-neighbor moving average to smooth local neighbor noise
           err <- sapply(5:ncol(err), function(j) matrixStats::rowMeans2(err, cols = (j - 4):j))
-
-          # Set full columns of 'err' to Inf to ensure min(krange) number of selected neighbors is respected
           if (min(krange) > 5) err[, 1:(min(krange) - 5)] <- Inf
-
-          # Offset used in following code
           delta <- 4L
-
         } else {
           delta <- 0L
         }
 
-        # Each row's minimum error column, prior to enforcing 'tol'
-        b0 <- max.col(-err, ties.method = "first")
-
-        # Enforce absolute and relative error tolerance
-        # Any error within 'tol' of the minimum is considering identical to the minimum and all are set to zero
-        # This reduces the number of neighbor indices that need to be retained without affecting results materially
+        # Enforce tolerance bounds around minimal error to select optimal k
         kerror <- matrixStats::rowMins(err, na.rm = TRUE)
-        err[err <= pmax(kerror, 0.01)] <- 0  # Absolute tolerance
-        err[err <= pmax(kerror * 1.05, kerror + 0.005)] <- 0  # Relative tolerance
+        err[err <= pmax(kerror, 0.01)] <- 0
+        err[err <= pmax(kerror * 1.05, kerror + 0.005)] <- 0
 
-        # Error-minimizing column index after absolute tolerance fix
-        # Can compare to 'b0' to see how 'tol' affects number of neighbors
         kbest <- max.col(-err, ties.method = "first")
-
-        # Final "best k"
-        # Add 4 (delta) because the first moving average window (i.e column 1 in 'err') includes the 5 nearest neighbors
         kbest <- kbest + delta
 
-        # Manual check of results
-        # r <- 1724  # Row number
-        # vj <- m[r, 1:kbest[r]]
-        # c(mean(vj), quantile(vj, probs = ptiles))
-        # kc[r, ]
-        # plot(density(vj, from = 0))
-        # abline(v = kc[r,], col = 2)
-
-        #---
-
-        # Set neighbors beyond the error-minimizing k to NA
-        # Reduces size on disk when 'nn' matrix is saved
+        # Trim neighbor indices beyond optimal k to optimize disk space
         for (j in 1:ncol(err)) nn[, j + delta] <- replace(nn[, j + delta], kbest < (j + delta), NA)
 
-        # This operation can be used in fuse() to recreate 'kbest' quickly from 'nn'
-        # test <- matrixStats::rowCounts(is.na(nn), value = FALSE)
-        # all.equal(test, kbest)
-
-        # Drop any columns in 'nn' that are only NA's
-        # Not necessary to retain on disk
         keep <- matrixStats::colSums2(nn, na.rm = TRUE) > 0
         if (any(!keep)) nn <- nn[, keep]
 
-        # Convert the index values in 'nn' to "complete data" indices
-        # This allows fuse() to lookup response values using the full dataset, rather than worry about non-zero subsets
-        # Note that this is unnecessary in blocked case, b/c 'pi' necessarily contains all indices (no zero model)
+        # Convert relative neighborhood indices to absolute row indices in donor dataset
         nn[] <- which(pi)[nn]
 
-        #---
-
-        # Calculate the R-squared value between each cluster's mean expectation and the mean value of the 'kbest' neighbors
-        # These values should be pretty close overall; report result to console
-        mb <- matrixStats::rowCollapse(m1, kbest)  # Extract the neighborhood mean associated with 'best' k
+        # Compute R-squared between cluster expectations and optimal neighborhood means
+        mb <- matrixStats::rowCollapse(m1, kbest)
         ssr <- sum((kc[, 1] - mb) ^ 2)
         sst <- sum((kc[, 1] - mean(kc[, 1])) ^ 2)
-        r2 <- 1 - ssr / sst  # r-squared
-        if (verbose) cat("  -- R-squared of cluster means:", round(r2, 3), "\n")
-        #plot(kc[, 1], mb); abline(0, 1, col = 2)
+        r2 <- 1 - ssr / sst
+        if (verbose) cli::cli_inform("  -- R-squared of cluster means: {round(r2, 3)}")
 
-        # Report to console info about the preferred number of neighbors across clusters
         if (verbose) {
-          cat("  -- Number of neighbors in each cluster:\n")
+          cli::cli_inform("  -- Number of neighbors in each cluster:")
           print(summary(kbest))
         }
 
       }
 
-      #-----
-
-      # If one wanted to smooth the neighborhood values...
-      # Play with kernel density
-      # x <- na.omit(m[2196, ])  # Neighborhood values
-      # xw <- na.omit(w[2196, ])
-      # ds <- density(x, weights = xw / sum(xw), from = 0, to = 1.2 * max(x))
-      # plot(ds)
-      # weighted.mean(x, xw)
-      # weighted.mean(ds$x, ds$y)
-      # quantile(x, probs = ptiles)
-      # Use weighted quantile function to see how density matches 'kc'
-      # Then could optimize bandwith to minimize quantile error
-      # The issue is probably how to estimate it quickly; maybe a manual calculation
-      # See here: https://rpubs.com/mcocam12/KDF_byHand
-
-
     }
 
     #---
 
-    # Assemble output list
+    # Assemble output object for current fusion step
     out <- list(xpreds = xv,
                 ycenter = ycenter,
                 yscale = yscale,
@@ -807,28 +748,24 @@ train <- function(data,
 
   #-----
 
-  # Apply buildFun() to each index in 'ylist', using forked parallel processing or serial (depending on 'fork' variable)
-  # NOTE: pblapply() has significant overhead, so using straight mclapply for the time being
+  # Execute step-wise model building across fusion sequence (forked or serial execution)
   if (fork) {
-    cat("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)", "\n", sep = "")
+    cli::cli_inform("Processing {length(pfixes)} training steps in parallel via forking ({cores} cores)")
     out <- parallel::mclapply(X = 1:length(ylist),
                               FUN = buildFun,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
   } else {
-    if (cores > 1) cat("Using OpenMP multithreading within LightGBM (", cores, " cores)", "\n", sep = "")
+    if (cores > 1) cli::cli_inform("Using OpenMP multithreading within LightGBM ({cores} cores)")
     out <- lapply(X = 1:length(ylist),
                   FUN = buildFun,
                   verbose = TRUE)
   }
 
-  # Troubleshooting buildFun()
-  #for (i in 1:length(ylist)) buildFun(i, verbose = TRUE)
-
   #-----
 
-  # Assemble metadata
+  # Collect package and run metadata
   metadata <- list(
     xclass = xclass,
     xlevels = xlevels,
@@ -841,29 +778,27 @@ train <- function(data,
     nobs = nrow(dmat),
     timing = difftime(Sys.time(), t0),
     version = list(fusionModel = utils::packageVersion("fusionModel"), R = getRversion()),
-    #call = match.call.defaults()
     call = match.call()
   )
 
-  # Add the metadata information returned by buildFun()
+  # Merge step outputs into metadata structure
   metadata <- c(metadata, purrr::transpose(out))
 
-  # Save metadata to disk
+  # Save metadata object to temporary archive path
   saveRDS(metadata, file = file.path(td, "metadata.rds"))
 
   #-----
 
-  # Save final model object to disk
-  # Requires 'zip' package: https://cran.r-project.org/web/packages/zip/index.html
-  # Zip up all of the model directories
-  zip::zip(zipfile = fsn, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)  # Zips to the temporary directory
-  file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = fsn, overwrite = TRUE)  # Copy .zip/.fsn file to desired location
-  cat("Fusion model saved to:\n", fsn, "\n")
+  # Compress model files into output .fsn archive
+  zip::zip(zipfile = fsn, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)
+  file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = fsn, overwrite = TRUE)
+
+  cli::cli_alert_success("Fusion model saved to: {.file {fsn}}")
   unlink(td)
 
-  # Report processing time
+  # Report total execution time
   tout <- difftime(Sys.time(), t0)
-  cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
+  cli::cli_inform("Total processing time: {signif(as.numeric(tout), 3)} {attr(tout, 'units')}")
 
   # Return .fsn file path invisibly
   invisible(fsn)

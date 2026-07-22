@@ -2,7 +2,7 @@
 % Please edit documentation in R/train.R
 \name{train}
 \alias{train}
-\title{Train a fusion model}
+\title{Train a Data Fusion Model}
 \usage{
 train(
   data,
@@ -20,92 +20,142 @@ train(
 )
 }
 \arguments{
-\item{data}{Data frame. Donor dataset. Categorical variables must be factors and ordered whenever possible.}
+\item{data}{A data frame (or \code{data.table}) containing the donor microdata.
+Categorical variables should be formatted as factors (ordered whenever applicable).}
 
-\item{y}{Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. Variables are fused in the order provided. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.}
+\item{y}{Character vector or list. Variable(s) in \code{data} to be fused to a
+recipient dataset. Variables are modeled and fused sequentially in the order
+provided. If \code{y} is a list, each element can be a character vector representing
+a "block" of variables to be sampled jointly during fusion to preserve
+multivariate dependence.}
 
-\item{x}{Character or list. Predictor variables in \code{data} common to donor and eventual recipient. If a list, each slot specifies the \code{x} predictors to use for each \code{y}.}
+\item{x}{Character vector or list. Predictor variable name(s) common to both donor
+and recipient datasets. If a list, each element specifies the predictor set to use
+for the corresponding element in \code{y}. If a character vector, earlier \code{y}
+variables in the sequence are automatically appended as predictors for subsequent
+\code{y} models.}
 
-\item{fsn}{Character. File path where fusion model will be saved. Must use \code{.fsn} suffix.}
+\item{fsn}{Character string. File path where the trained fusion model archive will
+be saved. Must end with the \code{.fsn} extension. Default is \code{"fusion_model.fsn"}.}
 
-\item{weight}{Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.}
+\item{weight}{Character string. Name of the column in \code{data} containing survey
+or sampling weights. If \code{NULL} (default), uniform observation weights are assumed.}
 
-\item{nfolds}{Numeric. Number of cross-validation folds used for LightGBM model training. Or, if \code{nfolds < 1}, the fraction of observations to use for training set; remainder used for validation (faster than cross-validation).}
+\item{nfolds}{Numeric. Number of cross-validation folds used during LightGBM model
+tuning. If \code{0 < nfolds < 1}, it represents the proportion of observations allocated
+to training, with the remainder used for validation (substantially faster than
+full cross-validation). Default is \code{5}.}
 
-\item{nquantiles}{Numeric. Number of quantile models to train for continuous \code{y} variables, in addition to the conditional mean. \code{nquantiles} evenly-distributed percentiles are used. For example, the default \code{nquantiles = 2} yields quantile models for the 25th and 75th percentiles. Higher values may produce more accurate conditional distributions at the expense of computation time. Even \code{nquantiles} is recommended since the conditional mean tends to capture the central tendency, making a median model superfluous.}
+\item{nquantiles}{Numeric. Number of quantile models to fit for continuous \code{y}
+variables in addition to the conditional mean model. Specified quantiles are
+evenly spaced. For example, \code{nquantiles = 2} (default) models the 25th and 75th
+percentiles. Even values are recommended, as the conditional mean already captures
+central tendency.}
 
-\item{nclusters}{Numeric. Maximum number of k-means clusters to use. Higher is better but at computational cost. \code{nclusters = 0} or \code{nclusters = Inf} turn off clustering.}
+\item{nclusters}{Numeric. Maximum number of \eqn{k}-means clusters used to group donor
+observations in conditional expectation space. Higher values increase donor selection
+precision at the expense of memory and processing time. Set to \code{0} or \code{Inf}
+to skip clustering (i.e., treat every donor row as a cluster center). Default is \code{2000}.}
 
-\item{krange}{Numeric. Minimum and maximum number of nearest neighbors to use for construction of continuous conditional distributions. Higher \code{max(krange)} is better but at computational cost.}
+\item{krange}{Numeric vector of length 2. Specifies the minimum and maximum number of
+nearest neighbors (\eqn{k}) evaluated when selecting optimal candidate pools for
+continuous conditional distributions. Default is \code{c(10, 500)}.}
 
-\item{hyper}{List. LightGBM hyperparameters to be used during model training. If \code{NULL}, default values are used. See Details and Examples.}
+\item{hyper}{List. LightGBM hyperparameter grid or custom values to evaluate during
+training. If \code{NULL} (default), a standardized baseline configuration optimized for
+survey fusion is used. See Details.}
 
-\item{fork}{Logical. Should parallel processing via forking be used, if possible? See Details.}
+\item{fork}{Logical. If \code{TRUE}, uses parallel processing via process forking
+(\code{\link[parallel]{mclapply}}) across fusion steps. Only supported on Unix/Linux/macOS platforms.
+Default is \code{FALSE}.}
 
-\item{cores}{Integer. Number of physical CPU cores used for parallel computation. When \code{fork = FALSE} or on Windows platform (since forking is not possible), the fusion variables/blocks are processed serially but LightGBM uses \code{cores} for internal multithreading via OpenMP. On a Unix system, if \code{fork = TRUE}, \code{cores > 1}, and \code{cores <= length(y)} then the fusion variables/blocks are processed in parallel via \code{\link[parallel]{mclapply}}.}
+\item{cores}{Integer. Number of physical CPU cores allocated to computation. When
+\code{fork = FALSE} or on Windows, fusion steps are processed serially, while
+LightGBM utilizes \code{cores} for internal OpenMP multithreading. When \code{fork = TRUE}
+on Unix, independent fusion steps are executed concurrently across \code{cores}.
+Default is \code{1}.}
 }
 \value{
-A fusion model object (.fsn) is saved to \code{fsn}.
+Returns the file path to the saved \code{.fsn} archive invisibly.
 }
 \description{
-Train a fusion model on "donor" data using sequential \href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} models to model the conditional distributions. The resulting fusion model (.fsn file) can be used with \code{\link{fuse}} to simulate outcomes for a "recipient" dataset.
+Trains a statistical fusion model on a "donor" dataset using sequential
+\href{https://lightgbm.readthedocs.io/en/latest/}{LightGBM} gradient boosting
+models to capture conditional distributions. The resulting fitted model archive
+(\code{.fsn} file) contains the conditional expectations, candidate donor pool
+indices, and metadata required by \code{\link{fuse}} to simulate synthetic outcomes
+onto a "recipient" dataset.
 }
 \details{
-When \code{y} is a list, each slot indicates either a single variable or, alternatively, multiple variables to fuse as a block. Variables within a block are sampled jointly from the original donor data during fusion. See Examples.
-
-\code{y} variables that exhibit no variance or continuous \code{y} variables with less than \code{10 * nfolds} non-zero observations (minimum required for cross-validation) are automatically removed with a warning.
-
-The fusion model written to \code{fsn} is a zipped archive created by \code{\link[zip]{zip}} containing models and data required by \code{\link{fuse}}.
-
-The \code{hyper} argument can be used to specify the LightGBM hyperparameter values over which to perform a "grid search" during model training. \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html}{See here} for the full list of parameters. For each combination of hyperparameters, \code{nfolds} cross-validation is performed using \code{\link[lightgbm]{lgb.cv}} with an early stopping condition. The parameter combination with the lowest loss function value is used to fit the final model via \code{\link[lightgbm]{lgb.train}}. The more candidate parameter values specified in \code{hyper}, the longer the processing time. If \code{hyper = NULL}, a single set of parameters is used with the following default values:
-
-\itemize{
-\item boosting = "gbdt"
-\item data_sample_strategy = "goss"
-\item num_leaves = 31
-\item feature_fraction = 0.8
-\item max_depth = 5
-\item min_data_in_leaf = max(10, round(0.001 * nrow(data)))
-\item num_iterations = 2500
-\item learning_rate= 0.1
-\item max_bin = 255
-\item min_data_in_bin = 3
-\item max_cat_threshold = 32
+\subsection{Sequential and Block Modeling}{
+Data fusion proceeds sequentially through the variables specified in \code{y}. To
+preserve complex dependencies among tightly coupled outcomes (e.g., fuel expenditure
+shares), supply those variables as a character vector within a list element of \code{y}.
+Block variables are predicted jointly, and donor observations within blocks are sampled
+en masse during fusion.
 }
-Typical users will only have reason to modify the hyperparameters listed above. Note that \code{num_iterations} only imposes a ceiling, since early stopping will typically result in models with a lower number of iterations. See Examples.
 
-Testing with small-to-medium size datasets suggests that forking is typically faster than OpenMP multithreading (the default). However, forking will sometimes "hang" (continue to run with no CPU usage or error message) if an OpenMP process has been previously used in the same session. The issue appears to be related to Intel's OpenMP implementation (\href{https://github.com/Rdatatable/data.table/issues/2418}{see here}). This can be triggered when other operations are called before \code{train()} that use \code{\link[data.table]{data.table}} or \code{\link[fst]{fst}} in multithread mode. If you experience hanged forking, try calling \code{data.table::setDTthreads(1)} and \code{fst::threads_fst(1)} immediately after \code{library(fusionModel)} in a new session.
+\subsection{Hyperparameter Optimization}{
+If a list of vectors is supplied to \code{hyper}, \code{train()} performs grid search
+across all parameter combinations using \eqn{V}-fold cross-validation (\code{\link[lightgbm]{lgb.cv}})
+with early stopping. The optimal parameter combination (minimizing loss) is selected to fit
+the final booster.
+
+When \code{hyper = NULL}, default hyperparameters applied include:
+\itemize{
+\item \code{boosting = "gbdt"}
+\item \code{data_sample_strategy = "goss"}
+\item \code{num_leaves = 31}
+\item \code{feature_fraction = 0.8}
+\item \code{max_depth = 5}
+\item \code{min_data_in_leaf = max(10, round(0.001 * nrow(data)))}
+\item \code{num_iterations = 2500}
+\item \code{learning_rate = 0.1}
+\item \code{max_bin = 255}
+\item \code{min_data_in_bin = 3}
+\item \code{max_cat_threshold = 32}
+}
+}
+
+\subsection{Parallel Execution & OpenMP Considerations}{
+On Unix-like operating systems, process forking via \code{fork = TRUE} can yield faster
+execution times than OpenMP multithreading. However, if OpenMP threads have already been
+initialized in the current R session (e.g., by \code{\link[data.table]{data.table}} or
+\code{\link[fst]{fst}}), forking may hang. If this occurs, execute \code{data.table::setDTthreads(1)}
+and \code{fst::threads_fst(1)} immediately after launching R before calling \code{train()}.
+}
 }
 \examples{
-# Build a fusion model using RECS microdata
-# Note that "fusion_model.fsn" will be written to working directory
-?recs
+\dontrun{
+# Load sample RECS survey dataset supplied with fusionModel
+data(recs)
+# Define fusion targets and common predictors
 fusion.vars <- c("electricity", "natural_gas", "aircon")
 predictor.vars <- names(recs)[2:12]
+# 1. Basic model training (saves output to working directory)
 fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
-
-# When 'y' is a list, it can specify variables to fuse as a block
-fusion.vars <- list("electricity", "natural_gas", c("heating_share", "cooling_share", "other_share"))
-fusion.vars
-train(data = recs, y = fusion.vars, x = predictor.vars)
-
-# When 'x' is a list, it specifies which predictor variables to use for each 'y'
+# 2. Block fusion: Preserving joint dependency across component shares
+fusion.vars.block <- list(
+  "electricity",
+  "natural_gas",
+  c("heating_share", "cooling_share", "other_share")
+)
+train(data = recs, y = fusion.vars.block, x = predictor.vars, fsn = "model_block.fsn")
+# 3. Custom predictor specification per fusion step
 xlist <- list(predictor.vars[1:4], predictor.vars[2:8], predictor.vars)
-xlist
-train(data = recs, y = fusion.vars, x = xlist)
-
-# Specify a single set of LightGBM hyperparameters
-# Here we use Random Forests instead of the default Gradient Boosting Decision Trees
+train(data = recs, y = fusion.vars.block, x = xlist, fsn = "model_xlist.fsn")
+# 4. Hyperparameter override (Random Forest boosting alternative)
 train(data = recs, y = fusion.vars, x = predictor.vars,
-      hyper = list(boosting = "rf",
-                   feature_fraction = 0.6,
-                   max_depth = 10
-      ))
-
-# Specify a range of LightGBM hyperparameters to search over
-# This takes longer, because there are more models to test
+      hyper = list(boosting = "rf", feature_fraction = 0.6, max_depth = 10))
+# 5. Grid search hyperparameter tuning
 train(data = recs, y = fusion.vars, x = predictor.vars,
-      hyper = list(max_depth = c(5, 10),
-                   feature_fraction = c(0.7, 0.9)
-      ))
+      hyper = list(max_depth = c(5, 10), feature_fraction = c(0.7, 0.9)))
+}
+}
+\references{
+Ummel, K., et al. (2024). Multidimensional well-being of US households at a fine spatial scale using fused household surveys.
+\emph{Scientific Data}, 11(142). \doi{10.1038/s41597-023-02788-7}
+}
+\seealso{
+\code{\link{fuse}}, \code{\link{validate}}, \code{\link{fitLGB}}
 }

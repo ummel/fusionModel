@@ -1,8 +1,25 @@
-# Function to "clean" a numeric vector by reducing to significant digits and converting to integer, if possible
-# If the input can be immediately coerced to integer, it is and returned as such
-# Otherwise, the number of digits is reduced and integer coercion attempted one final time
+#' Clean a Numeric Vector by Digit Reduction and Integer Coercion
+#'
+#' @description
+#' `cleanNumeric()` prepares a numeric vector for memory efficiency and optimal modeling
+#' compatibility. It attempts to safely coerce numeric values to standard R integers if
+#' doing so preserves precision within specified tolerance thresholds.
+#'
+#' @param x A numeric vector to clean.
+#' @param tol Numeric scalar specifying the allowable relative percentage difference when
+#'   reducing precision via \code{\link{signifDigits}}. Default is `0.001`.
+#' @param minimize Logical. If `TRUE`, attempts Z-score transformation first to minimize
+#'   the count of distinct values. Default is `FALSE`.
+#' @param threshold Numeric scalar between 0 and 1 indicating the required fraction of
+#'   integer-coercible values needed to trigger integer conversion. Default is `0.999`.
+#'
+#' @return A cleaned numeric vector, converted to integer where possible or rounded to
+#'   significant digits.
+#'
+#' @keywords internal
+#' @noRd
 cleanNumeric <- function(x, tol = 0.001, minimize = FALSE, threshold = 0.999) {
-  x <- convertInteger(x, threshold = 1)  # This coerces to integer, if possible
+  x <- convertInteger(x, threshold = 1)  # Coerces to integer, if possible
   if (is.double(x)) {
     x <- signifDigits(x, tol = tol, minimize = minimize)
     x <- convertInteger(x, threshold = threshold)
@@ -12,9 +29,22 @@ cleanNumeric <- function(x, tol = 0.001, minimize = FALSE, threshold = 0.999) {
 
 #------------------
 
-# Function to return numeric vector rounded to reasonable significant digits
-# Returns a significant digit-ized result that is within 'tol' (percent) of the original value for all observations
-# If minimize = TRUE, function will try converting x to Z-scores first and 'tol' assessed relative to the Z-scores, then return result that minimizes number of unique values
+#' Round Numeric Vector to Relative Significant Digits
+#'
+#' @description
+#' Rounds a numeric vector to a dynamic number of significant digits such that all returned
+#' values fall within a relative error tolerance of the original inputs.
+#'
+#' @param x A numeric vector.
+#' @param tol Numeric scalar defining the maximum allowable relative deviation
+#'   `abs(approx - orig) / abs(orig)`. Default is `0.001`.
+#' @param minimize Logical. If `TRUE`, evaluates scale transformations (Z-scores) to find
+#'   a representation that minimizes the total count of unique values. Default is `FALSE`.
+#'
+#' @return A numeric vector rounded to allowable significant digits.
+#'
+#' @keywords internal
+#' @noRd
 signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 
   intFUN <- function(x, orig = x) {
@@ -45,9 +75,21 @@ signifDigits <- function(x, tol = 0.001, minimize = FALSE) {
 
 #------------------
 
-# Function to convert a numeric vector to integer, if possible
-# Checks if maximum value is coercible to 32-bit integer; see ?integer "Details"
-# If the fraction of integer-coercible values exceeds 'threshold', then non-integer values are coerced to integer
+#' Conditionally Convert Numeric Vector to Integer
+#'
+#' @description
+#' Evaluates whether values in a numeric vector fall within 32-bit signed integer bounds
+#' (`.Machine$integer.max`) and satisfy an integer-coercion threshold fraction.
+#'
+#' @param x A numeric or logical vector.
+#' @param threshold Numeric scalar between 0 and 1 representing the minimum proportion of
+#'   values that must be whole numbers to trigger conversion. Default is `0.99`.
+#'
+#' @return An integer vector if conditions are satisfied; otherwise the original vector or
+#'   logical vector (if all values are `NA`).
+#'
+#' @keywords internal
+#' @noRd
 convertInteger <- function(x, threshold = 0.99) {
   if (collapse::allNA(x)) {
     x <- as.logical(x)
@@ -65,13 +107,36 @@ convertInteger <- function(x, threshold = 0.99) {
 
 #-------------------
 
-# Function returns TRUE if 'x' has only one non-NA value OR is entirely NA
+#' Check if a Vector Lacks Variation
+#'
+#' @description
+#' Identifies whether a vector contains zero non-trivial variance (i.e., has at most one
+#' unique non-`NA` value or is entirely `NA`).
+#'
+#' @param x An atomic vector.
+#'
+#' @return Logical scalar (`TRUE` if the vector has <= 1 unique non-`NA` value).
+#'
+#' @keywords internal
+#' @noRd
 novary <- function(x) data.table::uniqueN(x, na.rm = TRUE) <= 1
 
 #------------------
 
-# Function to detect and impute any missing values in 'data'
-# Performs median imputation of continuous variables and frequency-weighted sampling of categorical variables
+#' Calculate Imputation Replacement Values
+#'
+#' @description
+#' Derives replacement values for missing data points (`NA`). Uses median value replacement
+#' for numeric vectors and weighted random sampling based on non-missing frequency
+#' distributions for categorical vectors.
+#'
+#' @param x Vector containing missing values.
+#' @param na.ind Logical vector indicating location of `NA` values (`TRUE` for missing).
+#'
+#' @return Imputed values matching the count of `NA` occurrences (`sum(na.ind)`).
+#'
+#' @keywords internal
+#' @noRd
 imputationValue <- function(x, na.ind) {
   if (is.numeric(x)) {
     m <- median(x, na.rm = TRUE)
@@ -85,7 +150,19 @@ imputationValue <- function(x, na.ind) {
 
 #------------------
 
-# Function to treat integer and numeric as equal when checking for identical classes in fuse()
+#' Compare Equality of Variable Classes
+#'
+#' @description
+#' Evaluates whether two class descriptors are identical, treating `"integer"` and `"numeric"`
+#' as equivalent numeric types for data fusion operations.
+#'
+#' @param x Character vector representing class attributes of first object.
+#' @param y Character vector representing class attributes of second object.
+#'
+#' @return Logical scalar indicating structural class equivalence.
+#'
+#' @keywords internal
+#' @noRd
 sameClass <- function(x, y) {
   if (x[1] == "integer") x <- "numeric"
   if (y[1] == "integer") y <- "numeric"
@@ -94,16 +171,38 @@ sameClass <- function(x, y) {
 
 #------------------
 
-# Weighted mean; slightly faster than weighted.mean()
+#' Fast Weighted Mean Computation
+#'
+#' @description
+#' Efficient wrapper around \code{\link[matrixStats]{weightedMean}} for rapid weighted average
+#' calculations.
+#'
+#' @param x Numeric vector of values.
+#' @param w Numeric vector of non-negative weights matching length of `x`.
+#'
+#' @return Numeric scalar representing weighted arithmetic mean.
+#'
+#' @keywords internal
+#' @noRd
 wmean <- function(x, w) {
   matrixStats::weightedMean(x, w)
 }
 
 #------------------
 
-# Weighted standard deviation
-# Equivalent to Hmisc::wtd.var() with normwt = TRUE and taking sqrt() of result
-# Equivalent to na.rm = TRUE
+#' Weighted Standard Deviation Calculation
+#'
+#' @description
+#' Computes sample standard deviation incorporating observation weights. Results match
+#' `Hmisc::wtd.var()` with normalized weighting enabled (`normwt = TRUE`).
+#'
+#' @param x Numeric vector of sample observations.
+#' @param w Numeric vector of weights.
+#'
+#' @return Numeric scalar standard deviation.
+#'
+#' @keywords internal
+#' @noRd
 wsd <- function(x, w) {
   if (anyNA(x)) {
     i <- !is.na(x)
@@ -118,15 +217,26 @@ wsd <- function(x, w) {
 
 #------------------
 
-# Detect if a numeric variable is likely to be zero-inflated
-# Returns TRUE or FALSE
+#' Detect Zero-Inflated Numeric Distribution
+#'
+#' @description
+#' Evaluates density profile comparison to classify if a numeric variable exhibits
+#' structural zero inflation.
+#'
+#' @param x Vector to evaluate.
+#' @param threshold Numeric scalar threshold for density ratio test. Default is `0.9`.
+#'
+#' @return Logical scalar (`TRUE` if distribution is zero-inflated).
+#'
+#' @keywords internal
+#' @noRd
 inflated <- function(x, threshold = 0.9) {
   if (is.numeric(x)) {
     if (sum(x == 0) >= 0.01 * length(x)) {
       d1 <- density(x)
       d2 <- density(x[x != 0], bw = d1$bw, from = min(d1$x), to = max(d1$x))
       z <- which.min(abs(d1$x))
-      d2$y[z] / d1$y[z] < threshold  # Arbitrary threshold for detecting zero-inflated distribution
+      d2$y[z] / d1$y[z] < threshold  # Threshold for detecting zero-inflated distribution
     } else {
       FALSE
     }
@@ -137,10 +247,20 @@ inflated <- function(x, threshold = 0.9) {
 
 #-------------------
 
-# Function to integerize real (non-integer) positive weights
-# 'mincor' refers to the minimum allowable Pearson correlation between 'x' and the integerized version of 'x'
-# Function will also handle 'x' that is constant or already integer
-
+#' Convert Real Positive Weights to Integers
+#'
+#' @description
+#' Iteratively scales and rounds continuous positive sampling weights into integers while
+#' preserving a target Pearson correlation threshold relative to original continuous values.
+#'
+#' @param x Numeric vector of positive weights.
+#' @param mincor Numeric scalar specifying target minimum allowable correlation between original
+#'   and integerized weights. Default is `0.999`.
+#'
+#' @return Integer vector of integerized weights.
+#'
+#' @keywords internal
+#' @noRd
 integerize <- function(x, mincor = 0.999) {
   stopifnot(all(x > 0))
   if (sd(x) == 0) {
@@ -175,11 +295,18 @@ integerize <- function(x, mincor = 0.999) {
 
 #------------------
 
-# Convert data frame to 'dgCMatrix' sparse matrix for use by lightgbm
-# Convert factors to numeric, by reference (efficient)
-# Sets minimal categorical integer value to zero
-# Converts to Matrix class 'dgCMatrix'
-# See here: https://www.gormanalysis.com/blog/sparse-matrix-construction-and-use-in-r/
+#' Convert Data Frame to Matrix Representation
+#'
+#' @description
+#' Efficiently converts factors and logical columns in a data frame or `data.table` to integer
+#' values before casting into a numeric matrix.
+#'
+#' @param data Data frame or `data.table` to transform.
+#'
+#' @return Standard R numeric matrix object.
+#'
+#' @keywords internal
+#' @noRd
 to_mat <- function(data) {
   dmat <- as.data.table(data)
   for (v in names(dmat)) {
@@ -192,15 +319,42 @@ to_mat <- function(data) {
 
 #------------------
 
-# Normalize continuous variables prior to KNN
-# Assumes that there are no NA's in 'x'
+#' Normalize Continuous Variables for Distance Computation
+#'
+#' @description
+#' Centers and scales input vectors before standard normal quantile compression into a
+#' bounded unit metric space.
+#'
+#' @param x Numeric vector to normalize.
+#' @param center Location shift parameter (typically mean or median).
+#' @param scale Scale parameter (typically standard deviation or MAD).
+#' @param eps Small offset numeric scalar bound preventing infinite quantile estimates.
+#'   Default is `0.001`.
+#'
+#' @return Bounded, scaled numeric vector.
+#'
+#' @keywords internal
+#' @noRd
 normalize <- function(x, center, scale, eps = 0.001) {
   y <- (x - center) / scale
   z <- (y - qnorm(eps)) / (2 * qnorm(1 - eps))
   return(z)
 }
 
-# Back-transform normalized values
+#' Denormalize Bounded Values Back to Original Scale
+#'
+#' @description
+#' Reverses continuous transformation applied by \code{\link{normalize}}.
+#'
+#' @param z Normalized numeric vector.
+#' @param center Original centering location shift parameter used in normalization.
+#' @param scale Original scaling parameter used in normalization.
+#' @param eps Epsilon boundary offset used during initial normalization. Default is `0.001`.
+#'
+#' @return Numeric vector in original units and scale.
+#'
+#' @keywords internal
+#' @noRd
 denormalize <- function(z, center, scale, eps = 0.001) {
   y <- 2 * z * qnorm(1 - eps) + qnorm(eps)
   y * scale + center
@@ -208,13 +362,23 @@ denormalize <- function(z, center, scale, eps = 0.001) {
 
 #------------------
 
-# Function to efficiently one-hot encode factor variables in a data frame
-# Based on suggestion here: https://stackoverflow.com/questions/39905820/how-to-one-hot-encode-factor-variables-with-data-table
-# Note that original class of input 'data' is returned (data.frame or data.table)
-# If dropOriginal = TRUE, the original factor columns are dropped
-# If dropUnusedLevels = TRUE, unused factor levels are dropped
-# Adds attribute "one_hot_link" to output data.frame
-
+#' Efficient One-Hot Encoding of Factor Variables
+#'
+#' @description
+#' Encodes factor columns in a data frame into binary dummy indicator columns using optimized
+#' sparse matrix representations.
+#'
+#' @param data A `data.frame` or `data.table` containing columns to encode.
+#' @param dropOriginal Logical. If `TRUE`, drops source factor columns after encoding. Default
+#'   is `TRUE`.
+#' @param dropUnusedLevels Logical. If `TRUE`, removes factor levels with zero occurrence in the
+#'   data. Default is `FALSE`.
+#'
+#' @return Object of same class as `data` containing additional dummy columns, with a link
+#'   data frame attached under the `"one_hot_link"` attribute.
+#'
+#' @keywords internal
+#' @noRd
 one_hot <- function(data, dropOriginal = TRUE, dropUnusedLevels = FALSE) {
 
   stopifnot(is.data.frame(data))
@@ -231,41 +395,23 @@ one_hot <- function(data, dropOriginal = TRUE, dropUnusedLevels = FALSE) {
     if (dropOriginal) data[, c(y) := NULL]
 
     # Construct levels linkage
-    # Must be consistent with how Matrix::sparse.model.matrix (or data.table) names the dummy variables
     dlink <- lapply(y, function(v) {
       lev <- levels(dy[[v]])
-      data.frame(original = v, dummy = paste(v, lev, sep = ""), level = lev)  # If using Matrix::sparse.model.matrix
-      #data.frame(original = v, dummy = paste(v, lev, sep = "_"), level = lev)  # If using data.table implementation
+      data.frame(original = v, dummy = paste(v, lev, sep = ""), level = lev)
     })
     dlink <- do.call(rbind, dlink)
 
-    #---
-
-    # Pure data.table implementation
-    # dy[, ID__ := .I]
-    # for (i in y) set(dy, j = i, value = factor(paste(i, dy[[i]], sep = "_"), levels = paste(i, levels(dy[[i]]), sep = "_")))
-    # dy <- dcast(melt(dy, id = 'ID__', value.factor = TRUE), ID__ ~ value, drop = dropUnusedLevels, fun = length)
-    # dy[, ID__ := NULL]
-
-    #---
-
-    # ALT: Matrix package implementation (somewhat faster than data.table)
-    # One-hot encode to sparse matrix (requires Matrix package for speed; faster than pure data.table implementation)
-    # https://stackoverflow.com/questions/4560459/all-levels-of-a-factor-in-a-model-matrix-in-r
+    # Matrix package implementation (sparse matrix construction)
     dy <- Matrix::sparse.model.matrix(~ 0 + .,
                                       data = dy,
                                       contrasts.arg = lapply(dy, contrasts, contrasts = FALSE),
                                       drop.unused.levels = FALSE)
 
-    # Could return sparse matrix, but appending to original data frame by default
     dy <- as.matrix(dy)
-
-    #---
 
     # Drop dummy columns with no 1's
     if (dropUnusedLevels) {
       keep <- colSums(dy) > 0
-      #dy <- dy[, ..keep]  # data.table implementation
       dy <- dy[, keep]
     }
 
@@ -279,12 +425,25 @@ one_hot <- function(data, dropOriginal = TRUE, dropUnusedLevels = FALSE) {
 
 #------------------
 
-# Create stratified training set or cross-validation fold assignment
-# ycont: logical. Should 'y' be treated as continuous?
-# tfrac: Either a fraction of training data to retain (if less than 1) or the number of CV folds if greater than 1
-# ntiles: Number of buckets to break continuous 'y' into for stratified sampling
-# cv_list: If TRUE, a list of length 'tfrac' is returned with indices of fold assignment; otherwise, a single vector of length(y) with values 1:tfrac giving the fold assignment
-
+#' Stratified Partitioning and Cross-Validation Fold Assignment
+#'
+#' @description
+#' Generates stratified subsamples or K-fold cross-validation fold assignments while preserving
+#' outcome variable empirical distribution profiles.
+#'
+#' @param y Outcome vector used for distribution stratification.
+#' @param ycont Logical indicating whether `y` is continuous (`TRUE`) or discrete/categorical
+#'   (`FALSE`).
+#' @param tfrac Sampling fraction (if <= 1) or integer count of cross-validation folds (if > 1).
+#' @param ntiles Number of quantile bins to bucket continuous `y` into prior to stratified sampling.
+#' @param cv_list Logical. If `TRUE` and `tfrac > 1`, returns list of fold row indices; otherwise
+#'   returns vector of integer fold tags. Default is `FALSE`.
+#'
+#' @return Logical selection vector (if `tfrac <= 1`), integer fold vector, or list of index
+#'   vectors (if `cv_list = TRUE`).
+#'
+#' @keywords internal
+#' @noRd
 stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
   stopifnot((tfrac > 0 & tfrac <= 1) | (tfrac > 1 & tfrac %% 1 == 0))
   if (ycont) y <- dplyr::ntile(y, ntiles)
@@ -312,10 +471,25 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
 
 #------------------
 
-# Function to check a 'data' object against inputs 'y' and 'x'
-# Detects character columns, no-variance columns, and missing data columns (imputes as needed)
-# This simply wraps a code chunk that was present in train() and prepXY()
-
+#' Validate and Clean Modeling Data Frame Inputs
+#'
+#' @description
+#' Checks specified target and predictor variables within a dataset. Ensures character columns
+#' are converted, drops zero-variance columns, removes sparse zero-inflated targets relative
+#' to CV fold settings, and optionally imputes missing values.
+#'
+#' @param data Input data frame containing features and targets.
+#' @param y Character vector of target variable names.
+#' @param x Character vector of predictor variable names.
+#' @param nfolds Optional integer number of CV folds used for checking minimal non-zero count
+#'   thresholds. Default is `NULL`.
+#' @param impute Logical. If `TRUE`, imputes missing predictor values using \code{\link{imputationValue}}.
+#'   Default is `FALSE`.
+#'
+#' @return Cleaned data frame with invalid variables dropped and missing values optionally imputed.
+#'
+#' @keywords internal
+#' @noRd
 checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
 
   # Check for character-type variables; stop with error if any detected
@@ -332,7 +506,6 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
 
   # Remove (with warning) any zero-inflated 'y' variables with fewer than 'nfolds' non-zero values
   if (all(!is.null(nfolds), nfolds > 0)) {
-    #toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds * 10 else FALSE)))
     toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds else FALSE)))
     if (length(toofew)) {
       data <- select(data, -all_of(toofew))
@@ -345,15 +518,13 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
   if (length(constant)) {
     x <- setdiff(x, constant)
     data <- select(data, -all_of(constant))
-    cat("Removed zero-variance 'x' variable(s):\n", paste(constant, collapse = ", "), "\n")
+    cli::cli_alert_info("Removed zero-variance 'x' variable(s): {paste(constant, collapse = ', ')}")[cite: 1]
   }
 
   # Detect and impute any missing values in 'x' variables
   if (impute) {
     na.cols <- names(which(sapply(data[x], anyNA)))
     if (length(na.cols) > 0) {
-      # Turned off to suppress message when running prepXY()
-      #cat("Missing values imputed for the following 'x' variable(s):\n", paste(na.cols, collapse = ", "), "\n")
       for (j in na.cols) {
         xj <- data[[j]]
         ind <- is.na(xj)
@@ -368,16 +539,31 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
 
 #------------------
 
-# Function to return in-memory size of object in Mb
+#' Compute Memory Size of R Object in Megabytes
+#'
+#' @description
+#' Evaluates system memory overhead assigned to an object.
+#'
+#' @param x Any R object.
+#'
+#' @return Numeric size in megabytes (MB).
+#'
+#' @keywords internal
+#' @noRd
 objectSize <- function(x) as.numeric(utils::object.size(x)) / 1048576
 
 #------------------
 
-# Function to return free (actually, "available") system memory in Mb
-# Different commands used on Linux vs. MacOS vs. Windows
-# https://stackoverflow.com/questions/27788968/how-would-one-check-the-system-memory-available-using-r-on-a-windows-machine
-# https://stackoverflow.com/questions/6457290/how-to-check-the-amount-of-ram
-# On free vs available: https://haydenjames.io/free-vs-available-memory-in-linux/
+#' Query System Free Physical Memory
+#'
+#' @description
+#' Queries OS system utilities across Windows, macOS, Linux, and HPC SLURM environments to estimate
+#' available system RAM.
+#'
+#' @return Numeric scalar estimating available memory in megabytes (MB).
+#'
+#' @keywords internal
+#' @noRd
 freeMemory <- function() {
   gc()
   sys <- Sys.info()["sysname"]
@@ -403,7 +589,6 @@ freeMemory <- function() {
       ncores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))
       if (is.na(ncores)) {
         # Linux system assumed as backstop
-        # See output of 'cat /proc/meminfo'
         x <- system('grep MemAvailable /proc/meminfo', intern = TRUE)
         x <- strsplit(x, "\\s+")[[1]][2]
         as.numeric(x) / 1024
@@ -451,13 +636,6 @@ freeMemory <- function() {
 #
 #   N0 <- length(x)
 #
-#   # NOT USED: Initial brute downsample step, if necessary
-#   # Could be useful if the inputs are really big, making kmeans too slow
-#   # s0 <- if (N_init < N) sample.int(N, size = N_init) else 1:N
-#   # x <- x[s0]
-#   # y <- y[s0]
-#   # if (!is.null(w)) w <- w[s0] * (sum(w) / sum(w[s0]))  # Preserve the original total sample weight
-#
 #   # Keep copies of inputs
 #   x0 <- x
 #   y0 <- y
@@ -472,11 +650,6 @@ freeMemory <- function() {
 #   # k-means
 #   km <- kmeans(cbind(x, y), centers = K, iter.max = K * 5)
 #
-#   # Measure of the unusual-ness of each cluster (relative distance from all other cluster centers)
-#   # Used to calculate 'cadj'; cluster-specific downsampling factor
-#
-#   # Center of the (scaled) dataset
-#   #cnt <- c(weighted.mean(x, w), weighted.mean(y, w))  # Only necessary b/c scale() above is not weighted
 #   cnt <- apply(km$centers, 2, weighted.mean, w = km$size)
 #
 #   # Distance of each cluster center from the dataset center
@@ -492,7 +665,6 @@ freeMemory <- function() {
 #     j <- seq(from = 1, to = length(d), length.out = max(min_samp, length(d) * cadj[cl]))
 #     j <- unique(round(j))
 #     k <- i[order(d)][j]
-#     #k <- s0[k]
 #     wout <- w[k] * (sum(w[i]) / sum(w[k]))
 #     cbind(x = x0[k], y = y0[k], w = wout)
 #   })
@@ -504,8 +676,18 @@ freeMemory <- function() {
 
 #------------------
 
-# Function to cluster a univariate continuous variable into 'k' clusters
-# Returns an ordered factor with k ordered levels
+#' Univariate K-Means Clustering for Continuous Variables
+#'
+#' @description
+#' Partitions a continuous vector into ordered factor bins via deterministic 1D k-means clustering.
+#'
+#' @param x Continuous numeric vector or ordered factor.
+#' @param k Integer number of target clusters.
+#'
+#' @return An ordered factor vector of cluster assignments ranging from 1 to `k`.
+#'
+#' @keywords internal
+#' @noRd
 uniCluster <- function(x, k) {
   stopifnot(!is.character(x))
   if (is.ordered(x)) {
@@ -517,18 +699,10 @@ uniCluster <- function(x, k) {
   iter <- 0
   halt <- FALSE
 
-  # Ensures the kmeans() results are deterministic by specifying intial centers
+  # Ensures the kmeans() results are deterministic by specifying initial centers
   ind <- round(seq(from = 1, to = data.table::uniqueN(x), length.out = k))
   initial <- sort(unique(x))[ind]
   km <- suppressWarnings(kmeans(x, centers = initial, iter.max = 50))
-
-  # iter <- 0
-  # halt <- FALSE
-  # while (!halt) {
-  #   iter <- iter + 1
-  #   km <- suppressWarnings(kmeans(x, centers = k, nstart = 3 * iter, iter.max = 20))
-  #   halt <- km$ifault == 0
-  # }
 
   cl <- data.table::frank(km$centers, ties.method = "dense")[km$cluster]
   cl <- factor(cl, levels = 1:k, ordered = TRUE)
@@ -537,15 +711,22 @@ uniCluster <- function(x, k) {
 
 #------------------
 
-# This function returns weighted mean and approximate variance about the weighted mean
-# 'x' must be numeric but can be continuous or binary
-# In binary case, it return the (weighted) proportion and standard error
-# Note the difference in standard error calculation for continuous vs. binary case
+#' Compute Weighted Mean and Sampling Variance
+#'
+#' @description
+#' Estimates weighted mean/proportion and corresponding variance following Cochran (1977)
+#' formulation for continuous metrics or survey proportion formulations for binary vectors.
+#'
+#' @param x Continuous or binary numeric vector.
+#' @param w Non-negative sampling weights vector matching length of `x`.
+#'
+#' @return Numeric vector of length 2 containing `c(weighted_mean, variance)`.
+#'
+#' @keywords internal
+#' @noRd
 weightedVAR <- function(x, w) {
 
   # Continuous case
-  # Code: https://stats.stackexchange.com/questions/25895/computing-standard-error-in-weighted-mean-estimation
-  # Computes the variance of a weighted mean following Cochran 1977: https://www.sciencedirect.com/science/article/abs/pii/135223109400210C
   if (any(!x %in% 0:1)) {
     n <- length(x)
     wbar <- mean(w)
@@ -554,7 +735,6 @@ weightedVAR <- function(x, w) {
   } else {
 
     # Binary case
-    # https://stats.stackexchange.com/questions/159204/how-to-calculate-the-standard-error-of-a-proportion-using-weighted-data
     w <- w / sum(w)
     sw2 <- sum(w ^ 2)
     xWbar <- sum(w * x)
@@ -565,36 +745,24 @@ weightedVAR <- function(x, w) {
 
 #------------------
 
-# Function to quickly estimate the conditional quantile smoother for a bivariate (x, y) scatterplot
-# The results are not deterministic, but they are pretty stable if 'n' is higher enough
-# The returned curve is a LOESS fit to k * n observations of x and median(y)|x derived via repeated kmeans clustering of the 'x' values
-# The LOESS fit weights cluster observations by sqrt(cluster size); this down-weights small-sample medians
-
-# Test example from ?qgam
-# library(MASS)
-# x <- mcycle$times
-# y <- mcycle$accel
-# xout <- sort(unique(x))
-# fit.qgam <- qgam::qgam(accel~s(times), data = mcycle, qu = 0.5)
-# pred.qgam <- predict(fit.qgam, data.frame(times = xout))
-# plot(x, y)
-# lines(xout, pred.qgam, col = 2)
-#
-# test <- smoothQuantile(x, y)
-# lines(test$x, test$y, col = 3)
-#
-# data(recs)
-# x <- recs$square_feet
-# y <- recs$electricity
-# xout <- xout0 <-  unique(sort(x)[seq(from = 1, to = length(x), length.out = min(length(x), 200))])
-# fit.qgam <- qgam::qgam(y~s(x), data = data.frame(x, y), qu = 0.5)
-# pred.qgam <- predict(fit.qgam, data.frame(x = xout))
-# plot(x, y)
-# lines(xout0, pred.qgam, col = 2)
-#
-# test <- smoothQuantile(x, y)
-# lines(test$x, test$y, col = 3)
-
+#' Bivariate Conditional Quantile Smoother
+#'
+#' @description
+#' Estimates conditional target quantiles across continuous predictors using decision tree
+#' partition binning and generalized additive model (GAM) smoothing.
+#'
+#' @param x Predictor numeric vector.
+#' @param y Target numeric outcome vector.
+#' @param qu Numeric vector of target quantiles (e.g. `0.5`) or string `"mad"` to derive median
+#'   and median absolute deviations. Default is `0.5`.
+#' @param xout Optional numeric vector specifying prediction target locations along `x`. Default
+#'   is `NULL`.
+#' @param a Quantile bucket scaling exponent governing recursive tree node minimum bin counts. Default is `0.3`.
+#'
+#' @return Data frame containing columns `x` (evaluation values), `y` (smoothed quantile), and `q` (quantile tag).
+#'
+#' @keywords internal
+#' @noRd
 smoothQuantile <- function(x,
                            y,
                            qu = 0.5,
@@ -607,7 +775,6 @@ smoothQuantile <- function(x,
     qu == "mad" | all(qu > 1, qu < 1)
     is.null(xout) | length(xout) > 1
     a > 0
-    #b > 0
   })
 
   # Remove NA observations
@@ -631,32 +798,15 @@ smoothQuantile <- function(x,
 
   # x-values at which to predict smoothed values
   mout <- if (is.null(xout) | length(xout) == 2) {
-    #rng <- if (is.null(xout)) range(d$m) else range(xout)
     rng <- if (is.null(xout)) range(x) else range(xout)
     xx <- if (is.null(xout)) x else x[x >= rng[1] & x <= rng[2]]
-    mn <- diff(rng) / (0.1 * mad(xx, constant = 1))  # Originally b = 0.1; now hard-coded
-    mn <- min(mn, 200)  # Hard max on number of output x-values
+    mn <- diff(rng) / (0.1 * mad(xx, constant = 1))
+    mn <- min(mn, 200)
     seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
   } else {
     xout
   }
 
-  #---
-
-  # qgam implementation -- just too slow, even for small samples
-  # If number of observations is low, use qgam() directly
-  # NOTE: the qgam code has not been made safe for multiple 'qu'
-  # if (n < 500 & length(qu) == 1) {
-  #
-  #   temp <- capture.output(fit <- suppressWarnings(qgam(y ~ s(x), data = d, qu = qu)))
-  #   out <- data.frame(x = mout, y = predict(fit, data.frame(x = mout)), q = rep(qu, each = length(mout)))
-  #
-  # }
-
-  #---
-
-  # We can initially sample 'x' for the rpart() call
-  #  since we only care about estimating plausible bin breakpoints
   f <- min(1, max(0.05, 30e3 / n))
   df <- if (f < 1) {
     ind <- round(seq(from = 1, to = n, by = (n - 1) / (round(f * n) - 1)))
@@ -668,10 +818,9 @@ smoothQuantile <- function(x,
 
   # Minimum number of observations per rpart bin
   mb <- max(5, ceiling(n ^ a))
-  mbr <- max(5, ceiling(mb * f))  # Adjust for downsampling factor (f)
+  mbr <- max(5, ceiling(mb * f))
 
   # Winsorize y-values in 'df' with obviously extreme values prior to the rpart() call
-  # Extremely large y-values can unduly affect the rpart() call
   dr <- copy(df)
   zy <- (dr$y - median(dr$y)) / mad(dr$y)
   zy[is.na(zy)] <- 0
@@ -688,24 +837,7 @@ smoothQuantile <- function(x,
   r <- rle(as.integer(as.factor(fit$where)))
   rsum <- c(1, cumsum(r$lengths))
 
-  # Initial check if there is sufficient number of bins (require at least 10)
-  # k <- 3 * (length(rsum) - 1)
-  # if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
-
-  # Check plot -- useful diagnostic
-  # fit.mean <- mgcv::bam(y ~ s(x), data = df, discrete = TRUE)
-  # temp <- df[sample.int(n = nrow(df), size = min(n, 10e3), replace = TRUE), ]
-  # plot(temp)
-  # lines(df$x, fitted(fit.mean), col = 2)
-  # abline(v = df$x[rsum], col = 3)
-
-  #---
-
-  # Get the bin assignments and compute the bin metrics
-  # Uses data.table operations for speed
-
-  # This creates 3 binning vectors in 'd'
-  # Each row/observation is assigned to 3 different bins/windows
+  # Bin assignments and bin metrics calculation
   for (i in 1:3) {
     p <- c(0, 0.5, -0.5)[i]
     br <- pmax(1, round(p * diff(rsum) + rsum[-(length(rsum))]))
@@ -715,8 +847,6 @@ smoothQuantile <- function(x,
     set(d, j = paste0("bin", i), value = bin)
   }
 
-  # This computes the bin-specific outcomes (count, x-mean, and y-quantiles)
-  # quantile 'type = 1' ensures the bin quantiles are observed values; i.e. all(d$q %in% y); generally reduces impact of outliers
   d <- lapply(1:3, function(i) {
     d[, list(s = .N, m = sum(x), q = quantile(y, probs = qu, type = 1)), by = eval(paste0("bin", i))]
   })
@@ -727,61 +857,26 @@ smoothQuantile <- function(x,
   # Retain only those bins with sufficient number of observations
   d <- d[s >= mb, ]
 
-  # Final check if there is sufficient number of bins (require at least 10)
-  # k <- nrow(d) / length(qu)
-  # if (k < 10) stop("Too few bins (", k, "); try using smaller 'a' value\n", sep = "")
-
-  # If qmad, replace 25th and 75th percentiles with each bin's observed lower and upper MAD, respectively
-  # This ensures the GAM smooth output reflects the lower and upper MAD rather than the quantiles themselves
   if (qmad) {
     f <- function(x) c(x[2] - x[1], x[2], x[3] - x[2])
     d[, q := f(q), by = c("window", "bin1")]
   }
 
-  # Order bins by mean x-value
-  #setorder(d, m)
-
-  # Force the minimum and maximum x-values into the bin results
-  # This ensures that the GAM fit attempts to smooth out to the extreme x-values
-  #if (!qmad) {
   d[m == min(m), m := min(x)]
   d[m == max(m), m := max(x)]
-  #}
-
-  #---
-
-  # # x-values at which to predict smoothed values
-  # mout <- if (is.null(xout) | length(xout) == 2) {
-  #   #rng <- if (is.null(xout)) range(d$m) else range(xout)
-  #   rng <- if (is.null(xout)) range(x) else range(xout)
-  #   xx <- if (is.null(xout)) x else x[x >= rng[1] & x <= rng[2]]
-  #   mn <- diff(rng) / (b * mad(xx, constant = 1))
-  #   mn <- min(mn, 200)  # Hard max on number of output x-values
-  #   seq(from = rng[1], to = rng[2], length.out = ceiling(mn))
-  # } else {
-  #   xout
-  # }
-
-  #---
 
   # Fit GAM(s) and return the smoothed quantile values for each 'mout' x-value
   out <- sapply(qu, function(i) {
     df <- d[qu == i, ]
-    fit <- mgcv::gam(formula = q ~ s(m), data = df, weights = d$s)  # Weighted by bin sample size
+    fit <- mgcv::gam(formula = q ~ s(m), data = df, weights = d$s)
     predict(fit, newdata = data.table(m = mout))
   })
 
-  # Ensure there is no quantile crossing in the results
+  # Ensure no quantile crossing
   if (ncol(out) > 1 & !qmad) out <- t(apply(out, 1, sort))
 
   # Final output data frame
   out <- data.frame(x = mout, y = as.vector(out), q = rep(qu, each = length(mout)))
-
-  # Check results
-  # Minimize the quantile loss function
-  # plot(d$m, d$q)
-  # plot(dr$x, dr$y)
-  # lines(out$x, out$y, col = 2)
 
   return(out)
 
@@ -808,17 +903,11 @@ smoothQuantile <- function(x,
 #   x <- x[i]
 #   y <- y[i]
 #
-#   #---
-#
 #   # Eliminate obviously extreme y values?
 #   zy <- abs(y - median(y)) / mad(y)
 #   zy[is.na(zy)] <- 0
 #   iy <- zy > zmax ^ 2
 #
-#   # Eliminate obviously extreme x values?
-#   # zx <- abs(x - median(x)) / mad(x)
-#   # zx[is.na(zx)] <- 0
-#   # ix <- zx > zmax ^ 2
 #   ix <- rep(FALSE, length(iy))
 #
 #   # Initial outliers
@@ -826,16 +915,12 @@ smoothQuantile <- function(x,
 #   x <- x[!oi]
 #   y <- y[!oi]
 #
-#   #---
-#
 #   # If 'y' is already monotonic or has no variance, simply return a linear interpolation
 #   simple <- sorted(y) | var(y) == 0
 #   xout <- if (simple & is.null(xout)) range(x) else xout
 #
 #   # Data table used below
 #   df <- data.table(x, y)
-#
-#   #---
 #
 #   # Detect and remove outliers
 #   if (!simple) {
@@ -857,13 +942,6 @@ smoothQuantile <- function(x,
 #     d2 <- approx(x = d[[1]]$x[i], y = d[[1]]$y[i], xout = x)$y
 #     d2[d2 == 0] <- NA
 #
-#     # See the median and the cutoff lines for upper and lower outliers
-#     # Points falling outside the envelope are considered outliers
-#     # plot(x, y)
-#     # lines(x, m, col = 2)
-#     # lines(x, m + zmax * d1, col = 3)
-#     # lines(x, m - zmax * d2, col = 4)
-#
 #     # Detect the y outliers
 #     out1 <- y > m + zmax * d1
 #     out2 <- y < m - zmax * d2
@@ -877,8 +955,6 @@ smoothQuantile <- function(x,
 #     df <- df[!oy]
 #
 #   }
-#
-#   #---
 #
 #   # x-values at which to predict smoothed values
 #   xout <- if (is.null(xout)) {
@@ -894,8 +970,6 @@ smoothQuantile <- function(x,
 #       unique(sort(xout))
 #     }
 #   }
-#
-#   #---
 #
 #   # Final predicted smooth output
 #   result <- if (simple) {
@@ -921,10 +995,6 @@ smoothQuantile <- function(x,
 #   names(result) <- c("x", "y", if (se) "se" else NULL)
 #   row.names(result) <- NULL
 #
-#   # Ensure output smoothed values do not exceed the range of 'y' values in 'df'
-#   # result$y <- pmax(result$y, min(df$y))
-#   # result$y <- pmin(result$y, max(df$y))
-#
 #   return(result)
 #
 # }
@@ -941,32 +1011,35 @@ smoothQuantile <- function(x,
 #   # Ratio of ubar to b
 #   R <- seq(0, 1, length.out = 1e4)
 #
-#   # Degrees of freedom (checked; this is correct)
+#   # Degrees of freedom
 #   df <- (m - 1) * (1 - R * m  / (m + 1)) ^ 2
 #
 #   # Calculate SE and associated CI
-#   ubar <- 1  # Doesn't matter; changes magnitude but shape of subsequent curves
-#   se <- sqrt(ubar / R * (1 + 1 / m) - ubar)  # Estimated standard error
-#   ci <- se * qt(p, df)  # Estimated CI half-width
+#   ubar <- 1
+#   se <- sqrt(ubar / R * (1 + 1 / m) - ubar)
+#   ci <- se * qt(p, df)
 #
-#   # For a given ubar, the CI width declines with R up to some point and then begins to increase
-#   # We expect CI to decline with R, since increasing R means b is getting smaller relative to ubar (greater confidence)
-#   # But the eventual increase doesn't make sense, so we return the 'R' value at which the CI is minimized
-#   #plot(R, ci, type = "l")
-#
-#   # The ratio (ubar / b) at which CI width is minimized
-#   # Ratios beyond this point return rapidily increasing CI widths
 #   R[which.min(ci)]
 #
 # })
 #
-# # plot(mseq, out, type = "l")
 # maxr_fun <- approxfun(mseq, out, rule = 2)
 # rm(mseq, out)
 
 #------------------
 
-# Function to check if values are sorted; is.unsorted() checks only for increasing
+#' Check Vector Monotonicity
+#'
+#' @description
+#' Tests whether vector values are sorted monotonously (either strictly non-decreasing or
+#' non-increasing within floating point limits).
+#'
+#' @param x Numeric or atomic vector.
+#'
+#' @return Logical scalar (`TRUE` if sorted monotonically).
+#'
+#' @keywords internal
+#' @noRd
 sorted <- function(x) {
   xd <- diff(x)
   all(xd >= -sqrt(.Machine$double.eps)) | all(xd <= sqrt(.Machine$double.eps))
@@ -974,10 +1047,20 @@ sorted <- function(x) {
 
 #------------------
 
-# Version of match.call() that returns default argument values when not explicitly stated
-# 'exclude' allows particular function arguments to be excluded from result
-# https://stackoverflow.com/questions/14397364/match-call-with-default-arguments
-
+#' Retrieve Function Call with Preserved Formals Defaults
+#'
+#' @description
+#' Extends \code{\link[base]{match.call}} to preserve default function arguments that were not
+#' explicitly declared in the call stack.
+#'
+#' @param ... Passed to internal call expansion.
+#' @param exclude Character vector of parameter argument names to exclude from returned call.
+#'   Default is `NULL`.
+#'
+#' @return Language call object.
+#'
+#' @keywords internal
+#' @noRd
 match.call.defaults <- function(..., exclude = NULL) {
   call <- evalq(match.call(expand.dots = FALSE), parent.frame(1))
   formals <- evalq(formals(), parent.frame(1))
@@ -988,16 +1071,38 @@ match.call.defaults <- function(..., exclude = NULL) {
 
 #-------------------
 
-# Return normalized path using the '.Platform$file.sep' separator
+#' Standardize Absolute File Path Expressions
+#'
+#' @description
+#' Normalizes system file paths using current platform-specific directory separators
+#' (`.Platform$file.sep`).
+#'
+#' @param path Character vector of path locations.
+#' @param mustWork Logical indicating whether to throw an error if path does not exist. Default is `NA`.
+#'
+#' @return Character vector of normalized file path targets.
+#'
+#' @keywords internal
+#' @noRd
 full.path <- function(path, mustWork = NA) {
   normalizePath(path = path, winslash = .Platform$file.sep, mustWork = mustWork)
 }
 
 #-------------------
 
-# Much faster version of table() and can accommodate weights
-# Returns number of NA observations if na.rm = FALSE (default); i.e. equivalent to table(..., useNA = 'always')
-# https://stackoverflow.com/questions/17374651/find-the-n-most-common-values-in-a-vector
+#' Fast Weighted Frequency Counting
+#'
+#' @description
+#' High-performance weighted tabulation using `data.table` grouping structures.
+#'
+#' @param x Atomic vector of values to aggregate.
+#' @param w Optional numeric weights vector matching length of `x`. Default is `NULL`.
+#' @param na.rm Logical. If `TRUE`, drops `NA` categories from returned counts. Default is `FALSE`.
+#'
+#' @return Named numeric vector of frequency totals.
+#'
+#' @keywords internal
+#' @noRd
 table2 <- function(x, w = NULL, na.rm = FALSE) {
   require(data.table)
   stopifnot(is.atomic(x))
@@ -1015,13 +1120,21 @@ table2 <- function(x, w = NULL, na.rm = FALSE) {
 
 #-------------------
 
-# Lumps smallest factor levels into "Other", similar to forcats::fct_lump_n()
-# x: factor (see note about ordered factors)
-# nmax: maximum number of factor levels to return in result
-# w: optional numeric weights
-# other_level: Name of the 'other' level to assign
-# Note that ordered factor input is coerced to un-ordered in output!
-# Since assumed use is in prepXY() where ordered factor predictors are converted to integer, this isn't expected to be a problem
+#' Consolidate Low-Frequency Factor Levels
+#'
+#' @description
+#' Groups infrequent factor levels into a consolidated level label (e.g., `"_Other_"`), respecting
+#' optional observation weighting.
+#'
+#' @param x Factor vector.
+#' @param nmax Maximum integer count of distinct factor levels to retain. Default is `5`.
+#' @param w Optional numeric weight vector matching length of `x`. Default is `NULL`.
+#' @param other_level String label assigned to consolidated sparse levels. Default is `"_Other_"`.
+#'
+#' @return Unordered factor vector containing at most `nmax` distinct levels.
+#'
+#' @keywords internal
+#' @noRd
 lumpFactor <- function(x, nmax = 5, w = NULL, other_level = "_Other_") {
   stopifnot(is.factor(x))
   if (is.null(w)) w <- rep.int(1L, length(x))
@@ -1039,9 +1152,17 @@ lumpFactor <- function(x, nmax = 5, w = NULL, other_level = "_Other_") {
 
 #-------------------
 
-# Quickly identify if any values are Infinite; complement to anyNA()
-# Note that Inf is always double, so an integer vector cannot have Inf (if would need to be coerved to double)
-# See here: https://stackoverflow.com/questions/39849650/why-typeofinf-is-double
+#' Check for Infinite Numeric Values
+#'
+#' @description
+#' Efficiently determines whether any vector elements contain `Inf` or `-Inf` values.
+#'
+#' @param x Atomic vector to evaluate.
+#'
+#' @return Logical scalar (`TRUE` if infinite values are detected).
+#'
+#' @keywords internal
+#' @noRd
 anyInf <- function(x) {
   if (is.double(x)) collapse::anyv(x, Inf) else FALSE
 }

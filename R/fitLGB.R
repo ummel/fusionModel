@@ -1,3 +1,51 @@
+#' Internal Fitting Routine for LightGBM Models
+#'
+#' @title Internal LightGBM Hyperparameter Tuning and Model Fitting
+#'
+#' @description
+#' `fitLGB()` is an internal helper function invoked during \code{\link{train}} to perform
+#' hyperparameter grid searches and train final gradient boosting models using the
+#' \pkg{lightgbm} package. It evaluates candidate hyperparameter sets via K-fold
+#' cross-validation or a single validation split, selects the combination minimizing the
+#' loss metric, and returns a final model trained on the complete dataset.
+#'
+#' @param dfull An \code{\link[lightgbm]{lgb.Dataset}} object containing the full dataset
+#'   (predictor matrix and target outcome) used for the final model fit.
+#' @param dtrain An optional \code{\link[lightgbm]{lgb.Dataset}} object containing the
+#'   training subset when validation-set evaluation is performed. Default is `NULL`.
+#' @param dvalid An optional \code{\link[lightgbm]{lgb.Dataset}} object containing the
+#'   validation subset used for early stopping and performance comparison. Default is `NULL`.
+#' @param cv.folds A list of integer vectors specifying predefined fold indices for K-fold
+#'   cross-validation (via \code{\link[lightgbm]{lgb.cv}}), or a logical flag (`TRUE`) when
+#'   a single validation split is used.
+#' @param hyper.grid A list of lists or data frame/grid where each element represents a
+#'   specific hyperparameter combination (e.g., learning rate, tree depth, feature fraction)
+#'   to evaluate.
+#' @param params.obj A named list of global LightGBM parameters, including objective setting,
+#'   metric definitions, and thread counts.
+#'
+#' @details
+#' **Workflow:**
+#' \itemize{
+#'   \item **Cross-Validation / Validation Evaluation:** Loops through each candidate row in
+#'     `hyper.grid`. Depending on whether `cv.folds` is a list of fold indices or a logical flag,
+#'     it executes \code{\link[lightgbm]{lgb.cv}} or \code{\link[lightgbm]{lgb.train}} with early
+#'     stopping enabled (`early_stopping_rounds = 2L`).
+#'   \item **Optimal Selection:** Compares `best_score` across all candidate hyperparameter sets,
+#'     identifying the set that achieved the lowest evaluation loss and its associated optimal
+#'     number of boosting iterations (`best_iter`).
+#'   \item **Final Model Training:** Refits the model on the full dataset (`dfull`) using the optimal
+#'     hyperparameters and fixed iteration count (`num_iterations = best_iter`).
+#'   \item **Result Augmentation:** Attaches a metadata data.frame containing the grid search
+#'     results to the returned `lgb.Booster` object's `$record_evals` slot.
+#' }
+#'
+#' @return An object of class \code{\link[lightgbm]{lgb.Booster}} containing the final trained model,
+#'   augmented with `$best_score`, `$best_iter`, and `$record_evals` metadata summarizing the tuning process.
+#'
+#' @keywords internal
+#' @seealso \code{\link{train}}
+
 fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.grid, params.obj) {
 
   # If full cross-validation is requested...
@@ -105,4 +153,3 @@ fitLGB <- function(dfull, dtrain = NULL, dvalid = NULL, cv.folds = NULL, hyper.g
 #   callbacks = list(cb_early_stop(verbose = FALSE))  # !!! EXAMPLE -- may suppress console output
 # )
 #---
-

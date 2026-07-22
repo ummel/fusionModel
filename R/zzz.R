@@ -1,19 +1,25 @@
-# Specify package imports
-#' @import stringr
-#' @import collapse
-#' @import dplyr
-#' @rawNamespace import(stats, except = c(filter, lag, D))
-#' @rawNamespace import(data.table, except = c(first, last, between, fdroplevels))
-NULL
+.onLoad <- function(libname, pkgname) {
 
-#-----
+  # Set default option for available processing cores safely
+  cores <- parallel::detectCores()
+  if (is.na(cores) || cores < 1L) {
+    cores <- 1L
+  } else {
+    cores <- max(1L, cores - 1L)
+  }
 
-.onLoad <- function (libname, pkgname) {
+  options(fusionModel.cores = cores)
 
-  # Create default option value for number of cores
-  options(fusionModel.cores = max(1L, parallel::detectCores() - 1L))
+  invisible()
+}
 
-  # Package startup message
-  packageStartupMessage("fusionModel v", utils::packageVersion("fusionModel"), " | https://github.com/ummel/fusionModel")
+.onAttach <- function(libname, pkgname) {
 
+  # Package startup message displayed only when attached via library()
+  packageStartupMessage(
+    "fusionModel v", utils::packageVersion("fusionModel"),
+    " | https://github.com/ummel/fusionModel"
+  )
+
+  invisible()
 }

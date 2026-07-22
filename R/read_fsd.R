@@ -1,29 +1,69 @@
-#' Read fusion output from disk
+#' Read Fusion Output Files From Disk
 #'
-#' @description Efficiently read fusion output that was written to disk, optionally returning a subset of rows and/or columns. Since a \code{.fsd} file is simply a \code{\link[fst]{fst}} file under the hood, this function also works on any \code{.fst} file.
-#' @param path Character. Path to a \code{.fsd} (or \code{.fst}) file, typically produced by \code{\link{fuse}}.
-#' @param columns Character. Column names to read. The default is to return all columns.
-#' @param M Integer. The first \code{M} implicates are returned. Set \code{M = Inf} to return all implicates. Ignored if \code{M} column not present in data.
-#' @param df Data frame. Data frame used to identify a subset of rows to return. Default is to return all rows.
-#' @param cores Integer. Number of cores used by \code{\link[fst]{fst}}.
-#' @details If \code{df} is provided and the file size on disk is less than 100 MB, then a full read and inner \code{\link[collapse]{join}} is performed. For larger files, a manual read of the required rows is performed, using \code{\link[collapse]{fmatch}} for the matching operation.
-#' @return A \code{\link[data.table]{data.table}}; keys are preserved if present in the on-disk data. When \code{path} points to a \code{.fsd} file, it includes an integer column "M" indicating the implicate assignment of each observation (unless explicitly ignored by \code{columns}).
+#' @description
+#' `read_fsd()` efficiently loads microdata fusion outputs (`.fsd` files) or standard Fast
+#' Storage (`.fst`) datasets into memory. Because fusion files can become extremely large
+#' when generating multiple implicates, `read_fsd()` leverages partial reading capabilities
+#' to load only the specific rows, columns, or implicates needed, drastically reducing memory
+#' footprint and processing time.
+#'
+#' @param path Character. Path to a valid `.fsd` or `.fst` file on disk, typically created
+#'   by calling \code{\link{fuse}} with the `fsd` argument specified.
+#' @param columns Character vector. Specific column names to read from disk. The default
+#'   (`NULL`) loads all available columns in the dataset.
+#' @param M Numeric or Integer. The maximum number of implicates to read (e.g., `M = 5` loads
+#'   implicates `1` through `5`). Set `M = Inf` to load all implicates available in the file.
+#'   Default is `1`. Ignored if the target dataset does not contain an `M` column.
+#' @param df Data frame or data.table. Optional filtering subset. If provided, only rows in
+#'   the file matching the combination of key values in `df` will be returned. Default is `NULL`.
+#' @param cores Integer. Number of CPU threads to assign to `fst` for multi-threaded decompression.
+#'   Defaults to available logical cores minus one (minimum 1).
+#'
+#' @details
+#' The `.fsd` format (Fusion Data file) is functionally identical to the high-performance binary
+#' format supplied by the \pkg{fst} package, optimized for fast random access and compression.
+#'
+#' **Subsetting Mechanics:**
+#' \itemize{
+#'   \item **Implicate Filtering:** When the dataset contains multiple implicates (identified by column `M`),
+#'     `read_fsd()` calculates contiguous row indices corresponding to `M <= max_M` before reading,
+#'     preventing unnecessary disk I/O for unused implicates.
+#'   \item **Row Subsetting (`df`):** If a matching dataset `df` is provided:
+#'     \itemize{
+#'       \item For files **< 100 MB**, the relevant implicate range is fully loaded into memory and filtered
+#'         using an efficient inner join via \code{\link[collapse]{join}}.
+#'       \item For files **>= 100 MB**, low-memory index matching is performed out-of-core using high-speed
+#'         C-level matching via \code{\link[collapse]{fmatch}} (`%iin%`), loading only matching record indices.
+#'     }
+#' }
+#'
+#' @return A \code{\link[data.table]{data.table}} containing the requested columns and rows.
+#'   Original `data.table` key attributes are automatically preserved if present in the source file.
+#'
 #' @examples
+#' \dontrun{
 #' # Build a fusion model using RECS microdata
-#' # Note that "fusion_model.fsn" will be written to working directory
-#' ?recs
 #' fusion.vars <- c("electricity", "natural_gas", "aircon")
 #' predictor.vars <- names(recs)[2:12]
 #' fsn.path <- train(data = recs, y = fusion.vars, x = predictor.vars)
 #'
-#' # Write fusion output directly to disk
-#' # Note that "results.fsd" will be written to working directory
+#' # Write fusion implicates directly to disk during fusion
 #' recipient <- recs[predictor.vars]
-#' sim <- fuse(data = recipient, fsn = fsn.path, M = 5, fsd = "results.fsd")
+#' fsd_file <- file.path(tempdir(), "results.fsd")
+#' fuse(data = recipient, fsn = fsn.path, M = 3, fsd = fsd_file)
 #'
-#' # Read the fusion output saved to disk
-#' sim <- read_fsd(sim)
-#' head(sim)
+#' # Read only the first implicate (M = 1) for all variables
+#' sim_m1 <- read_fsd(path = fsd_file, M = 1)
+#' head(sim_m1)
+#'
+#' # Read specific columns across all 3 implicates
+#' sim_sub <- read_fsd(
+#'   path = fsd_file,
+#'   columns = c("M", "electricity"),
+#'   M = 3
+#' )
+#' head(sim_sub)
+#' }
 #'
 #' @export
 
@@ -58,7 +98,7 @@ read_fsd <- function(path,
     cores > 0 & cores %% 1 == 0
   })
 
-  #require(collapse, quietly = TRUE)
+  # Temporarily configure parallel decompression threads in 'fst'
   n <- fst::threads_fst()
   fst::threads_fst(nr_of_threads = cores)
 
@@ -69,21 +109,6 @@ read_fsd <- function(path,
     columns <- unique(columns)
     stopifnot(all(columns %in% meta$columnNames))
   }
-
-  # TURNED OFF FOR TESTING
-  # Add 'M' column to 'df' to subset on the number of implicates
-  # if (is.finite(M) & "M" %in% v) {
-  #   df <- if (nrow(df) == 0) {
-  #     data.table(M = 1:M)
-  #   } else {
-  #     df %>%
-  #       select(any_of(v)) %>%
-  #       select(-any_of("M")) %>%
-  #       unique() %>%
-  #       slice(rep(1:nrow(.), M)) %>%
-  #       mutate(M = rep(1:M, each = nrow(.) / M))
-  #   }
-  # }
 
   #-----
 
@@ -119,6 +144,7 @@ read_fsd <- function(path,
 
     } else {
 
+      # For larger files, perform low-memory out-of-core index matching using collapse::fmatch via %iin%
       d <- fst::fst(path)
       m <- qDT(d[i, names(df)])
       i <- i[m %iin% df] # Uses 'collapse' package equivalent of which(x %in% table) using fmatch()
@@ -129,11 +155,11 @@ read_fsd <- function(path,
     }
   }
 
-  # Set column order and data.table keys
+  # Set column order and restore data.table keys
   setcolorder(d, neworder = columns)
   suppressWarnings(setkeyv(d, cols = intersect(meta$keys, columns)))
 
-  # Reset number of threads
+  # Reset number of 'fst' decompression threads to initial state
   fst::threads_fst(nr_of_threads = n)
 
   return(d)

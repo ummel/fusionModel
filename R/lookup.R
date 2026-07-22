@@ -1,4 +1,5 @@
-# Lookup details about available variables
+#' Lookup details about available variables
+#' @export
 
 lookup <- function(var = NULL, year = NULL) {
 

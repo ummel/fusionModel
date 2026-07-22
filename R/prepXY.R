@@ -1,33 +1,104 @@
-#' Prepare the 'x' and 'y' inputs
+#' Prepare Optimal Fusion Order and Screen Predictor Variables
 #'
 #' @description
-#' Optional-but-useful function to: 1) provide a plausible ordering of the 'y' (fusion) variables and 2) identify the subset of 'x' (predictor) variables likely to be consequential during subsequent model training. Output can be passed directly to \code{\link{train}}. Most useful for large datasets with many and/or highly-correlated predictors. Employs an absolute Spearman rank correlation screen and then LASSO models (via \code{\link[glmnet]{glmnet}}) to return a plausible ordering of 'y' and the preferred subset of 'x' variables associated with each.
+#' Determines a data-driven, sequential fusion order for recipient target
+#' variables (\code{y}) and screens out uninformative predictor variables
+#' (\code{x}) prior to model fitting. Designed primarily for large-scale donor datasets
+#' containing many and/or collinear variables, \code{prepXY()} pairs an
+#' initial rank-correlation screening step with LASSO regularization via
+#' \code{\link[glmnet]{glmnet}}. The generated output can be passed directly to
+#' \code{\link{train}}.
 #'
-#' @param data Data frame. Training dataset. All categorical variables should be factors and ordered whenever possible.
-#' @param y Character or list. Variables in \code{data} to eventually fuse to a recipient dataset. If \code{y} is a list, each entry is a character vector possibly indicating multiple variables to fuse as a block.
-#' @param x Character. Predictor variables in \code{data} common to donor and eventual recipient.
-#' @param weight Character. Name of the observation weights column in \code{data}. If NULL (default), uniform weights are assumed.
-#' @param cor_thresh Numeric. Predictors that exhibit less than \code{cor_thresh} absolute Spearman (rank) correlation with a \code{y} variable are screened out prior to the LASSO step. Fast exclusion of predictors that the LASSO step probably doesn't need to consider.
-#' @param lasso_thresh Numeric. Controls how aggressively the LASSO step screens out predictors. Lower value is more aggressive. \code{lasso_thresh = 0.95}, for example, retains predictors that collectively explain at least 95% of the deviance explained by a "full" model.
-#' @param xmax Integer. Maximum number of predictors returned by LASSO step. Does not strictly control the number of final predictors returned (especially for categorical \code{y} variables), but useful for setting a (very) soft upper bound. Lower \code{xmax} can help control computation time if a large number of \code{x} pass the correlation screen. \code{xmax = Inf} imposes no restriction.
-#' @param xforce Character. Subset of \code{x} variables to "force" as included predictors in the results.
-#' @param fraction Numeric. Fraction of observations in \code{data} to randomly sample. For larger datasets, sampling often has minimal effect on results but speeds up computation.
-#' @param cores Integer. Number of cores used. Only applicable on Unix systems.
+#' @param data Data frame (or \code{data.table}) containing donor training data.
+#'   Categorical variables should be represented as factors (ordered whenever
+#'   applicable) to ensure optimal dummy encoding and LASSO evaluation.
+#' @param y Character vector or list. Variable names in \code{data} intended for
+#'   fusion to a recipient dataset. If passed as a list, individual elements can
+#'   contain character vectors of multiple variables to force their fusion together
+#'   as a unified block.
+#' @param x Character vector. Predictor variable names present in \code{data} that
+#'   are common to both the donor and recipient datasets.
+#' @param weight Character string, optional. Name of the observation sampling weight
+#'   column in \code{data}. If \code{NULL} (default), uniform weights equal to 1 are assumed.
+#' @param cor_thresh Numeric value between 0 and 1. Predictors exhibiting an absolute
+#'   Spearman rank correlation below \code{cor_thresh} relative to a target \code{y}
+#'   variable are filtered out prior to LASSO optimization. Defaults to \code{0.05}.
+#' @param lasso_thresh Numeric value between 0 and 1. Controls predictor screening
+#'   aggressiveness during LASSO regularization. Lower values screen more aggressively.
+#'   For example, \code{lasso_thresh = 0.95} (default) retains the subset of candidate
+#'   predictors that collectively account for at least 95% of the deviance explained
+#'   by a full LASSO model.
+#' @param xmax Integer. Soft ceiling on the maximum number of predictors returned
+#'   by the LASSO step. Serves as a performance guardrail when candidate \code{x}
+#'   pools are very large. Set to \code{Inf} to disable upper-bound constraints.
+#'   Defaults to \code{100}.
+#' @param xforce Character vector, optional. Subset of \code{x} predictor variable
+#'   names to unconditionally retain across all target variables, bypassing correlation
+#'   and LASSO screens.
+#' @param fraction Numeric value strictly greater than 0 and less than or equal to 1.
+#'   Fraction of observations in \code{data} to randomly sample during screening.
+#'   Sampling significantly decreases computation times on large microdata files
+#'   with minimal impact on variable selection. Defaults to \code{1} (full dataset).
+#' @param cores Integer. Number of physical CPU cores used for parallel execution via
+#'   \code{\link[parallel]{mclapply}}. Applicable on Unix-like operating systems
+#'   (Linux/macOS). Defaults to \code{1}.
 #'
-#' @return List with named slots "y" and "x". Each is a list of the same length. Former gives the preferred fusion order. Latter gives the preferred sets of predictor variables.
+#' @details
+#' \code{prepXY()} establishes a disciplined, empirical sequence for microdata fusion
+#' while reducing dimensionality before full model training in \code{\link{train}}.
+#'
+#' \strong{Methodological Overview:}
+#' \describe{
+#'   \item{1. Zero-Inflation & Factor Handling}{Zero-inflated numeric target variables
+#'     are automatically split into a binary indicator (\code{*_zero}) and a non-zero
+#'     sub-model to handle spike-at-zero distributions. High-cardinality factors are
+#'     lumped to manage dummy expansion.}
+#'   \item{2. Spearman Rank Correlation Screen}{A fast rank-based correlation matrix
+#'     is calculated between all \code{y} target levels and candidate \code{x} predictors.
+#'     Variables falling below \code{cor_thresh} are screened out early.}
+#'   \item{3. Full Model Baseline Fitting}{LASSO models (\code{alpha = 1}) are fitted
+#'     for all candidate target variables against the remaining predictor pool to
+#'     establish maximum achievable deviance explained (\eqn{R_{max}^2}).}
+#'   \item{4. Iterative Chain Construction}{Target variables are greedily ordered by
+#'     identifying which variable achieves the highest fraction of its total
+#'     potential deviance explained using only common \code{x} predictors and
+#'     previously selected \code{y} targets in the chain. Predictors meeting the
+#'     \code{lasso_thresh} deviance ratio are retained for that step.}
+#' }
+#'
+#' The resulting list matches the structural expectation of \code{\link{train}},
+#' enabling direct down-stream pipeline integration.
+#'
+#' @return A named list containing two primary slots:
+#' \item{y}{A list of character vectors indicating the recommended, sequential order
+#'   for fusing target variables.}
+#' \item{x}{A list of character vectors of equal length to \code{y}, specifying the
+#'   preferred subset of \code{x} predictors associated with each target variable step.}
+#'
+#' Additional diagnostic attributes are attached to the output list:
+#' \item{xpredictors}{Character vector of all unique common predictors retained
+#'   across any of the target steps.}
+#' \item{xforce}{The character vector of forced predictor variables provided by the user.}
+#' \item{xoriginal}{The original vector of candidate \code{x} predictor variables passed into the function.}
 #'
 #' @examples
+#' \dontrun{
+#' library(fusionModel)
+#' data(recs)
+#'
+#' # Select candidate target (y) and predictor (x) variables
 #' y <- names(recs)[c(14:16, 20:22)]
 #' x <- names(recs)[2:13]
 #'
-#' # Fusion variable "blocks" are respected by prepXY()
-#' y <- c(list(y[1:2]), y[-c(1:2)])
+#' # Group first two y variables into a joint fusion block
+#' y_blocked <- c(list(y[1:2]), y[-c(1:2)])
 #'
-#' # Do the prep work...
-#' prep <- prepXY(data = recs, y = y, x = x)
+#' # Run prepXY to determine preferred fusion ordering and predictor screening
+#' prep <- prepXY(data = recs, y = y_blocked, x = x, cor_thresh = 0.05, lasso_thresh = 0.95)
 #'
-#' # The result can be passed to train()
-#' train(data = recs, y = prep$y, x = prep$x)
+#' # Pass the prepared lists directly to train()
+#' trained_model <- train(data = recs, y = prep$y, x = prep$x)
+#' }
 #'
 #' @export
 
@@ -219,7 +290,7 @@ prepXY <- function(data,
 
   # Determine the x-predictors that pass absolute correlation threshold for each y
   # The 'Zr' matrix contains the ranks, so the correlation threshold refers to Spearman (rank) correlation
-  cat("Identifying 'x' that pass absolute Spearman correlation threshold\n")
+  cli::cli_alert_info("Identifying 'x' that pass absolute Spearman correlation threshold")
   Zr <- matrixStats::colRanks(Z, ties.method = "average", preserveShape = TRUE, useNames = TRUE)
   xok <- parallel::mclapply(unlist(vc), function(v) {
 
@@ -265,7 +336,7 @@ prepXY <- function(data,
 
   #-----
 
-  cat("Fitting full models for each 'y'\n")
+  cli::cli_alert_info("Fitting full models for each 'y'")
 
   # Weights
   ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
@@ -286,7 +357,7 @@ prepXY <- function(data,
 
   #-----
 
-  cat("Iteratively constructing preferred fusion order\n")
+  cli::cli_alert_info("Iteratively constructing preferred fusion order")
 
   # Start building the preferred fusion order...
   ord <- NULL  # Vector with preferred fusion variable sequence
@@ -391,12 +462,11 @@ prepXY <- function(data,
   attr(result, "xpredictors") <- intersect(x, pvars)
   attr(result, "xforce") <- xforce
   attr(result, "xoriginal") <- x  # Original, full set of potential predictor variables
-  #cat("Retained", length(pvars), "of", length(x), "potential predictor variables\n")
-  cat("Retained", length(intersect(x, pvars)), "of", length(x), "potential predictor variables\n")
+  cli::cli_alert_info("Retained {length(intersect(x, pvars))} of {length(x)} potential predictor variables")
 
   # Report processing time
   tout <- difftime(Sys.time(), t0)
-  cat("Total processing time:", signif(as.numeric(tout), 3), attr(tout, "units"), "\n", sep = " ")
+  cli::cli_alert_success("Total processing time: {signif(as.numeric(tout), 3)} {attr(tout, 'units')}")
 
   return(result)
 
