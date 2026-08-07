@@ -1,6 +1,6 @@
 Package: fusionModel
 Title: Data fusion and analysis of synthetic data in R
-Version: 2.4.0
+Version: 2.4
 Authors@R: c(
     person(given = "Kevin", family = "Ummel", role = c("aut", "cre"), email = "kevin.ummel@yale.edu"),
     person(given = "Karthik", family = "Akkiraju", role = "ctb"),
@@ -10,6 +10,7 @@ License: GPL (>= 3)
 Depends: 
     R (>= 3.5.0)
 Imports:
+    cli,
     data.table,
     dplyr,
     collapse,
@@ -21,6 +22,7 @@ Imports:
     mgcv,
     purrr,
     RANN,
+    rpart,
     stats,
     stringr,
     utils,
