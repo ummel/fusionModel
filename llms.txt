@@ -848,8 +848,6 @@ Happy fusing!
   : Extract Predictor Variable Importance from a Fusion Model
 - [`impute()`](https://ummel.github.io/fusionModel/reference/impute.md)
   : Impute Missing Data via Microdata Fusion
-- [`lookup()`](https://ummel.github.io/fusionModel/reference/lookup.md)
-  : Lookup details about available variables
 - [`monotonic()`](https://ummel.github.io/fusionModel/reference/monotonic.md)
   : Enforce Monotonic Relationships Between Numerical Variables
 - [`prepXY()`](https://ummel.github.io/fusionModel/reference/prepXY.md)
