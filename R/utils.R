@@ -519,7 +519,7 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
   if (length(constant)) {
     x <- setdiff(x, constant)
     data <- select(data, -all_of(constant))
-    cli::cli_alert_info("Removed zero-variance 'x' variable(s): {paste(constant, collapse = ', ')}")
+    cli::cat_line("Removed zero-variance 'x' variable(s):\n", paste(constant, collapse = ", "))
   }
 
   # Detect and do simple imputation of any missing values in 'x' variables
