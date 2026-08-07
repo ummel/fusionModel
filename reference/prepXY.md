@@ -5,8 +5,8 @@ variables (`y`) and screens out uninformative predictor variables (`x`)
 prior to model fitting. Designed primarily for large-scale donor
 datasets containing many and/or collinear variables, `prepXY()` pairs an
 initial rank-correlation screening step with LASSO regularization via
-[`glmnet`](https://rdrr.io/pkg/glmnet/man/glmnet.html). The generated
-output can be passed directly to
+[`glmnet`](https://glmnet.stanford.edu/reference/glmnet.html). The
+generated output can be passed directly to
 [`train`](https://ummel.github.io/fusionModel/reference/train.md).
 
 ## Usage
