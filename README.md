@@ -143,8 +143,8 @@ following requirements:
 - Automatically selects predictor variables from a potentially large set
 - Ability to prevent overfitting (e.g. cross-validation)
 
-Complete methodological details are available in the fusionACS Guidebook
-(INSERT LINK).
+Complete methodological details are available in [Ummel et
+al. (2024)](https://www.nature.com/articles/s41597-023-02788-7).
 
 # Installation
 
@@ -156,7 +156,9 @@ devtools::install_github("ummel/fusionModel")
 library(fusionModel)
 ```
 
-    fusionModel v2.4.0 | https://github.com/ummel/fusionModel
+    fusionModel v2.4 | https://github.com/ummel/fusionModel
+
+    You are using the latest version.
 
 # Simple fusion
 
@@ -231,34 +233,36 @@ fsn.model <- train(data = donor,
 ```
 
     Using all available predictors for each fusion variable
-    ℹ 5 fusion variables
-    ℹ 13 predictor variables
-    ℹ 2843 observations
-    -- Training step 1 of 5: insulation
-    -- Training step 2 of 5: aircon
-    -- Training step 3 of 5: square_feet
-    -- R-squared of cluster means: 0.98
-    -- Number of neighbors in each cluster:
+      - 5 fusion variables
+      - 13 predictor variables
+      - 2843 observations
 
+    -- Training step 1 of 5: insulation
+
+    -- Training step 2 of 5: aircon
+
+    -- Training step 3 of 5: square_feet
+      -- R-squared of cluster means: 0.98
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-      10.00   26.75   99.00  189.22  386.00  495.00 
+       10.0    27.0    94.5   178.0   353.2   498.0 
 
     -- Training step 4 of 5: electricity
-    -- R-squared of cluster means: 0.974
-    -- Number of neighbors in each cluster:
-
+      -- R-squared of cluster means: 0.974
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-       10.0    36.0    99.0   178.7   335.8   498.0 
+       10.0    37.0   105.0   177.8   327.0   497.0 
 
     -- Training step 5 of 5: natural_gas
-    -- R-squared of cluster means: 0.958
-    -- Number of neighbors in each cluster:
-
+      -- R-squared of cluster means: 0.959
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-       10.0    43.0   152.0   203.3   373.0   498.0 
+       10.0    43.0   133.0   192.4   344.0   498.0 
 
-    ✔ Fusion model saved to: '/home/kevin/Documents/Projects/fusionModel/fusion_model.fsn'
-    Total processing time: 5.63 secs
+    Fusion model saved to:
+    /home/kevin/Documents/Projects/fusionModel/fusion_model.fsn
+
+    Total processing time: 6.45 secs
 
 To fuse variables to `recipient`, we simply pass the recipient data and
 path of the .fsn model to the `fuse()` function. Each variable specified
@@ -273,27 +277,33 @@ sim <- fuse(data = recipient,
             fsn = fsn.model)
 ```
 
-    ℹ 5 fusion variables
-    ℹ 13 initial predictor variables
-    ℹ 2843 observations
-    Detected 37.7 GB of free memory
-    Generating 1 implicate
-    Fusion step 1 of 5: insulation
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 2 of 5: aircon
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 3 of 5: square_feet
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 4 of 5: electricity
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 5 of 5: natural_gas
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Total processing time: 0.854 secs
+      - 5 fusion variables
+      - 13 initial predictor variables
+      - 2843 observations
+      - Available memory: 40.1 GB
+      - Implicates: 1
+
+    -- Fusion step 1 of 5: insulation
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 2 of 5: aircon
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 3 of 5: square_feet
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 4 of 5: electricity
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 5 of 5: natural_gas
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    Total processing time: 0.729 secs
 
 Let’s look at the the recipient dataset’s fused/simulated variables.
 Note that your results will look different, because each call to
@@ -304,22 +314,22 @@ head(sim)
 ```
 
     Key: <M>
-           M           insulation                          aircon square_feet
-       <int>                <ord>                          <fctr>       <int>
-    1:     1 Adequately insulated Central air conditioning system        2352
-    2:     1       Well insulated Central air conditioning system        1024
-    3:     1 Adequately insulated Central air conditioning system         631
-    4:     1     Poorly insulated Central air conditioning system        2652
-    5:     1     Poorly insulated Central air conditioning system        2790
-    6:     1 Adequately insulated Central air conditioning system        1884
-       electricity natural_gas
-             <int>       <num>
-    1:       22640           0
-    2:        7290         595
-    3:       11000           0
-    4:       15200         681
-    5:       20500           0
-    6:       10180           0
+           M           insulation                                   aircon
+       <int>                <ord>                                   <fctr>
+    1:     1 Adequately insulated Individual window/wall or portable units
+    2:     1 Adequately insulated          Central air conditioning system
+    3:     1     Poorly insulated Individual window/wall or portable units
+    4:     1 Adequately insulated          Central air conditioning system
+    5:     1 Adequately insulated          Central air conditioning system
+    6:     1 Adequately insulated          Central air conditioning system
+       square_feet electricity natural_gas
+             <int>       <int>       <num>
+    1:        1548       14670         0.0
+    2:        2460       15160       179.5
+    3:         761        2200         0.0
+    4:        2160       11220      1150.0
+    5:        4210       21300         0.0
+    6:        1323        8420       220.0
 
 We can do some quick sanity checks to compare the distribution of the
 fusion variables in `donor` with those in `sim`. This, at least,
@@ -334,9 +344,9 @@ cbind(donor = colMeans(donor[fusion.vars[3:5]]), sim = colMeans(sim[fusion.vars[
 ```
 
                     donor        sim
-    square_feet  2070.784  2092.9033
-    electricity 10994.517 10956.0679
-    natural_gas   338.154   330.5215
+    square_feet  2070.784  2075.9100
+    electricity 10994.517 10795.8692
+    natural_gas   338.154   340.0952
 
 ``` r
 # Compare frequencies of categorical variable classes
@@ -344,20 +354,20 @@ cbind(donor = table(donor$insulation), sim = table(sim$insulation))
 ```
 
                          donor  sim
-    Not insulated           40   44
-    Poorly insulated       459  441
-    Adequately insulated  1401 1403
-    Well insulated         943  955
+    Not insulated           40   35
+    Poorly insulated       459  428
+    Adequately insulated  1401 1401
+    Well insulated         943  979
 
 ``` r
 cbind(donor = table(donor$aircon), sim = table(sim$aircon))
 ```
 
                                                donor  sim
-    Central air conditioning system             1788 1726
-    Individual window/wall or portable units     545  621
-    Both a central system and individual units   125  134
-    No air conditioning                          385  362
+    Central air conditioning system             1788 1746
+    Individual window/wall or portable units     545  532
+    Both a central system and individual units   125  148
+    No air conditioning                          385  417
 
 And we can look at kernel density plots of the non-zero values for the
 continuous variables to see if the univariate distributions in `donor`
@@ -367,19 +377,86 @@ are generally similar in `sim`.
 
 # Advanced fusion
 
-For this call to `train()`, we specify a set of hyperparameters to
-search over when training each LightGBM gradient boosting model (see
-`?train` for details). The hyperparameters can be used to tune the
-underlying GBM models for better cross-validated performance. We also
-set `nfolds = 10` (default is 5) to indicate the number of
-cross-validation folds to use. Since this requires additional
+When working with datasets containing numerous or potentially
+correlated/collinear variables, `prepXY()` provides an automated way to
+screen predictors and optimize fusion variable ordering before model
+training. It pairs an initial rank-correlation screening step with LASSO
+regularization (via `glmnet`) to filter out weak predictors and then
+determines a preferred fusion sequence among the fusion variables.
+
+Using the `donor` microdata and variable sets defined earlier:
+
+``` r
+# Screen predictors and determine optimal target fusion order
+xy_prep <- prepXY(data = donor,
+                  y = fusion.vars,
+                  x = predictor.vars)
+```
+
+    Identifying 'x' predictors passing Spearman correlation threshold (cor_thresh = 0.05)...
+    Fitting full LASSO models for each 'y'...
+    Iteratively constructing preferred fusion order...
+      - Retained 13 of 13 potential predictor variables
+      - prepXY() completed in 0.355 secs
+
+Because we have a relatively small number of highly-relevant predictor
+variables in this example, `prepXY()` retained all of the
+`predictor.vars`. The output of `prepXY()` can be passed directly to
+`train()`. This is especially helpful when automating fusion using
+larger donor datasets.
+
+``` r
+# Train a basic fusion model using the prepXY output
+fsn.model <- train(data = donor,
+                   y = xy_prep$y,
+                   x = xy_prep$x)
+```
+
+    Using specified set of predictors for each fusion variable
+      - 5 fusion variables
+      - 13 predictor variables
+      - 2843 observations
+
+    -- Training step 1 of 5: insulation
+
+    -- Training step 2 of 5: aircon
+
+    -- Training step 3 of 5: square_feet
+      -- R-squared of cluster means: 0.97
+      -- Number of neighbors in each cluster:
+       Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+       10.0    33.0    98.0   170.8   291.5   497.0 
+
+    -- Training step 4 of 5: natural_gas
+      -- R-squared of cluster means: 0.948
+      -- Number of neighbors in each cluster:
+       Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+       10.0    56.0   175.0   229.1   432.0   498.0 
+
+    -- Training step 5 of 5: electricity
+      -- R-squared of cluster means: 0.944
+      -- Number of neighbors in each cluster:
+       Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+       10.0    38.0   108.0   184.0   344.5   497.0 
+
+    Fusion model saved to:
+    /home/kevin/Documents/Projects/fusionModel/fusion_model.fsn
+
+    Total processing time: 4.58 secs
+
+For a more sophistiaced call to `train()`, we specify a set of
+hyperparameters to search over when training each LightGBM gradient
+boosting model (see `?train` for details). The hyperparameters can be
+used to tune the underlying GBM models for better cross-validated
+performance. We also set `nfolds = 10` (default is 5) to indicate the
+number of cross-validation folds to use. Since this requires additional
 computation, the `cores` argument is used to enable parallel processing.
 
 ``` r
 # Train a fusion model with variable blocks
 fsn.model <- train(data = donor, 
-                   y = fusion.vars, 
-                   x = predictor.vars,
+                   y = xy_prep$y, 
+                   x = xy_prep$x,
                    nfolds = 10,
                    hyper = list(boosting = c("gbdt", "goss"),
                                 num_leaves = c(10, 30),
@@ -387,36 +464,39 @@ fsn.model <- train(data = donor,
                    cores = 2)
 ```
 
-    Using all available predictors for each fusion variable
-    ℹ 5 fusion variables
-    ℹ 13 predictor variables
-    ℹ 2843 observations
+    Using specified set of predictors for each fusion variable
+      - 5 fusion variables
+      - 13 predictor variables
+      - 2843 observations
+
     Using OpenMP multithreading within LightGBM (2 cores)
+
     -- Training step 1 of 5: insulation
+
     -- Training step 2 of 5: aircon
+
     -- Training step 3 of 5: square_feet
-    -- R-squared of cluster means: 0.978
-    -- Number of neighbors in each cluster:
-
+      -- R-squared of cluster means: 0.938
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-       10.0    41.0   111.5   181.9   328.0   498.0 
+       10.0    37.0   127.0   204.3   405.5   498.0 
 
-    -- Training step 4 of 5: electricity
-    -- R-squared of cluster means: 0.971
-    -- Number of neighbors in each cluster:
-
+    -- Training step 4 of 5: natural_gas
+      -- R-squared of cluster means: 0.962
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-       10.0    45.0   127.0   196.2   366.0   498.0 
+       10.0    43.0   120.0   182.1   301.0   498.0 
 
-    -- Training step 5 of 5: natural_gas
-    -- R-squared of cluster means: 0.953
-    -- Number of neighbors in each cluster:
-
+    -- Training step 5 of 5: electricity
+      -- R-squared of cluster means: 0.949
+      -- Number of neighbors in each cluster:
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-       10.0    53.0   147.0   196.7   334.0   499.0 
+       10.0    34.0    92.0   169.5   287.0   495.0 
 
-    ✔ Fusion model saved to: '/home/kevin/Documents/Projects/fusionModel/fusion_model.fsn'
-    Total processing time: 29.1 secs
+    Fusion model saved to:
+    /home/kevin/Documents/Projects/fusionModel/fusion_model.fsn
+
+    Total processing time: 20.9 secs
 
 We generally want to create multiple versions of the simulated fusion
 variables – called *implicates* – in order to reduce bias in point
@@ -432,27 +512,33 @@ sim10 <- fuse(data = recipient,
               M = 10)
 ```
 
-    ℹ 5 fusion variables
-    ℹ 13 initial predictor variables
-    ℹ 2843 observations
-    Detected 37.5 GB of free memory
-    Generating 10 implicates
-    Fusion step 1 of 5: insulation
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 2 of 5: aircon
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 3 of 5: square_feet
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 4 of 5: electricity
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 5 of 5: natural_gas
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Total processing time: 2.06 secs
+      - 5 fusion variables
+      - 13 initial predictor variables
+      - 2843 observations
+      - Available memory: 39.8 GB
+      - Implicates: 10
+
+    -- Fusion step 1 of 5: insulation
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 2 of 5: aircon
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 3 of 5: square_feet
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 4 of 5: natural_gas
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 5 of 5: electricity
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    Total processing time: 1.37 secs
 
 Note that each implicate in `sim10` is identified by the “M”
 variable/column.
@@ -464,20 +550,20 @@ head(sim10)
     Key: <M>
            M           insulation                                   aircon
        <int>                <ord>                                   <fctr>
-    1:     1       Well insulated          Central air conditioning system
-    2:     1     Poorly insulated          Central air conditioning system
-    3:     1     Poorly insulated                      No air conditioning
-    4:     1       Well insulated Individual window/wall or portable units
-    5:     1 Adequately insulated          Central air conditioning system
-    6:     1 Adequately insulated Individual window/wall or portable units
-       square_feet electricity natural_gas
-             <int>       <int>       <num>
-    1:        1072        9040           0
-    2:        3268        7720           0
-    3:         714        1818           0
-    4:        1656        5650         524
-    5:        2765       14020           0
-    6:        1258       15140           0
+    1:     1 Adequately insulated                      No air conditioning
+    2:     1 Adequately insulated          Central air conditioning system
+    3:     1 Adequately insulated          Central air conditioning system
+    4:     1 Adequately insulated Individual window/wall or portable units
+    5:     1       Well insulated                      No air conditioning
+    6:     1     Poorly insulated                      No air conditioning
+       square_feet natural_gas electricity
+             <int>       <num>       <int>
+    1:        1204         371        3610
+    2:        2215         689        7170
+    3:         952          67        6150
+    4:        1106         726       22200
+    5:        3935         923        7630
+    6:        1073         518        1480
 
 ``` r
 table(sim10$M)
@@ -495,10 +581,10 @@ table(sim10$M)
 > al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). A
 > newer, improved analysis approach has since been introduced in the
 > `fusionACS` package ([fusionACS
-> Methods](https://ummel.github.io/fusionACS/)). While `analyze()` is
-> retained for legacy support and replication purposes, users are
-> encouraged to review the updated `fusionACS` workflow for improved
-> analysis techniques.
+> Methods](https://ummel.github.io/fusionACS/articles/methods.html)).
+> While `analyze()` is retained for legacy support and replication
+> purposes, users are encouraged to review the updated `fusionACS`
+> workflow for improved analysis techniques.
 
 The fused values are inherently probabilistic, reflecting uncertainty in
 the underlying statistical models. Multiple implicates are needed to
@@ -525,11 +611,11 @@ analyze(x = list(mean = "electricity"),
 
     ℹ Assuming uniform sample weights
 
-    ✔ Total processing time: 0.0237 secs
+    ✔ Total processing time: 0.0227 secs
 
            N           y  level   type      est      moe
        <int>      <char> <lgcl> <char>    <num>    <num>
-    1:  2843 electricity     NA   mean 10925.07 238.2842
+    1:  2843 electricity     NA   mean 11149.65 302.5612
 
 When the response variable is categorical, `analyze()` automatically
 returns the proportions associated with each factor level.
@@ -543,7 +629,7 @@ analyze(x = list(mean = "aircon"),
 
     ℹ Assuming uniform sample weights
 
-    ✔ Total processing time: 0.0651 secs
+    ✔ Total processing time: 0.0584 secs
 
            N      y                                      level       type
        <int> <char>                                     <char>     <char>
@@ -553,10 +639,10 @@ analyze(x = list(mean = "aircon"),
     4:  2843 aircon                        No air conditioning proportion
               est         moe
             <num>       <num>
-    1: 0.62022511 0.022633809
-    2: 0.19324657 0.015933188
-    3: 0.04934928 0.009002835
-    4: 0.13717904 0.015253775
+    1: 0.62296870 0.022589716
+    2: 0.19704537 0.017080786
+    3: 0.04386212 0.008929643
+    4: 0.13612381 0.015763985
 
 If we want to perform an analysis across subsets of the recipient
 population – for example, calculate the mean value of “electricity” by
@@ -574,18 +660,18 @@ analyze(x = list(mean = "electricity"),
 
     ℹ Assuming uniform sample weights
 
-    ✔ Total processing time: 0.0211 secs
+    ✔ Total processing time: 0.0246 secs
 
                      income     N           y  level   type       est       moe
                       <ord> <int>      <char> <lgcl> <char>     <num>     <num>
-    1:    Less than $20,000   471 electricity     NA   mean  8750.062  537.9967
-    2:    $20,000 - $39,999   645 electricity     NA   mean  9808.782  474.7702
-    3:    $40,000 - $59,999   464 electricity     NA   mean 10684.930  526.5698
-    4:   $60,000 to $79,999   372 electricity     NA   mean 11279.174  704.9938
-    5:   $80,000 to $99,999   248 electricity     NA   mean 11656.552  902.0131
-    6: $100,000 to $119,999   222 electricity     NA   mean 12382.729  970.6336
-    7: $120,000 to $139,999   119 electricity     NA   mean 13116.725 1504.4645
-    8:     $140,000 or more   302 electricity     NA   mean 14098.276  932.7634
+    1:    Less than $20,000   471 electricity     NA   mean  9046.579  527.2344
+    2:    $20,000 - $39,999   645 electricity     NA   mean 10062.808  539.6401
+    3:    $40,000 - $59,999   464 electricity     NA   mean 10830.042  736.3983
+    4:   $60,000 to $79,999   372 electricity     NA   mean 11545.838  693.1825
+    5:   $80,000 to $99,999   248 electricity     NA   mean 12117.840  813.2068
+    6: $100,000 to $119,999   222 electricity     NA   mean 12623.509 1061.2703
+    7: $120,000 to $139,999   119 electricity     NA   mean 13272.992 1264.6678
+    8:     $140,000 or more   302 electricity     NA   mean 14038.658  985.1132
 
 It is also possible to do multiple kinds of analyses in a single call to
 `analyze()`. For example, the following call calculates the mean value
@@ -608,7 +694,7 @@ result <- analyze(x = list(mean = c("natural_gas", "square_feet"),
 
     ℹ Assuming uniform sample weights
 
-    ✔ Total processing time: 0.509 secs
+    ✔ Total processing time: 0.52 secs
 
 We can then (for example) isolate the results for white households in
 rural areas. Notice that the mean estimate of “square_feet” exceeds the
@@ -630,14 +716,14 @@ subset(result, race == "White" & urban_rural == "Rural")
     8:  White       Rural   503 square_feet                 <NA> median
                 est          moe
               <num>        <num>
-    1: 6961264.2000 3.351969e+05
-    2:       5.8000 6.318078e+00
-    3:      77.1000 2.107942e+01
-    4:     218.1000 2.717505e+01
-    5:     202.0000 2.439389e+01
-    6:     161.4957 3.036519e+01
-    7:    2418.2807 1.261965e+02
-    8:    2164.3000 1.900049e+02
+    1: 6879414.6000 458249.58083
+    2:       5.7000      4.87618
+    3:      72.4000     15.46669
+    4:     218.0000     22.94028
+    5:     206.9000     24.80348
+    6:     221.5125     50.80821
+    7:    2313.7581    173.23956
+    8:    2033.5000    221.23380
 
 More complicated analyses can be performed using the custom `fun`
 argument to `analyze()`. See the Examples section of `?analyze`.
@@ -667,27 +753,33 @@ sim <- fuse(data = donor,
             M = 40)
 ```
 
-    ℹ 5 fusion variables
-    ℹ 13 initial predictor variables
-    ℹ 2843 observations
-    Detected 37.5 GB of free memory
-    Generating 40 implicates
-    Fusion step 1 of 5: insulation
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 2 of 5: aircon
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 3 of 5: square_feet
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 4 of 5: electricity
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Fusion step 5 of 5: natural_gas
-    -- Predicting LightGBM models
-    -- Simulating fused values
-    Total processing time: 5.5 secs
+      - 5 fusion variables
+      - 13 initial predictor variables
+      - 2843 observations
+      - Available memory: 39.8 GB
+      - Implicates: 40
+
+    -- Fusion step 1 of 5: insulation
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 2 of 5: aircon
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 3 of 5: square_feet
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 4 of 5: natural_gas
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    -- Fusion step 5 of 5: electricity
+      - Predicting LightGBM models
+      - Simulating fused values
+
+    Total processing time: 2.93 secs
 
 Next, we pass the `sim` results to `validate()`. The argument
 `subset_vars` specifies that we want the validation exercise to compare
@@ -706,22 +798,22 @@ valid <- validate(observed = donor,
     Correlation between observed and fused values:
 
        Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-      0.039   0.068   0.250   0.270   0.424   0.748 
+      0.037   0.060   0.068   0.130   0.163   0.389 
 
     Processing validation analyses for 5 fusion variables
-    Performed 1430 analyses across 130 subsets
+    Performed 1419 analyses across 129 subsets
     Smoothing validation metrics
     Average smoothed performance metrics across subset range:
 
                  y      est    vad   moe
-    1       aircon  0.04028  0.426  1.33
-    2  electricity  0.02248  0.584  1.16
-    3   insulation  0.05358  0.359  1.39
-    4  natural_gas  0.01445  0.796  1.09
-    5  square_feet  0.00621  0.935  1.24
+    1       aircon  0.04633  0.614  1.42
+    2  electricity  0.01572  0.747  1.22
+    3   insulation  0.04367  0.351  1.43
+    4  natural_gas  0.02677  0.778  1.34
+    5  square_feet  0.00786  0.895  1.31
 
     Creating ggplot2 graphics
-    Total processing time: 2.32 secs
+    Total processing time: 2.38 secs
 
 The `validate()` output includes ggplot2 graphics that helpfully
 summarize the validation results. For example, the plot below shows how
@@ -740,6 +832,6 @@ analyses, given the underlying fusion model and data.
 valid$plots$est
 ```
 
-![](man/figures/README-unnamed-chunk-21-1.png)<!-- -->
+![](man/figures/README-unnamed-chunk-23-1.png)<!-- -->
 
 Happy fusing!

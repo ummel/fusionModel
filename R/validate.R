@@ -395,13 +395,10 @@ validate <- function(observed,
   # Check if ggplot2 is installed; if so, call plot_valid() prior to returning result
   if (plot) {
     if (!requireNamespace("ggplot2", quietly = TRUE)) {
-      stop("Package 'ggplot2' is required for this plotting function. Please install it.", call. = FALSE)
-    }
-    if (ok) {
+      cli::cli_alert_warning("Skipping plot generation because 'ggplot2' package is not installed")
+    } else {
       result <- plot_valid(result, cores = cores)
       class(result) <- c("validate", class(result))
-    } else {
-      cli::cli_alert_warning("Skipping plot generation because 'ggplot2' package is not installed")
     }
   }
 

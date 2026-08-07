@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 # About
 
 ⚠️ The **`fusionModel`** package provides an engine for generalized data fusion, implementing the statistical techniques described in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7). It is primarily intended for users looking to build their own custom fusion workflows using arbitrary datasets.
- 
+
 💡 **Looking to analyze U.S. social survey microdata?**  
 Practitioners interested in accessing and analyzing fused U.S. social survey microdata should instead use the purpose-built [**`fusionACS` R package**](https://ummel.github.io/fusionACS/), which is designed to streamline workflows across a variety of standard U.S. survey sources.
 
@@ -64,7 +64,7 @@ Specifically, the goal was to create a data fusion tool that meets the following
 + Automatically selects predictor variables from a potentially large set
 + Ability to prevent overfitting (e.g. cross-validation)
 
-Complete methodological details are available in the fusionACS Guidebook (INSERT LINK).
+Complete methodological details are available in [Ummel et al. (2024)](https://www.nature.com/articles/s41597-023-02788-7).
 
 # Installation
 
@@ -174,19 +174,40 @@ pdata[c("dataset", ncont)] %>%
 
 # Advanced fusion
 
-For this call to `train()`, we specify a set of hyperparameters to search over when training each LightGBM gradient boosting model (see `?train` for details). The hyperparameters can be used to tune the underlying GBM models for better cross-validated performance. We also set `nfolds = 10` (default is 5) to indicate the number of cross-validation folds to use. Since this requires additional computation, the `cores` argument is used to enable parallel processing. 
+When working with datasets containing numerous or potentially correlated/collinear variables, `prepXY()` provides an automated way to screen predictors and optimize fusion variable ordering before model training. It pairs an initial rank-correlation screening step with LASSO regularization (via `glmnet`) to filter out weak predictors and then determines a preferred fusion sequence among the fusion variables.
+
+Using the `donor` microdata and variable sets defined earlier:
+
+```{r}
+# Screen predictors and determine optimal target fusion order
+xy_prep <- prepXY(data = donor,
+                  y = fusion.vars,
+                  x = predictor.vars)
+```
+
+Because we have a relatively small number of highly-relevant predictor variables in this example, `prepXY()` retained all of the `predictor.vars`. The output of `prepXY()` can be passed directly to `train()`. This is especially helpful when automating fusion using larger donor datasets.
+
+```{r}
+# Train a basic fusion model using the prepXY output
+fsn.model <- train(data = donor,
+                   y = xy_prep$y,
+                   x = xy_prep$x)
+```
+
+For a more sophistiaced call to `train()`, we specify a set of hyperparameters to search over when training each LightGBM gradient boosting model (see `?train` for details). The hyperparameters can be used to tune the underlying GBM models for better cross-validated performance. We also set `nfolds = 10` (default is 5) to indicate the number of cross-validation folds to use. Since this requires additional computation, the `cores` argument is used to enable parallel processing. 
 
 ```{r}
 # Train a fusion model with variable blocks
 fsn.model <- train(data = donor, 
-                   y = fusion.vars, 
-                   x = predictor.vars,
+                   y = xy_prep$y, 
+                   x = xy_prep$x,
                    nfolds = 10,
                    hyper = list(boosting = c("gbdt", "goss"),
                                 num_leaves = c(10, 30),
                                 feature_fraction = c(0.7, 0.9)),
                    cores = 2)
 ```
+
 We generally want to create multiple versions of the simulated fusion variables -- called *implicates* -- in order to reduce bias in point estimates and calculate associated uncertainty. We can do this using the `M` argument within `fuse()`. Here we generate 10 implicates; i.e. 10 unique, probabilistic representations of what the recipient records might look like with respect to the fusion variables.
 
 ```{r}
