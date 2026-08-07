@@ -245,35 +245,6 @@ prepXY <- function(data,
 
   #-----
 
-  # TO DO: Switch to using this code instead of 'X' and 'Y' blocks above
-  # 8/9/24:TEST ALT
-  # MOVE this could into separate function? It is also in impute()
-  # d2 <- copy(data)
-  #
-  # # Convert 'd2' to plausible ranks for correlation screening
-  # # All output columns should be NA, integer, or logical
-  # # NA's in input are preserved in output
-  # for (i in 1:ncol(d2)) {
-  #   z <- d2[[i]]
-  #   if (is.numeric(z)) {
-  #     # Ties method 'dense' ensures integer output with minimum of 1 and maximum of length(na.omit(z))
-  #     z <- frank(z, ties.method = "dense", na.last = "keep")
-  #   } else {
-  #     if (is.ordered(z)) {
-  #       z <- as.integer(z)
-  #     } else {
-  #       if (!is.logical(z)) {
-  #         # Converts character and un-ordered factors to TRUE for the most-common (non-NA) value and FALSE otherwise
-  #         zt <- table2(z, na.rm = TRUE)
-  #         z <- z == names(which.max(zt))
-  #       }
-  #     }
-  #   }
-  #   set(d2, j = i, value = z)
-  # }
-
-  #-----
-
   # intersect() call restricts to factor levels present in 'Z' (some levels can be dropped when 'data' is randomly subsampled)
   vc <- lapply(y, function(v) {
     out <- if (v %in% yfactor) {
@@ -290,7 +261,7 @@ prepXY <- function(data,
 
   # Determine the x-predictors that pass absolute correlation threshold for each y
   # The 'Zr' matrix contains the ranks, so the correlation threshold refers to Spearman (rank) correlation
-  cli::cli_alert_info("Identifying 'x' that pass absolute Spearman correlation threshold")
+  cli::cat_line("Identifying 'x' predictors passing Spearman correlation threshold (cor_thresh = ", cor_thresh, ")...")
   Zr <- matrixStats::colRanks(Z, ties.method = "average", preserveShape = TRUE, useNames = TRUE)
   xok <- parallel::mclapply(unlist(vc), function(v) {
 
@@ -326,17 +297,9 @@ prepXY <- function(data,
     })
   }
 
-  # Testing with 'pmax' argument enabled
-  # y = "square_feet"
-  # x = setdiff(xcols, y)
-  # m <- gfit(y, x)
-  # i <- which(m$dev.ratio / max(m$dev.ratio) >= ifelse(m$jerr == 0, lasso_thresh, 1))[1] # Preferred lambda index value for each model fit, based on supplied lasso threshold
-  # cf <- coef(m, s = m$lambda[i])
-  # sum(cf[, 1] != 0)
-
   #-----
 
-  cli::cli_alert_info("Fitting full models for each 'y'")
+  cli::cat_line("Fitting full LASSO models for each 'y'...")
 
   # Weights
   ywgt <- matrixStats::colWeightedMeans(Z, W, cols = ycols)
@@ -357,7 +320,7 @@ prepXY <- function(data,
 
   #-----
 
-  cli::cli_alert_info("Iteratively constructing preferred fusion order")
+  cli::cat_line("Iteratively constructing preferred fusion order...")
 
   # Start building the preferred fusion order...
   ord <- NULL  # Vector with preferred fusion variable sequence
@@ -424,18 +387,12 @@ prepXY <- function(data,
 
     # Extract the predictor variables to be used for 'best' fusion variable
     keep <- out[[best]]$xk
-    # if (!is.null(xlink)) {
-    #   i <- keep %in% xlink$dummy
-    #   keep[i] <- filter(xlink, dummy %in% keep[i])$original
     if (!is.null(xylink)) {
-      # i <- keep %in% xylink$dummy
-      # keep[i] <- filter(xylink, dummy %in% keep[i])$original
       i <- xylink$original[match(keep, xylink$dummy)]
       i[is.na(i)] <- keep[is.na(i)]
       keep <- i
     }
     keep <- unique(keep)
-    #keep <- setdiff(keep, ycols)  # Remove any fusion variables from the preferred predictor set
     xpred <- c(xpred, list(keep))
 
   }
@@ -449,24 +406,22 @@ prepXY <- function(data,
   # Force inclusion of 'xforce' predictor variables
   xpred <- lapply(xpred, function(v) unique(c(v, xforce)))
 
-  # Nicely name and order the x-predictors list in order of original 'x'
-  # names(xpred) <- sapply(ord, paste, collapse = " | ")
-  # xpred <- lapply(xpred, function(v) v[order(match(v, x))])
-
   # Results list
   result <- list(y = ord, x = xpred)
 
   # The full set of variables being retained, stored as attribute
   pvars <- unique(unlist(xpred))
-  #stopifnot(all(pvars %in% x))
+  retained_count <- length(intersect(x, pvars))
   attr(result, "xpredictors") <- intersect(x, pvars)
   attr(result, "xforce") <- xforce
   attr(result, "xoriginal") <- x  # Original, full set of potential predictor variables
-  cli::cli_alert_info("Retained {length(intersect(x, pvars))} of {length(x)} potential predictor variables")
+
+  cli::cat_line("  - Retained ", retained_count, " of ", length(x), " potential predictor variables")
 
   # Report processing time
   tout <- difftime(Sys.time(), t0)
-  cli::cli_alert_success("Total processing time: {signif(as.numeric(tout), 3)} {attr(tout, 'units')}")
+  cli::cat_line("  - prepXY() completed in ", signif(as.numeric(tout), 3), " ", attr(tout, "units"))
+  cli::cat_line()
 
   return(result)
 

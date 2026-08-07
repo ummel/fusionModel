@@ -490,26 +490,27 @@ stratify <- function(y, ycont, tfrac, ntiles, cv_list = FALSE) {
 #'
 #' @keywords internal
 #' @noRd
+
 checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
 
   # Check for character-type variables; stop with error if any detected
   xc <- sapply(data[c(x, y)], is.character)
   if (any(xc)) stop("Coerce character variables to factor:\n", paste(names(which(xc)), collapse = ", "))
 
-  # Remove (with warning) any zero-variance 'y' variables
+  # Remove any zero-variance 'y' variables
   constant <- names(which(sapply(data[y], novary)))
   if (length(constant)) {
     y <- setdiff(y, constant)
     data <- select(data, -all_of(constant))
-    warning("Removed zero-variance 'y' variable(s):\n", paste(constant, collapse = ", "), immediate. = TRUE)
+    cli::cat_line("Removed zero-variance 'y' variable(s):\n", paste(constant, collapse = ", "))
   }
 
-  # Remove (with warning) any zero-inflated 'y' variables with fewer than 'nfolds' non-zero values
+  # Remove any zero-inflated 'y' variables with fewer than 'nfolds' non-zero values
   if (all(!is.null(nfolds), nfolds > 0)) {
     toofew <- names(which(sapply(data[y], function(x) if (inflated(x)) sum(x != 0) < nfolds else FALSE)))
     if (length(toofew)) {
       data <- select(data, -all_of(toofew))
-      warning("Removed 'y' variable(s) with too few non-zero values:\n", paste(toofew, collapse = ", "), immediate. = TRUE)
+      cli::cat_line("Removed 'y' variable(s) with too few non-zero values:\n", paste(toofew, collapse = ", "))
     }
   }
 
@@ -518,10 +519,10 @@ checkData <- function(data, y, x, nfolds = NULL, impute = FALSE) {
   if (length(constant)) {
     x <- setdiff(x, constant)
     data <- select(data, -all_of(constant))
-    cli::cli_alert_info("Removed zero-variance 'x' variable(s): {paste(constant, collapse = ', ')}")[cite: 1]
+    cli::cli_alert_info("Removed zero-variance 'x' variable(s): {paste(constant, collapse = ', ')}")
   }
 
-  # Detect and impute any missing values in 'x' variables
+  # Detect and do simple imputation of any missing values in 'x' variables
   if (impute) {
     na.cols <- names(which(sapply(data[x], anyNA)))
     if (length(na.cols) > 0) {
@@ -793,7 +794,7 @@ smoothQuantile <- function(x,
 
   # Check if 'xout' is outside natural range of 'x'
   if (!is.null(xout)) {
-    if (any(xout < min(x) | xout > max(x))) warning("'xout' contains values outside range of 'x' (be careful)")
+    if (any(xout < min(x) | xout > max(x))) cli::cat_line("'xout' contains values outside range of 'x' (be careful)")
   }
 
   # x-values at which to predict smoothed values
@@ -1104,7 +1105,6 @@ full.path <- function(path, mustWork = NA) {
 #' @keywords internal
 #' @noRd
 table2 <- function(x, w = NULL, na.rm = FALSE) {
-  require(data.table)
   stopifnot(is.atomic(x))
   if (is.null(w)) {
     ds <- setDT(list(x = x), key = "x")

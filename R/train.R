@@ -194,11 +194,11 @@ train <- function(data,
   if (is.list(x)) {
     xlist <- x
     x <- unique(unlist(x))
-    cli::cli_inform("Using specified set of predictors for each fusion variable")
+    cli::cat_line("Using specified set of predictors for each fusion variable")
   } else {
     # Sequence chaining: Append previously predicted 'y' variables as predictors for subsequent 'y' variables
     xlist <- lapply(1:length(ylist), function(i) c({if (i == 1) NULL else unlist(ylist[1:(i - 1)])}, x))
-    cli::cli_inform("Using all available predictors for each fusion variable")
+    cli::cat_line("Using all available predictors for each fusion variable")
   }
   x <- setdiff(x, y)
 
@@ -252,7 +252,7 @@ train <- function(data,
     rep(1L, nrow(data))
   } else {
     if (anyNA(data[[weight]])) stop("Missing (NA) values are not allowed in 'weight'")
-    if (any(data[[weight]] < 0)) cli::cli_alert_warning("Setting negative observation weights to zero")
+    if (any(data[[weight]] < 0)) cli::cat_line("  - Warning: Setting negative observation weights to zero")
     set(data, j = weight, value = pmax(0, data[[weight]]))
     data[[weight]] / mean(data[[weight]]) # Scaled weights to avoid numerical issues
   }
@@ -304,11 +304,9 @@ train <- function(data,
   #-----
 
   # Output summary info to console
-  cli::cli_inform(c(
-    "i" = "{length(y)} fusion variable{?s}",
-    "i" = "{length(x)} predictor variable{?s}",
-    "i" = "{nrow(data)} observation{?s}"
-  ))
+  cli::cat_line("  - ", length(y), " fusion variable", if (length(y) != 1) "s" else "")
+  cli::cat_line("  - ", length(x), " predictor variable", if (length(x) != 1) "s" else "")
+  cli::cat_line("  - ", nrow(data), " observation", if (nrow(data) != 1) "s" else "")
 
   # Limit 'data' to the necessary variables
   data <- data[c(x, y)]
@@ -360,7 +358,7 @@ train <- function(data,
   for (v in c("min_data_in_leaf", "max_bin", "min_data_in_bin", "max_cat_threshold")) {
     if (length(hyper[[v]]) > 1) {
       hyper[[v]] <- hyper[[v]][1]
-      cli::cli_alert_warning("Only one {.val {v}} value allowed. Using: {.val {hyper[[v]]}}")
+      cli::cat_line("  - Warning: Only one ", v, " value allowed. Using: ", hyper[[v]])
     }
   }
 
@@ -389,7 +387,7 @@ train <- function(data,
 
     # Print message to console
     if (verbose) {
-      cli::cli_inform("-- Training step {i} of {length(pfixes)}: {paste(v, collapse = ', ')}")
+      cli::cat_line("\n-- Training step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "))
     }
 
     # 'y' variables from prior clusters to be included as predictors
@@ -720,10 +718,10 @@ train <- function(data,
         ssr <- sum((kc[, 1] - mb) ^ 2)
         sst <- sum((kc[, 1] - mean(kc[, 1])) ^ 2)
         r2 <- 1 - ssr / sst
-        if (verbose) cli::cli_inform("  -- R-squared of cluster means: {round(r2, 3)}")
+        if (verbose) cli::cat_line("  -- R-squared of cluster means: ", round(r2, 3))
 
         if (verbose) {
-          cli::cli_inform("  -- Number of neighbors in each cluster:")
+          cli::cat_line("  -- Number of neighbors in each cluster:")
           print(summary(kbest))
         }
 
@@ -750,14 +748,14 @@ train <- function(data,
 
   # Execute step-wise model building across fusion sequence (forked or serial execution)
   if (fork) {
-    cli::cli_inform("Processing {length(pfixes)} training steps in parallel via forking ({cores} cores)")
+    cli::cat_line("Processing ", length(pfixes), " training steps in parallel via forking (", cores, " cores)")
     out <- parallel::mclapply(X = 1:length(ylist),
                               FUN = buildFun,
                               mc.cores = cores,
                               mc.preschedule = FALSE,
                               verbose = FALSE)
   } else {
-    if (cores > 1) cli::cli_inform("Using OpenMP multithreading within LightGBM ({cores} cores)")
+    if (cores > 1) cli::cat_line("\nUsing OpenMP multithreading within LightGBM (", cores, " cores)")
     out <- lapply(X = 1:length(ylist),
                   FUN = buildFun,
                   verbose = TRUE)
@@ -793,12 +791,13 @@ train <- function(data,
   zip::zip(zipfile = fsn, files = list.files(td, recursive = TRUE), root = td, mode = "mirror", include_directories = TRUE)
   file.copy(from = list.files(td, "\\.fsn$", full.names = TRUE), to = fsn, overwrite = TRUE)
 
-  cli::cli_alert_success("Fusion model saved to: {.file {fsn}}")
+  cli::cat_line("\nFusion model saved to:\n", fsn)
   unlink(td)
 
   # Report total execution time
   tout <- difftime(Sys.time(), t0)
-  cli::cli_inform("Total processing time: {signif(as.numeric(tout), 3)} {attr(tout, 'units')}")
+  cli::cat_line("\nTotal processing time: ", signif(as.numeric(tout), 3), " ", attr(tout, "units"))
+  cli::cat_line()
 
   # Return .fsn file path invisibly
   invisible(fsn)

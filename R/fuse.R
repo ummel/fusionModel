@@ -212,23 +212,21 @@ fuse <- function(data,
   #-----
 
   # Print variable information to console
-  cli::cli_inform(c(
-    "i" = "{length(yvars)} fusion variable{?s}",
-    "i" = "{length(xvars)} initial predictor variable{?s}",
-    "i" = "{nrow(data)} observation{?s}"
-  ))
+  cli::cat_line("  - ", length(yvars), " fusion variable", if (length(yvars) != 1) "s" else "")
+  cli::cat_line("  - ", length(xvars), " initial predictor variable", if (length(xvars) != 1) "s" else "")
+  cli::cat_line("  - ", nrow(data), " observation", if (nrow(data) != 1) "s" else "")
 
   # TO DO possibly: If there are NOT NA's in the training but NA's in 'data', might want to simply impute the NA's
   # NOT NEEDED?
   # # Detect and impute any missing values in 'data'
   # na.cols <- names(which(sapply(data, anyNA)))
   # if (length(na.cols) > 0) {
-  #   cat("Missing values imputed for the following variable(s):\n", paste(na.cols, collapse = ", "), "\n")
-  #   for (j in na.cols) {
-  #     x <- data[[j]]
-  #     ind <- is.na(x)
-  #     data[ind, j] <-  imputationValue(x, ind)
-  #   }
+  #    cat("Missing values imputed for the following variable(s):\n", paste(na.cols, collapse = ", "), "\n")
+  #    for (j in na.cols) {
+  #      x <- data[[j]]
+  #      ind <- is.na(x)
+  #      data[ind, j] <-  imputationValue(x, ind)
+  #    }
   # }
 
   #-----
@@ -271,7 +269,7 @@ fuse <- function(data,
   n <- min(n, M)
 
   # Report on the memory situation
-  cli::cli_inform("Detected {signif(mfree / 1e3, 3)} GB of free memory")
+  cli::cat_line("  - Available memory: ", signif(mfree / 1e3, 3), " GB")
 
   # The number of steps/chunks can be overridden by negative 'margin' value (for testing)
   nstep <- ifelse(margin > 0, ceiling(M / n), min(M, ceiling(-margin)))
@@ -280,9 +278,9 @@ fuse <- function(data,
   if (delta > 0) nimp[1:delta] <- nimp[1:delta] + 1L
   stopifnot(M == sum(nimp))
   if (nstep > 1) {
-    cli::cli_inform("Generating {M} implicates in {nstep} chunks of size: {nimp}")
+    cli::cat_line("  - Implicates: ", M, " (in ", nstep, " chunks of size: ", paste(nimp, collapse = ", "), ")")
   } else {
-    cli::cli_inform("Generating {M} implicate{?s}")
+    cli::cat_line("  - Implicates: ", M)
   }
 
   # Replicate the prediction matrix ('dmat'), if necessary
@@ -295,7 +293,7 @@ fuse <- function(data,
   }
 
   # Report parallel processing to console
-  if (cores > 1) cli::cli_inform("Using OpenMP multithreading within LightGBM ({cores} cores)")
+  if (cores > 1) cli::cat_line("  - Multithreading: OpenMP (", cores, " cores)")
 
   # 'chunk.paths' holds the temporary, uncompressed fst file chunks
   if (nstep > 1) chunk.paths <- file.path(td, paste0("fused.fst", 1:nstep))
@@ -304,13 +302,13 @@ fuse <- function(data,
 
   for (mstep in 1:nstep) {
 
-    if (nstep > 1) cli::cli_inform("<< Processing implicate chunk {mstep} of {nstep} >>")
+    if (nstep > 1) cli::cat_line("\nProcessing implicate chunk ", mstep, " of ", nstep)
 
     for (i in 1:length(pfixes)) {
 
       v <- meta$ylist[[i]]
 
-      cli::cli_inform("Fusion step {i} of {length(pfixes)}: {paste(v, collapse = ', ')}")
+      cli::cat_line("\n-- Fusion step ", i, " of ", length(pfixes), ": ", paste(v, collapse = ", "))
 
       block <- length(v) > 1
 
@@ -354,7 +352,7 @@ fuse <- function(data,
       #---
 
       # Make predictions for each model ('pred' object)
-      cli::cli_inform("-- Predicting LightGBM models")
+      cli::cat_line("  - Predicting LightGBM models")
       pred <- data.table()
       for (m in mods) {
         y <- sub("_[^_]+$", "", basename(m))
@@ -382,7 +380,7 @@ fuse <- function(data,
 
       # Simulate values for case of single categorical variable
       if (!block & meta$ytype[v[[1]]] != "continuous") {
-        cli::cli_inform("-- Simulating fused values")
+        cli::cat_line("  - Simulating fused values")
         ptile <- runif(n = nrow(pred))
         S <- if (ncol(pred) > 1) {
           for (j in 2:ncol(pred)) set(pred, i = NULL, j = j, value = pred[[j - 1]] + pred[[j]])
@@ -437,7 +435,7 @@ fuse <- function(data,
 
           #---
 
-          cli::cli_inform("-- Simulating fused values")
+          cli::cat_line("  - Simulating fused values")
 
           simChunk <- function(pchunk) {
 
@@ -538,7 +536,7 @@ fuse <- function(data,
   #-----
 
   # If fsd = NULL, load the fusion results into memory and return data.table
-  # Otherwise, invisibly return path to .csv file containing results
+  # Otherwise, invisibly return path to .fsd file containing results
 
   if (nstep > 1) {
     dtemp <- chunk.paths %>%
@@ -578,13 +576,14 @@ fuse <- function(data,
   } else {
     gc(verbose = FALSE)
     fst::write_fst(dtemp, path = fsd.path, compress = 90)
-    cli::cli_alert_success("Fusion output saved to: {.file {fsd.path}}")
+    cli::cat_line("\nFusion output saved to:\n", fsd.path)
     invisible(fsd.path)
   }
 
   # Report processing time
   tout <- difftime(Sys.time(), t0)
-  cli::cli_inform("Total processing time: {signif(as.numeric(tout), 3)} {attr(tout, 'units')}")
+  cli::cat_line("\nTotal processing time: ", signif(as.numeric(tout), 3), " ", attr(tout, "units"))
+  cli::cat_line()
 
   # Either return data.table 'out' or invisible path to file on disk
   #return(if(is.null(fsd)) out else invisible(fsd.path))

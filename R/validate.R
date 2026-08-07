@@ -394,7 +394,9 @@ validate <- function(observed,
 
   # Check if ggplot2 is installed; if so, call plot_valid() prior to returning result
   if (plot) {
-    suppressMessages(ok <- require(ggplot2, quietly = TRUE, warn.conflicts = FALSE))
+    if (!requireNamespace("ggplot2", quietly = TRUE)) {
+      stop("Package 'ggplot2' is required for this plotting function. Please install it.", call. = FALSE)
+    }
     if (ok) {
       result <- plot_valid(result, cores = cores)
       class(result) <- c("validate", class(result))
@@ -446,8 +448,9 @@ plot_valid <- function(valid,
                        ...) {
 
   # Check if ggplot is installed
-  suppressMessages(ok <- require(ggplot2, quietly = TRUE, warn.conflicts = FALSE))
-  if (!ok) stop("package 'ggplot2' must be installed for plot_valid() to work")
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for this plotting function. Please install it.", call. = FALSE)
+  }
 
   if (inherits(valid, "validate")) {
     if (!is.data.frame(valid)) valid <- valid$data  # This forces 'valid' to just the data frame with validation results
