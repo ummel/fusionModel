@@ -47,7 +47,8 @@ to provide a fast, non-parametric imputation workflow powered by LightGBM gradie
 <span>  <span class="va">data</span>,</span>
 <span>  weight <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ignore <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span>logical <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span></span>
+<span>  cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span>logical <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span>,</span>
+<span>  max_predictors <span class="op">=</span> <span class="fl">30</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -75,6 +76,12 @@ Ignored variables are neither imputed nor utilized as predictors in the underlyi
 by <code>fst</code>, <code>data.table</code>, and <code>LightGBM</code>. Defaults to physical cores minus 1
 (<code>parallel::detectCores(logical = FALSE) - 1L</code>).</p></dd>
 
+
+<dt id="arg-max-predictors">max_predictors<a class="anchor" aria-label="anchor" href="#arg-max-predictors"></a></dt>
+<dd><p>Integer &gt; 5. Maximum number of predictor variables to retain for each variable
+being imputed. A higher value is potentially more accurate but with additional computational cost.
+This is the primary means by which to control overall computation time.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -97,7 +104,7 @@ available as predictors for subsequent target variables.</p></dd>
 a rank-based Spearman correlation matrix is computed to pre-screen predictors.
 To maintain efficiency while preserving strong predictor signals, candidate
 predictors for each target are filtered to those meeting an absolute correlation threshold
-(&gt; 0.025), capped at a maximum of 30 predictors (and a minimum of 5).</p></dd>
+(&gt; 0.025), capped at a maximum of <code>max_predictors</code> total predictors (minimum of 5).</p></dd>
 
 <dt>3. Stratified Training Subsampling</dt>
 <dd><p>For variables with large non-missing sample sizes,

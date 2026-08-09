@@ -98,7 +98,7 @@ train(
 
   List. LightGBM hyperparameter grid or custom values to evaluate during
   training. If `NULL` (default), a standardized baseline configuration
-  optimized for survey fusion is used. See Details.
+  suitable for typical survey fusion is used. See Details.
 
 - fork:
 

@@ -14,7 +14,8 @@ impute(
   data,
   weight = NULL,
   ignore = NULL,
-  cores = parallel::detectCores(logical = FALSE) - 1L
+  cores = parallel::detectCores(logical = FALSE) - 1L,
+  max_predictors = 30
 )
 ```
 
@@ -43,6 +44,13 @@ impute(
   `fst`, `data.table`, and `LightGBM`. Defaults to physical cores minus
   1 (`parallel::detectCores(logical = FALSE) - 1L`).
 
+- max_predictors:
+
+  Integer \> 5. Maximum number of predictor variables to retain for each
+  variable being imputed. A higher value is potentially more accurate
+  but with additional computational cost. This is the primary means by
+  which to control overall computation time.
+
 ## Value
 
 A data frame (or `data.table`, matching the input class of `data`) with
@@ -68,8 +76,8 @@ datasets through the following steps:
   Spearman correlation matrix is computed to pre-screen predictors. To
   maintain efficiency while preserving strong predictor signals,
   candidate predictors for each target are filtered to those meeting an
-  absolute correlation threshold (\> 0.025), capped at a maximum of 30
-  predictors (and a minimum of 5).
+  absolute correlation threshold (\> 0.025), capped at a maximum of
+  `max_predictors` total predictors (minimum of 5).
 
 - 3\. Stratified Training Subsampling:
 
