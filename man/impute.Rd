@@ -8,7 +8,8 @@ impute(
   data,
   weight = NULL,
   ignore = NULL,
-  cores = parallel::detectCores(logical = FALSE) - 1L
+  cores = parallel::detectCores(logical = FALSE) - 1L,
+  max_predictors = 30
 )
 }
 \arguments{
@@ -24,6 +25,10 @@ Ignored variables are neither imputed nor utilized as predictors in the underlyi
 \item{cores}{Integer. Number of physical CPU cores used for parallel computation
 by \code{fst}, \code{data.table}, and \code{LightGBM}. Defaults to physical cores minus 1
 (\code{parallel::detectCores(logical = FALSE) - 1L}).}
+
+\item{max_predictors}{Integer > 5. Maximum number of predictor variables to retain for each variable
+being imputed. A higher value is potentially more accurate but with additional computational cost.
+This is the primary means by which to control overall computation time.}
 }
 \value{
 A data frame (or \code{data.table}, matching the input class of \code{data})
@@ -48,7 +53,7 @@ available as predictors for subsequent target variables.}
 a rank-based Spearman correlation matrix is computed to pre-screen predictors.
 To maintain efficiency while preserving strong predictor signals, candidate
 predictors for each target are filtered to those meeting an absolute correlation threshold
-(> 0.025), capped at a maximum of 30 predictors (and a minimum of 5).}
+(> 0.025), capped at a maximum of \code{max_predictors} total predictors (minimum of 5).}
 \item{3. Stratified Training Subsampling}{For variables with large non-missing sample sizes,
 a stratified sample of non-missing training observations (ranging between 5,000 and 50,000
 rows) is selected to speed up model fitting.}

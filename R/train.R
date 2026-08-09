@@ -41,8 +41,8 @@
 #'   nearest neighbors (\eqn{k}) evaluated when selecting optimal candidate pools for
 #'   continuous conditional distributions. Default is \code{c(10, 500)}.
 #' @param hyper List. LightGBM hyperparameter grid or custom values to evaluate during
-#'   training. If \code{NULL} (default), a standardized baseline configuration optimized for
-#'   survey fusion is used. See Details.
+#'   training. If \code{NULL} (default), a standardized baseline configuration suitable for
+#'   typical survey fusion is used. See Details.
 #' @param fork Logical. If \code{TRUE}, uses parallel processing via process forking
 #'   (\code{\link[parallel]{mclapply}}) across fusion steps. Only supported on Unix/Linux/macOS platforms.
 #'   Default is \code{FALSE}.

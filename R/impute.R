@@ -14,6 +14,9 @@
 #' @param cores Integer. Number of physical CPU cores used for parallel computation
 #'   by \code{fst}, \code{data.table}, and \code{LightGBM}. Defaults to physical cores minus 1
 #'   (\code{parallel::detectCores(logical = FALSE) - 1L}).
+#' @param max_predictors Integer > 5. Maximum number of predictor variables to retain for each variable
+#' being imputed. A higher value is potentially more accurate but with additional computational cost.
+#' This is the primary means by which to control overall computation time.
 #'
 #' @details
 #' \code{impute()} automates missing data imputation across complex microdata datasets
@@ -28,7 +31,7 @@
 #'     a rank-based Spearman correlation matrix is computed to pre-screen predictors.
 #'     To maintain efficiency while preserving strong predictor signals, candidate
 #'     predictors for each target are filtered to those meeting an absolute correlation threshold
-#'     (> 0.025), capped at a maximum of 30 predictors (and a minimum of 5).}
+#'     (> 0.025), capped at a maximum of `max_predictors` total predictors (minimum of 5).}
 #'   \item{3. Stratified Training Subsampling}{For variables with large non-missing sample sizes,
 #'     a stratified sample of non-missing training observations (ranging between 5,000 and 50,000
 #'     rows) is selected to speed up model fitting.}
@@ -75,7 +78,7 @@
 #' @export
 
 #---
-
+#
 # library(tidyverse)
 # library(data.table)
 # source("R/utils.R")
@@ -94,7 +97,8 @@
 impute <- function(data,
                    weight = NULL,
                    ignore = NULL,
-                   cores = parallel::detectCores(logical = FALSE) - 1L) {
+                   cores = parallel::detectCores(logical = FALSE) - 1L,
+                   max_predictors = 30) {
 
   t0 <- Sys.time()
 
@@ -108,6 +112,7 @@ impute <- function(data,
     any(is.null(weight), length(weight) == 1 & weight %in% names(data))
     any(is.null(ignore), all(ignore %in% names(data)))
     cores > 0 & cores %% 1 == 0 & cores <= parallel::detectCores(logical = FALSE)
+    max_predictors > 5 & max_predictors %% 1 == 0
   })
 
   dnames <- names(data)
@@ -183,10 +188,10 @@ impute <- function(data,
       p <- sort(abs(p), decreasing = TRUE)
 
       # Restrict to predictors that meet arbitrary absolute correlation threshold (> 0.025)
-      # Limit to maximum 30 potential predictors for each model (hard cap)
+      # Limit to maximum 'max_predictors' potential predictors for each model (hard cap)
       # Attempt to retain minimum 5 potential predictors regardless of correlation
       xv <- names(p[p > 0.025])
-      xv <- xv[1:min(30, length(xv))]
+      xv <- xv[1:min(max_predictors, length(xv))]
       if (length(xv) < 5) xv <- names(p)[1:min(5, length(p))]
 
       return(xv)
@@ -250,6 +255,7 @@ impute <- function(data,
 
     # Train fusion model (saved to 'temp.fsn' temporary file)
     # Suppress output to the console
+    # NOTE: hyper = list(feature_fraction = 1) in order to maximize chance of capturing structural dependencies
     invisible(capture.output(
       suppressMessages(
         fusionModel::train(data = dtrain,
@@ -259,6 +265,7 @@ impute <- function(data,
                            weight = weight,
                            nfolds = 0.8,
                            nquantiles = 2,
+                           hyper = list(feature_fraction = 1), # Use all features, in order to better capture structural dependencies
                            cores = cores)
       )
     ))
